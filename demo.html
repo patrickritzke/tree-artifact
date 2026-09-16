@@ -7,8 +7,15 @@
    relationship below is invented. Nothing here reaches a network.
    ──────────────────────────────────────────────────────────────────────── */
 (function () {
-  function co(id, name, subs) {
-    return { externalId: id, name: name, subCompanies: subs || [] };
+  // flags: "E" equity issuer, "D" fixed income issuer, "ED" both.
+  function co(id, name, subs, flags) {
+    return {
+      externalId: id,
+      name: name,
+      subCompanies: subs || [],
+      is_equity_issuer: (flags || "").indexOf("E") >= 0,
+      is_fixed_income_issuer: (flags || "").indexOf("D") >= 0
+    };
   }
 
   // Bureau van Dijk shape: 28 entities, anchor sits four levels down with
@@ -20,25 +27,25 @@
           co("GB40000005", "Northwind Asset Management Ltd", [
             co("GB50000006", "Northwind Fund Services Ltd"),
             co("GB50000007", "Northwind Custody Nominees Ltd")
-          ]),
+          ], "E"),
           co("GB40000008", "Northwind Advisory LLP"),
           co("GB40000009", "Northwind Real Estate Holdings Ltd", [
             co("GB50000010", "Northwind Property One Ltd"),
-            co("GB50000011", "Northwind Property Two Ltd"),
+            co("GB50000011", "Northwind Property Two Ltd", null, "D"),
             co("GB50000012", "Northwind Property Three Ltd")
           ]),
           co("SG40000013", "Northwind Ventures Pte Ltd", [
             co("HK50000014", "Northwind Ventures Asia Ltd")
           ])
-        ]),
-        co("GB30000015", "Cavendish Insurance Brokers Ltd"),
+        ], "ED"),
+        co("GB30000015", "Cavendish Insurance Brokers Ltd", null, "D"),
         co("GB30000016", "Thames Logistics Group Ltd", [
           co("GB40000017", "Thames Freight Services Ltd")
         ])
       ]),
       co("DE20000018", "Meridian Deutschland GmbH", [
         co("DE30000019", "Rheinland Industrial Services GmbH"),
-        co("DE30000020", "Rheinland Chemicals GmbH")
+        co("DE30000020", "Rheinland Chemicals GmbH", null, "D")
       ]),
       co("FR20000021", "Meridian France SAS", [
         co("FR30000022", "Provence Agro Holdings SAS")
@@ -48,10 +55,10 @@
       co("US20000024", "Harborline Energy Corp", [
         co("US30000025", "Harborline Pipeline LLC"),
         co("US30000026", "Harborline Renewables LLC")
-      ]),
+      ], "ED"),
       co("US20000027", "Summit Data Systems Inc.", [
         co("US30000028", "Summit Analytics LLC")
-      ])
+      ], "E")
     ])
   ]);
 
@@ -60,16 +67,16 @@
   var DNB = co("100000001", "Meridian Global Holdings SA", [
     co("200000002", "Meridian UK Group Limited", [
       co("300000003", "Northwind Capital Partners Limited", [
-        co("400000004", "Northwind Asset Management Limited"),
+        co("400000004", "Northwind Asset Management Limited", null, "E"),
         co("400000005", "Northwind Advisory LLP"),
         co("400000006", "Northwind Real Estate Holdings Limited", [
           co("500000007", "Northwind Property One Limited")
         ])
-      ]),
+      ], "ED"),
       co("300000008", "Cavendish Insurance Brokers Limited")
     ]),
     co("200000009", "Meridian Americas Incorporated", [
-      co("300000010", "Harborline Energy Corporation")
+      co("300000010", "Harborline Energy Corporation", null, "D")
     ])
   ]);
 
@@ -232,44 +239,94 @@
     white-space: nowrap;
   }
 
-  /* ── Controls ── */
+  /* ── Toolbar ── */
   #controls {
-    padding: 12px 20px 0;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 12px 20px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
-  #filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  #search-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
   }
   #filter-input {
-    flex: 1;
-    max-width: 420px;
-    padding: 7px 12px;
+    width: 100%;
+    padding: 8px 30px 8px 12px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
+    font: inherit;
     font-size: 13px;
     outline: none;
     background: #fff;
+    color: #1a1a2e;
     transition: border-color .15s;
   }
   #filter-input:focus { border-color: #6366f1; }
   #filter-input::placeholder { color: #9ca3af; }
 
-  #clear-btn {
-    padding: 7px 14px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background: #fff;
-    font-size: 13px;
+  #search-clear {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: none;
+    padding: 0;
+    border-radius: 4px;
+    color: #9ca3af;
+    font-size: 16px;
+    line-height: 1;
     cursor: pointer;
-    color: #374151;
-    transition: background .15s;
   }
-  #clear-btn:hover { background: #f3f4f6; }
+  #search-clear:hover { background: #f3f4f6; color: #374151; }
+  #search-clear[hidden] { display: none; }
+
+  /* ── Quick filters ── */
+  #quick-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .qf-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-right: 2px;
+  }
+  .qf-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    background: #fff;
+    font: inherit;
+    font-size: 12px;
+    color: #374151;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .qf-btn:hover:not(:disabled):not(.active) { background: #f3f4f6; }
+  .qf-btn.active {
+    background: #1a1a2e;
+    border-color: #1a1a2e;
+    color: #fff;
+    font-weight: 600;
+  }
+  .qf-btn:disabled { opacity: .45; cursor: default; }
+  .qf-arrow { font-size: 12px; line-height: 1; }
 
   /* ── Per-row relationship menu ── */
   #row-menu {
@@ -393,7 +450,7 @@
     background: none;
     border-radius: 3px;
     color: #9ca3af;
-    font-size: 10px;
+    font-size: 13px;
     line-height: 1;
     cursor: pointer;
     transition: background .12s, color .12s;
@@ -444,6 +501,52 @@
   .node-id {
     color: #6b7280;
     font-size: 12px;
+  }
+
+  /* ── Expand / collapse twisty ── */
+  .twisty {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    align-self: center;
+    margin-right: 2px;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 3px;
+    color: #6b7280;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .twisty:hover, .twisty:focus-visible {
+    background: #e5e7eb;
+    color: #111827;
+    outline: none;
+  }
+  .twisty-spacer {
+    display: inline-block;
+    width: 18px;
+    flex-shrink: 0;
+  }
+
+  /* ── Issuer badges ── */
+  .issuer-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    background: #111827;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: default;
   }
   .node-indicators {
     display: inline-flex;
@@ -541,9 +644,20 @@
 </div>
 
 <div id="controls">
-  <div id="filter-bar">
-    <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
-    <button id="clear-btn">Clear</button>
+  <div id="search-wrap">
+    <input id="filter-input" type="text" placeholder="type name to filter..." autocomplete="off" />
+    <button id="search-clear" type="button" aria-label="Clear search" hidden>&times;</button>
+  </div>
+  <div id="quick-filters">
+    <span class="qf-label">Filters</span>
+    <button class="qf-btn" type="button" data-qf="party-up" aria-pressed="false"
+            title="Show the party and its ownership chain up to the ultimate owner">Party <span class="qf-arrow">&#8593;</span></button>
+    <button class="qf-btn" type="button" data-qf="party-updown" aria-pressed="false"
+            title="Show the party, its chain up to the ultimate owner, and everything beneath it">Party <span class="qf-arrow">&#8597;</span></button>
+    <button class="qf-btn" type="button" data-qf="issuers-up" aria-pressed="false"
+            title="Show every equity or fixed income issuer and its chain up to the ultimate owner">Issuers <span class="qf-arrow">&#8593;</span></button>
+    <button class="qf-btn" type="button" data-qf="issuers-updown" aria-pressed="false"
+            title="Show every equity or fixed income issuer, its chain up to the ultimate owner, and everything beneath it">Issuers <span class="qf-arrow">&#8597;</span></button>
   </div>
   <div id="legend-strip"></div>
 </div>
@@ -618,7 +732,9 @@ function flattenNode(node, parentId, out, seen) {
   out.push({
     id: id,
     name: node.name || node.displayName || node.nameWithoutHonorifics || id,
-    parentId: parentId
+    parentId: parentId,
+    isEquityIssuer: !!(node.is_equity_issuer || node.isEquityIssuer),
+    isFixedIncomeIssuer: !!(node.is_fixed_income_issuer || node.isFixedIncomeIssuer)
   });
   var children = node.subCompanies || node.children || [];
   for (var i = 0; i < children.length; i++) {
@@ -778,6 +894,10 @@ function initApp(DATA, META, titleOverride) {
   headerTitle.textContent = titleOverride || (anchorNode ? anchorNode.name : "Corporate tree");
 
   var selected = new Set();
+  var quickActive = new Set();
+  var collapsed = new Set();
+
+  function isIssuer(n) { return n.isEquityIssuer || n.isFixedIncomeIssuer; }
 
   function getAncestors(nodeId) {
     var ancestors = new Set();
@@ -812,6 +932,34 @@ function initApp(DATA, META, titleOverride) {
       out.push(child.id);
       if (deep) getDescendants(child.id, true).forEach(function(id) { out.push(id); });
     });
+    return out;
+  }
+
+  function withAncestors(ids) {
+    var out = new Set(ids);
+    ids.forEach(function(id) {
+      getAncestors(id).forEach(function(aid) { out.add(aid); });
+    });
+    return out;
+  }
+
+  // Each quick filter keeps its seed rows plus the chain above them, so a
+  // match is never orphaned from its ultimate owner. The up/down variants
+  // also keep everything beneath the seeds.
+  function quickFilterIds(key) {
+    var seeds;
+    if (key === "party-up" || key === "party-updown") {
+      if (!anchorNode) return new Set();
+      seeds = [anchorNode.id];
+    } else {
+      seeds = DATA.nodes.filter(isIssuer).map(function(n) { return n.id; });
+    }
+    var out = withAncestors(seeds);
+    if (key === "party-updown" || key === "issuers-updown") {
+      seeds.forEach(function(id) {
+        getDescendants(id, true).forEach(function(did) { out.add(did); });
+      });
+    }
     return out;
   }
 
@@ -871,8 +1019,14 @@ function initApp(DATA, META, titleOverride) {
     rowMenu.classList.add("open");
     btn.classList.add("active");
     btn.setAttribute("aria-expanded", "true");
+    positionRowMenu();
+  }
 
-    var r = btn.getBoundingClientRect();
+  function positionRowMenu() {
+    if (!rowMenuBtn) return;
+    var r = rowMenuBtn.getBoundingClientRect();
+    // The row scrolled out of sight; nothing left to anchor to.
+    if (r.bottom < 0 || r.top > window.innerHeight) { closeRowMenu(); return; }
     var mw = rowMenu.offsetWidth, mh = rowMenu.offsetHeight;
     var left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
     var top = r.bottom + 4;
@@ -895,35 +1049,59 @@ function initApp(DATA, META, titleOverride) {
     container.innerHTML = "";
     closeRowMenu();
 
-    var legendVisible = null;
+    // Every active filter contributes a set of ids; a row must survive all
+    // of them. Quick filters union with each other first, so picking two of
+    // them widens rather than narrows.
+    var sets = [];
+
     if (activeIcon) {
-      var matching = new Set(
-        DATA.nodes.filter(function(n) { return n.indicators && n.indicators.includes(activeIcon); }).map(function(n) { return n.id; })
-      );
-      legendVisible = new Set(matching);
-      matching.forEach(function(id) {
-        getAncestors(id).forEach(function(aid) { legendVisible.add(aid); });
+      sets.push(withAncestors(
+        DATA.nodes.filter(function(n) { return n.indicators && n.indicators.includes(activeIcon); })
+                  .map(function(n) { return n.id; })
+      ));
+    }
+
+    if (quickActive.size) {
+      var union = new Set();
+      quickActive.forEach(function(key) {
+        quickFilterIds(key).forEach(function(id) { union.add(id); });
       });
+      sets.push(union);
     }
 
     var txt = filterText.trim().toLowerCase();
-    var textVisible = null;
     if (txt) {
-      var matching2 = new Set(
-        DATA.nodes.filter(function(n) { return (n.name + " " + (n.id || "")).toLowerCase().includes(txt); }).map(function(n) { return n.id; })
-      );
-      textVisible = new Set(matching2);
-      matching2.forEach(function(id) {
-        getAncestors(id).forEach(function(aid) { textVisible.add(aid); });
+      sets.push(withAncestors(
+        DATA.nodes.filter(function(n) { return (n.name + " " + (n.id || "")).toLowerCase().includes(txt); })
+                  .map(function(n) { return n.id; })
+      ));
+    }
+
+    var visibleSet = null;
+    if (sets.length) {
+      visibleSet = sets.reduce(function(acc, s) {
+        return new Set(Array.from(acc).filter(function(id) { return s.has(id); }));
+      });
+      // A filtered-in row must not stay hidden behind a collapsed ancestor.
+      visibleSet.forEach(function(id) {
+        getAncestors(id).forEach(function(aid) { collapsed.delete(aid); });
       });
     }
 
     var visibleCount = 0;
+    var collapseDepth = null;
 
     allRows.forEach(function(r) {
       var node = r.node, depth = r.depth, isLast = r.isLast, ancestorDepths = r.ancestorDepths;
-      if (legendVisible !== null && !legendVisible.has(node.id)) return;
-      if (textVisible !== null && !textVisible.has(node.id)) return;
+
+      if (collapseDepth !== null) {
+        if (depth > collapseDepth) return;
+        collapseDepth = null;
+      }
+      if (visibleSet !== null && !visibleSet.has(node.id)) return;
+
+      var hasChildren = (childrenOf.get(node.id) || []).length > 0;
+      if (hasChildren && collapsed.has(node.id)) collapseDepth = depth;
 
       visibleCount++;
 
@@ -949,7 +1127,7 @@ function initApp(DATA, META, titleOverride) {
       var menuBtn = document.createElement("button");
       menuBtn.type = "button";
       menuBtn.className = "row-menu-btn";
-      menuBtn.textContent = "▾";
+      menuBtn.textContent = "⋮";
       menuBtn.setAttribute("aria-haspopup", "true");
       menuBtn.setAttribute("aria-expanded", "false");
       menuBtn.setAttribute("aria-label", "Select entities related to " + node.name);
@@ -975,6 +1153,29 @@ function initApp(DATA, META, titleOverride) {
         row.appendChild(conn);
       }
 
+      if (hasChildren) {
+        var twisty = document.createElement("button");
+        twisty.type = "button";
+        twisty.className = "twisty";
+        var isCollapsed = collapsed.has(node.id);
+        twisty.textContent = isCollapsed ? "▶" : "▼";
+        twisty.setAttribute("aria-expanded", String(!isCollapsed));
+        twisty.setAttribute("aria-label",
+          (isCollapsed ? "Expand " : "Collapse ") + node.name);
+        twisty.title = isCollapsed ? "Expand children" : "Collapse children";
+        twisty.addEventListener("click", function(e) {
+          e.stopPropagation();
+          if (collapsed.has(node.id)) collapsed.delete(node.id);
+          else collapsed.add(node.id);
+          renderTree();
+        });
+        row.appendChild(twisty);
+      } else {
+        var spacer = document.createElement("span");
+        spacer.className = "twisty-spacer";
+        row.appendChild(spacer);
+      }
+
       var content = document.createElement("span");
       content.className = "node-content";
 
@@ -982,6 +1183,23 @@ function initApp(DATA, META, titleOverride) {
       nameSpan.className = "node-name";
       nameSpan.textContent = node.name;
       content.appendChild(nameSpan);
+
+      if (node.isEquityIssuer) {
+        var eq = document.createElement("span");
+        eq.className = "issuer-badge";
+        eq.textContent = "E";
+        eq.title = "Equity Issuer";
+        eq.setAttribute("aria-label", "Equity Issuer");
+        content.appendChild(eq);
+      }
+      if (node.isFixedIncomeIssuer) {
+        var fi = document.createElement("span");
+        fi.className = "issuer-badge";
+        fi.textContent = "D";
+        fi.title = "Fixed Income Issuer";
+        fi.setAttribute("aria-label", "Fixed Income Issuer");
+        content.appendChild(fi);
+      }
 
       var idSpan = document.createElement("span");
       idSpan.className = "node-id";
@@ -1011,17 +1229,47 @@ function initApp(DATA, META, titleOverride) {
   }
 
   var filterInput = document.getElementById("filter-input");
+  var searchClear = document.getElementById("search-clear");
+
+  function syncSearchClear() {
+    searchClear.hidden = filterInput.value.length === 0;
+  }
+
   filterInput.addEventListener("input", function() {
     filterText = filterInput.value;
+    syncSearchClear();
     renderTree();
   });
 
-  document.getElementById("clear-btn").addEventListener("click", function() {
+  searchClear.addEventListener("click", function() {
     filterInput.value = "";
     filterText = "";
-    activeIcon = null;
-    document.querySelectorAll(".legend-pill").forEach(function(p) { p.classList.remove("active"); });
+    syncSearchClear();
+    filterInput.focus();
     renderTree();
+  });
+  syncSearchClear();
+
+  /* ── Quick filters: independently toggleable, combined as a union ── */
+  document.querySelectorAll(".qf-btn").forEach(function(btn) {
+    var key = btn.dataset.qf;
+    if (!anchorNode && key.indexOf("party") === 0) {
+      btn.disabled = true;
+      btn.title = "The loaded party was not found in this tree";
+      return;
+    }
+    if (key.indexOf("issuers") === 0 && !DATA.nodes.some(isIssuer)) {
+      btn.disabled = true;
+      btn.title = "No equity or fixed income issuers in this tree";
+      return;
+    }
+    btn.addEventListener("click", function() {
+      var on = !quickActive.has(key);
+      if (on) quickActive.add(key); else quickActive.delete(key);
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+      renderTree();
+    });
   });
 
   document.getElementById("sel-clear").addEventListener("click", function() {
@@ -1035,9 +1283,10 @@ function initApp(DATA, META, titleOverride) {
   document.addEventListener("keydown", function(e) {
     if (e.key === "Escape") closeRowMenu();
   });
-  // Fixed-position popup would otherwise drift away from its row.
-  window.addEventListener("scroll", closeRowMenu, true);
-  window.addEventListener("resize", closeRowMenu);
+  // The popup is fixed-position, so it has to be re-anchored as the tree
+  // scrolls under it rather than left floating over an unrelated row.
+  window.addEventListener("scroll", positionRowMenu, true);
+  window.addEventListener("resize", positionRowMenu);
 
   renderTree();
 }
