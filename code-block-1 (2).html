@@ -211,52 +211,36 @@
   }
   #clear-btn:hover { background: #f3f4f6; }
 
-  /* ── Bulk select menu ── */
-  #bulk-wrap { position: relative; }
-  #bulk-btn {
-    padding: 7px 14px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background: #fff;
-    font-size: 13px;
-    cursor: pointer;
-    color: #374151;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: background .15s;
-  }
-  #bulk-btn:hover { background: #f3f4f6; }
-  #bulk-btn .caret { font-size: 9px; color: #6b7280; }
-
-  #bulk-menu {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    min-width: 230px;
+  /* ── Per-row relationship menu ── */
+  #row-menu {
+    position: fixed;
+    min-width: 240px;
+    max-width: 300px;
     background: #fff;
     border: 1px solid #e5e7eb;
     border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    box-shadow: 0 6px 20px rgba(0,0,0,.14);
     padding: 4px;
-    z-index: 150;
+    z-index: 200;
     display: none;
   }
-  #bulk-menu.open { display: block; }
-  #bulk-scope {
+  #row-menu.open { display: block; }
+  #row-menu-scope {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: .5px;
     color: #9ca3af;
     font-weight: 600;
-    padding: 6px 10px 4px;
+    padding: 6px 10px 5px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 260px;
   }
   .bulk-item {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
     width: 100%;
     text-align: left;
     padding: 7px 10px;
@@ -269,8 +253,9 @@
     cursor: pointer;
   }
   .bulk-item:hover { background: #f3f4f6; }
-  .bulk-item:disabled { color: #9ca3af; cursor: not-allowed; background: none; }
-  .bulk-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+  .bulk-item:disabled { color: #c3c7ce; cursor: default; background: none; }
+  .bulk-item .bulk-n { font-size: 11px; color: #9ca3af; font-variant-numeric: tabular-nums; }
+  .bulk-item:disabled .bulk-n { color: #d8dbe0; }
 
   /* ── Legend strip ── */
   #legend-strip {
@@ -331,10 +316,34 @@
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    margin: 0 8px 0 0;
+    margin: 0;
     align-self: center;
     accent-color: #6366f1;
     cursor: pointer;
+  }
+
+  .row-menu-btn {
+    width: 16px;
+    height: 18px;
+    flex-shrink: 0;
+    margin: 0 6px 0 2px;
+    align-self: center;
+    padding: 0;
+    border: none;
+    background: none;
+    border-radius: 3px;
+    color: #9ca3af;
+    font-size: 10px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background .12s, color .12s;
+  }
+  .row-menu-btn:hover,
+  .row-menu-btn:focus-visible,
+  .row-menu-btn.active {
+    background: #e5e7eb;
+    color: #374151;
+    outline: none;
   }
 
   .indent {
@@ -401,6 +410,19 @@
     z-index: 90;
   }
   #sel-count { font-weight: 600; color: #1a1a2e; }
+  #sel-clear {
+    margin-left: auto;
+    padding: 4px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 12px;
+    color: #374151;
+    cursor: pointer;
+  }
+  #sel-clear:hover:not(:disabled) { background: #f3f4f6; }
+  #sel-clear:disabled { opacity: .45; cursor: default; }
 
   /* ── No-results message ── */
   #no-results {
@@ -460,17 +482,6 @@
   <div id="filter-bar">
     <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
     <button id="clear-btn">Clear</button>
-    <div id="bulk-wrap">
-      <button id="bulk-btn" type="button" aria-haspopup="true" aria-expanded="false">Bulk select <span class="caret">▼</span></button>
-      <div id="bulk-menu" role="menu">
-        <div id="bulk-scope"></div>
-        <button class="bulk-item" type="button" role="menuitem" data-scope="parents">Select all parents</button>
-        <button class="bulk-item" type="button" role="menuitem" data-scope="direct">Select all direct subsidiaries</button>
-        <button class="bulk-item" type="button" role="menuitem" data-scope="all">Select all subsidiaries</button>
-        <div class="bulk-sep"></div>
-        <button class="bulk-item" type="button" role="menuitem" data-scope="none">Clear selection</button>
-      </div>
-    </div>
   </div>
   <div id="legend-strip"></div>
 </div>
@@ -480,7 +491,17 @@
   <div id="no-results">No matching entities.</div>
 </div>
 
-<div id="sel-bar"><span id="sel-count">0 entities selected</span></div>
+<div id="sel-bar">
+  <span id="sel-count">0 entities selected</span>
+  <button id="sel-clear" type="button" disabled>Clear selection</button>
+</div>
+</div>
+
+<div id="row-menu" role="menu" aria-label="Select related entities">
+  <div id="row-menu-scope"></div>
+  <button class="bulk-item" type="button" role="menuitem" data-scope="parents">Select all parents<span class="bulk-n"></span></button>
+  <button class="bulk-item" type="button" role="menuitem" data-scope="direct">Select all direct subsidiaries<span class="bulk-n"></span></button>
+  <button class="bulk-item" type="button" role="menuitem" data-scope="all">Select all subsidiaries<span class="bulk-n"></span></button>
 </div>
 
 <div id="jp-backdrop" onclick="jpHandleBackdrop(event)">
@@ -732,21 +753,22 @@ function initApp(DATA, META, titleOverride) {
     return out;
   }
 
+  // Relationships of any one node, used by that node's own row menu.
+  function scopeIds(scope, nodeId) {
+    if (scope === "parents") return Array.from(getAncestors(nodeId));
+    if (scope === "direct") return getDescendants(nodeId, false);
+    return getDescendants(nodeId, true);
+  }
+
   function updateSelCount() {
     var n = selected.size;
     document.getElementById("sel-count").textContent =
       n + (n === 1 ? " entity selected" : " entities selected");
+    document.getElementById("sel-clear").disabled = n === 0;
   }
 
-  function applyBulkScope(scope) {
-    if (scope === "none") {
-      selected.clear();
-    } else if (anchorNode) {
-      var ids = scope === "parents" ? Array.from(getAncestors(anchorNode.id))
-              : scope === "direct"  ? getDescendants(anchorNode.id, false)
-              :                       getDescendants(anchorNode.id, true);
-      ids.forEach(function(id) { selected.add(id); });
-    }
+  function applyScope(scope, nodeId) {
+    scopeIds(scope, nodeId).forEach(function(id) { selected.add(id); });
     renderTree();
   }
 
@@ -755,9 +777,61 @@ function initApp(DATA, META, titleOverride) {
     legendStrip.classList.add("hidden");
   }
 
+  /* ── Row menu (one shared popup, repointed at whichever row opened it) ── */
+  var rowMenu = document.getElementById("row-menu");
+  var rowMenuScope = document.getElementById("row-menu-scope");
+  var rowMenuNodeId = null;
+  var rowMenuBtn = null;
+
+  function closeRowMenu() {
+    rowMenu.classList.remove("open");
+    if (rowMenuBtn) {
+      rowMenuBtn.classList.remove("active");
+      rowMenuBtn.setAttribute("aria-expanded", "false");
+    }
+    rowMenuNodeId = null;
+    rowMenuBtn = null;
+  }
+
+  function openRowMenu(node, btn) {
+    rowMenuNodeId = node.id;
+    rowMenuBtn = btn;
+    rowMenuScope.textContent = "Relative to " + node.name;
+    rowMenuScope.title = node.name;
+
+    rowMenu.querySelectorAll(".bulk-item").forEach(function(item) {
+      var n = scopeIds(item.dataset.scope, node.id).length;
+      item.disabled = n === 0;
+      item.querySelector(".bulk-n").textContent = n;
+    });
+
+    // Show it before measuring, then keep it inside the viewport.
+    rowMenu.classList.add("open");
+    btn.classList.add("active");
+    btn.setAttribute("aria-expanded", "true");
+
+    var r = btn.getBoundingClientRect();
+    var mw = rowMenu.offsetWidth, mh = rowMenu.offsetHeight;
+    var left = Math.max(8, Math.min(r.left, window.innerWidth - mw - 8));
+    var top = r.bottom + 4;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+    rowMenu.style.left = left + "px";
+    rowMenu.style.top = top + "px";
+  }
+
+  rowMenu.querySelectorAll(".bulk-item").forEach(function(item) {
+    item.addEventListener("click", function() {
+      if (item.disabled || !rowMenuNodeId) return;
+      var id = rowMenuNodeId;
+      closeRowMenu();
+      applyScope(item.dataset.scope, id);
+    });
+  });
+
   function renderTree() {
     var container = document.getElementById("tree-container");
     container.innerHTML = "";
+    closeRowMenu();
 
     var legendVisible = null;
     if (activeIcon) {
@@ -809,6 +883,21 @@ function initApp(DATA, META, titleOverride) {
         updateSelCount();
       });
       row.appendChild(check);
+
+      var menuBtn = document.createElement("button");
+      menuBtn.type = "button";
+      menuBtn.className = "row-menu-btn";
+      menuBtn.textContent = "▾";
+      menuBtn.setAttribute("aria-haspopup", "true");
+      menuBtn.setAttribute("aria-expanded", "false");
+      menuBtn.setAttribute("aria-label", "Select entities related to " + node.name);
+      menuBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        var wasOpen = rowMenuNodeId === node.id;
+        closeRowMenu();
+        if (!wasOpen) openRowMenu(node, menuBtn);
+      });
+      row.appendChild(menuBtn);
 
       for (var d = 0; d < depth; d++) {
         var ind = document.createElement("span");
@@ -873,39 +962,20 @@ function initApp(DATA, META, titleOverride) {
     renderTree();
   });
 
-  /* ── Bulk select menu ── */
-  var bulkBtn = document.getElementById("bulk-btn");
-  var bulkMenu = document.getElementById("bulk-menu");
-
-  document.getElementById("bulk-scope").textContent =
-    anchorNode ? "Relative to " + anchorNode.name : "Party not found in tree";
-
-  function closeBulkMenu() {
-    bulkMenu.classList.remove("open");
-    bulkBtn.setAttribute("aria-expanded", "false");
-  }
-
-  bulkBtn.addEventListener("click", function(e) {
-    e.stopPropagation();
-    var open = !bulkMenu.classList.contains("open");
-    bulkMenu.classList.toggle("open", open);
-    bulkBtn.setAttribute("aria-expanded", String(open));
-  });
-
-  bulkMenu.querySelectorAll(".bulk-item").forEach(function(item) {
-    if (!anchorNode && item.dataset.scope !== "none") item.disabled = true;
-    item.addEventListener("click", function() {
-      applyBulkScope(item.dataset.scope);
-      closeBulkMenu();
-    });
+  document.getElementById("sel-clear").addEventListener("click", function() {
+    selected.clear();
+    renderTree();
   });
 
   document.addEventListener("click", function(e) {
-    if (!bulkMenu.contains(e.target)) closeBulkMenu();
+    if (!rowMenu.contains(e.target)) closeRowMenu();
   });
   document.addEventListener("keydown", function(e) {
-    if (e.key === "Escape") closeBulkMenu();
+    if (e.key === "Escape") closeRowMenu();
   });
+  // Fixed-position popup would otherwise drift away from its row.
+  window.addEventListener("scroll", closeRowMenu, true);
+  window.addEventListener("resize", closeRowMenu);
 
   renderTree();
 }
