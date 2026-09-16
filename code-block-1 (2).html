@@ -258,8 +258,14 @@
     color: #fff;
     font-weight: 600;
   }
+  /* Deal party filters carry the same indigo as the deal party row, so the
+     button and the row it targets read as one thing. */
+  .qf-btn.qf-party.active { background: #4338ca; border-color: #4338ca; }
   .qf-btn:disabled { opacity: .45; cursor: default; }
   .qf-arrow { font-size: 12px; line-height: 1; }
+
+  .qf-btn .issuer-badge { width: 13px; height: 13px; font-size: 8px; }
+  .qf-btn.active .issuer-badge { background: #fff; color: #1a1a2e; }
 
   /* ── Per-row relationship menu ── */
   #row-menu {
@@ -360,6 +366,20 @@
   .tree-node.selected > .node-content {
     background: #eef2ff;
     border-radius: 4px;
+  }
+
+  /* Deal party row. Listed after .selected so the stronger tint wins, with a
+     combined rule so a selected deal party still reads as selected. */
+  .tree-node.deal-party > .node-content {
+    background: #e0e7ff;
+    border-radius: 4px;
+  }
+  .tree-node.deal-party .node-name {
+    font-weight: 700;
+    color: #312e81;
+  }
+  .tree-node.deal-party.selected > .node-content {
+    box-shadow: inset 0 0 0 1.5px #6366f1;
   }
 
   .row-check {
@@ -581,14 +601,18 @@
   </div>
   <div id="quick-filters">
     <span class="qf-label">Filters</span>
-    <button class="qf-btn" type="button" data-qf="party-up" aria-pressed="false"
-            title="Show the party and its ownership chain up to the ultimate owner">Party <span class="qf-arrow">&#8593;</span></button>
-    <button class="qf-btn" type="button" data-qf="party-updown" aria-pressed="false"
-            title="Show the party, its chain up to the ultimate owner, and everything beneath it">Party <span class="qf-arrow">&#8597;</span></button>
+    <button class="qf-btn qf-party" type="button" data-qf="deal-party-up" aria-pressed="false"
+            title="Show the deal party and its ownership chain up to the ultimate owner">Deal Party <span class="qf-arrow">&#8593;</span></button>
+    <button class="qf-btn qf-party" type="button" data-qf="deal-party-updown" aria-pressed="false"
+            title="Show the deal party, its chain up to the ultimate owner, and everything beneath it">Deal Party <span class="qf-arrow">&#8597;</span></button>
     <button class="qf-btn" type="button" data-qf="issuers-up" aria-pressed="false"
-            title="Show every equity or fixed income issuer and its chain up to the ultimate owner">Issuers <span class="qf-arrow">&#8593;</span></button>
+            title="Show every equity or fixed income issuer and its chain up to the ultimate owner">Issuers
+      <span class="issuer-badge" aria-hidden="true">E</span><span class="issuer-badge" aria-hidden="true">D</span>
+      <span class="qf-arrow">&#8593;</span></button>
     <button class="qf-btn" type="button" data-qf="issuers-updown" aria-pressed="false"
-            title="Show every equity or fixed income issuer, its chain up to the ultimate owner, and everything beneath it">Issuers <span class="qf-arrow">&#8597;</span></button>
+            title="Show every equity or fixed income issuer, its chain up to the ultimate owner, and everything beneath it">Issuers
+      <span class="issuer-badge" aria-hidden="true">E</span><span class="issuer-badge" aria-hidden="true">D</span>
+      <span class="qf-arrow">&#8597;</span></button>
   </div>
   <div id="legend-strip"></div>
 </div>
@@ -879,14 +903,14 @@ function initApp(DATA, META, titleOverride) {
   // also keep everything beneath the seeds.
   function quickFilterIds(key) {
     var seeds;
-    if (key === "party-up" || key === "party-updown") {
+    if (key === "deal-party-up" || key === "deal-party-updown") {
       if (!anchorNode) return new Set();
       seeds = [anchorNode.id];
     } else {
       seeds = DATA.nodes.filter(isIssuer).map(function(n) { return n.id; });
     }
     var out = withAncestors(seeds);
-    if (key === "party-updown" || key === "issuers-updown") {
+    if (key === "deal-party-updown" || key === "issuers-updown") {
       seeds.forEach(function(id) {
         getDescendants(id, true).forEach(function(did) { out.add(did); });
       });
@@ -1042,6 +1066,8 @@ function initApp(DATA, META, titleOverride) {
         row.classList.add("highlighted");
       }
       if (selected.has(node.id)) row.classList.add("selected");
+      var isDealParty = anchorNode && node.id === anchorNode.id;
+      if (isDealParty) row.classList.add("deal-party");
 
       var check = document.createElement("input");
       check.type = "checkbox";
@@ -1109,6 +1135,7 @@ function initApp(DATA, META, titleOverride) {
 
       var content = document.createElement("span");
       content.className = "node-content";
+      if (isDealParty) content.title = "Deal party";
 
       var nameSpan = document.createElement("span");
       nameSpan.className = "node-name";
@@ -1184,9 +1211,9 @@ function initApp(DATA, META, titleOverride) {
   /* ── Quick filters: independently toggleable, combined as a union ── */
   document.querySelectorAll(".qf-btn").forEach(function(btn) {
     var key = btn.dataset.qf;
-    if (!anchorNode && key.indexOf("party") === 0) {
+    if (!anchorNode && key.indexOf("deal-party") === 0) {
       btn.disabled = true;
-      btn.title = "The loaded party was not found in this tree";
+      btn.title = "The deal party was not found in this tree";
       return;
     }
     if (key.indexOf("issuers") === 0 && !DATA.nodes.some(isIssuer)) {
