@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>
+/* ─── DEMO TRANSPORT ─────────────────────────────────────────────────────
+   Stand-in for the Celeste RPC bridge. Returns a fabricated get_party
+   payload so the page can be driven without a host. Every name, ID and
+   relationship below is invented. Nothing here reaches a network.
+   ──────────────────────────────────────────────────────────────────────── */
+(function () {
+  function co(id, name, subs) {
+    return { externalId: id, name: name, subCompanies: subs || [] };
+  }
+
+  // Bureau van Dijk shape: 28 entities, anchor sits four levels down with
+  // ancestors above it, four direct subsidiaries, siblings and cousin arms.
+  var BVD = co("LU00000001", "Meridian Global Holdings S.A.", [
+    co("NL10000002", "Meridian Europe Holdings B.V.", [
+      co("GB20000003", "Meridian UK Group Ltd", [
+        co("GB30000004", "Northwind Capital Partners Ltd", [
+          co("GB40000005", "Northwind Asset Management Ltd", [
+            co("GB50000006", "Northwind Fund Services Ltd"),
+            co("GB50000007", "Northwind Custody Nominees Ltd")
+          ]),
+          co("GB40000008", "Northwind Advisory LLP"),
+          co("GB40000009", "Northwind Real Estate Holdings Ltd", [
+            co("GB50000010", "Northwind Property One Ltd"),
+            co("GB50000011", "Northwind Property Two Ltd"),
+            co("GB50000012", "Northwind Property Three Ltd")
+          ]),
+          co("SG40000013", "Northwind Ventures Pte Ltd", [
+            co("HK50000014", "Northwind Ventures Asia Ltd")
+          ])
+        ]),
+        co("GB30000015", "Cavendish Insurance Brokers Ltd"),
+        co("GB30000016", "Thames Logistics Group Ltd", [
+          co("GB40000017", "Thames Freight Services Ltd")
+        ])
+      ]),
+      co("DE20000018", "Meridian Deutschland GmbH", [
+        co("DE30000019", "Rheinland Industrial Services GmbH"),
+        co("DE30000020", "Rheinland Chemicals GmbH")
+      ]),
+      co("FR20000021", "Meridian France SAS", [
+        co("FR30000022", "Provence Agro Holdings SAS")
+      ])
+    ]),
+    co("US10000023", "Meridian Americas Inc.", [
+      co("US20000024", "Harborline Energy Corp", [
+        co("US30000025", "Harborline Pipeline LLC"),
+        co("US30000026", "Harborline Renewables LLC")
+      ]),
+      co("US20000027", "Summit Data Systems Inc.", [
+        co("US30000028", "Summit Analytics LLC")
+      ])
+    ])
+  ]);
+
+  // Dun & Bradstreet shape: deliberately sparser, with DUNS-style IDs, so
+  // switching provider on the loader visibly changes the tree.
+  var DNB = co("100000001", "Meridian Global Holdings SA", [
+    co("200000002", "Meridian UK Group Limited", [
+      co("300000003", "Northwind Capital Partners Limited", [
+        co("400000004", "Northwind Asset Management Limited"),
+        co("400000005", "Northwind Advisory LLP"),
+        co("400000006", "Northwind Real Estate Holdings Limited", [
+          co("500000007", "Northwind Property One Limited")
+        ])
+      ]),
+      co("300000008", "Cavendish Insurance Brokers Limited")
+    ]),
+    co("200000009", "Meridian Americas Incorporated", [
+      co("300000010", "Harborline Energy Corporation")
+    ])
+  ]);
+
+  var PARTY = {
+    partyId: "1096",
+    name: "Northwind Capital Partners Ltd",
+    bureauVanDijkId: "GB30000004",
+    dunsNumber: "300000003",
+    corporateTrees: [
+      { providerType: "BureauVanDijk", rootCompanyId: BVD.externalId, rootCompany: BVD },
+      { providerType: "DunAndBradstreet", rootCompanyId: DNB.externalId, rootCompany: DNB }
+    ]
+  };
+
+  function delay(value) {
+    return new Promise(function (resolve) {
+      setTimeout(function () { resolve(value); }, 250);
+    });
+  }
+
+  var celeste = {
+    query: function (name) {
+      if (name === "intapp_compliance__get_party") return delay(PARTY);
+      return delay(null);
+    },
+    action: function () { return delay({}); },
+    getContext: function () { return { demo: true }; }
+  };
+  Object.freeze(celeste);
+  Object.defineProperty(window, "celeste", {
+    value: celeste, writable: false, configurable: false
+  });
+})();
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Corporate Tree — demo</title>
+<style>
+  #demo-note {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+  #demo-badge {
+    background: #4338ca;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+</style>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    background: #f5f6f8;
+    color: #1a1a2e;
+    min-height: 100vh;
+  }
+
+  /* ── Loader ── */
+  #loader {
+    max-width: 480px;
+    margin: 60px auto;
+    padding: 32px 24px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  #loader h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 16px;
+    color: #1a1a2e;
+  }
+  #loader label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #6b7280;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+  }
+  #loader input, #loader select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 14px;
+    margin-bottom: 12px;
+    background: #fff;
+    color: #1a1a2e;
+  }
+  #loader input:focus, #loader select:focus {
+    outline: none;
+    border-color: #6366f1;
+  }
+  #load-btn {
+    padding: 8px 20px;
+    background: #1a1a2e;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #load-btn:hover { background: #2d2d4e; }
+  #load-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  #lerr {
+    display: block;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #dc2626;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  #header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  #header-title {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #node-count {
+    font-size: 12px;
+    color: #9ca3af;
+    white-space: nowrap;
+  }
+
+  /* ── Controls ── */
+  #controls {
+    padding: 12px 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  #filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #filter-input {
+    flex: 1;
+    max-width: 420px;
+    padding: 7px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    background: #fff;
+    transition: border-color .15s;
+  }
+  #filter-input:focus { border-color: #6366f1; }
+  #filter-input::placeholder { color: #9ca3af; }
+
+  #clear-btn {
+    padding: 7px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #374151;
+    transition: background .15s;
+  }
+  #clear-btn:hover { background: #f3f4f6; }
+
+  /* ── Bulk select menu ── */
+  #bulk-wrap { position: relative; }
+  #bulk-btn {
+    padding: 7px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .15s;
+  }
+  #bulk-btn:hover { background: #f3f4f6; }
+  #bulk-btn .caret { font-size: 9px; color: #6b7280; }
+
+  #bulk-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 230px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    padding: 4px;
+    z-index: 150;
+    display: none;
+  }
+  #bulk-menu.open { display: block; }
+  #bulk-scope {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #9ca3af;
+    font-weight: 600;
+    padding: 6px 10px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+  }
+  .bulk-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 10px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: #374151;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .bulk-item:hover { background: #f3f4f6; }
+  .bulk-item:disabled { color: #9ca3af; cursor: not-allowed; background: none; }
+  .bulk-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+
+  /* ── Legend strip ── */
+  #legend-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+  #legend-strip.hidden { display: none; }
+
+  .legend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 999px;
+    border: 1.5px solid #d1d5db;
+    background: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  .legend-pill:hover { background: #f3f4f6; }
+  .legend-pill.active {
+    background: #eef2ff;
+    border-color: #6366f1;
+    color: #4338ca;
+    font-weight: 600;
+  }
+
+  /* ── Tree container ── */
+  #tree-wrap {
+    padding: 16px 20px 64px;
+    overflow-x: auto;
+  }
+
+  /* ── Tree node rows ── */
+  .tree-node {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+    padding: 3px 0;
+    white-space: nowrap;
+  }
+  .tree-node.hidden { display: none; }
+  .tree-node.highlighted > .node-content {
+    background: #fef9c3;
+    border-radius: 4px;
+  }
+  .tree-node.selected > .node-content {
+    background: #eef2ff;
+    border-radius: 4px;
+  }
+
+  .row-check {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin: 0 8px 0 0;
+    align-self: center;
+    accent-color: #6366f1;
+    cursor: pointer;
+  }
+
+  .indent {
+    display: inline-block;
+    width: 22px;
+    flex-shrink: 0;
+    color: #9ca3af;
+    font-size: 13px;
+    text-align: center;
+    user-select: none;
+  }
+  .indent.pipe    { border-left: 1.5px solid #d1d5db; height: 100%; }
+  .connector {
+    display: inline-block;
+    width: 22px;
+    flex-shrink: 0;
+    color: #9ca3af;
+    font-size: 13px;
+    user-select: none;
+  }
+
+  .node-content {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .node-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .node-name {
+    font-weight: 500;
+    color: #111827;
+  }
+  .node-id {
+    color: #6b7280;
+    font-size: 12px;
+  }
+  .node-indicators {
+    display: inline-flex;
+    gap: 2px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  /* ── Selection counter bar ── */
+  #sel-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 -1px 4px rgba(0,0,0,.05);
+    z-index: 90;
+  }
+  #sel-count { font-weight: 600; color: #1a1a2e; }
+
+  /* ── No-results message ── */
+  #no-results {
+    padding: 32px 20px;
+    color: #6b7280;
+    font-size: 13px;
+    display: none;
+  }
+
+  /* ── Judgement panel ── */
+  #jp-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.18s; }
+  #jp-backdrop.open { opacity:1; pointer-events:auto; }
+  .jp-panel { background:#fff; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.18); width:420px; max-width:92vw; max-height:80vh; overflow-y:auto; padding:20px; }
+  #jp-title { font-size:15px; font-weight:700; margin-bottom:4px; color:#1e293b; }
+  #jp-desc { font-size:12px; color:#64748b; margin-bottom:12px; line-height:1.4; }
+  .jp-pills { display:flex; gap:4px; background:#f1f5f9; border-radius:7px; padding:3px; margin-bottom:8px; }
+  .jp-pill { flex:1; text-align:center; font-size:11px; font-weight:500; color:#64748b; padding:4px 8px; border-radius:5px; cursor:pointer; border:none; background:transparent; transition:background 0.12s,color 0.12s,box-shadow 0.12s; }
+  .jp-pill:hover { color:#1e293b; }
+  .jp-pill.active { background:#fff; color:#1e293b; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  .jp-tree-leaf { font-weight:600; color:#0f172a; }
+  .jp-legend { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .jp-legend-item { font-size:11px; display:flex; align-items:center; gap:3px; }
+  #jp-tree { font-size:12px; font-family:monospace; line-height:1.7; }
+  .jp-tree-row { display:flex; align-items:center; gap:4px; }
+  .jp-tree-name { color:#334155; }
+  .jp-tree-id { color:#94a3b8; font-size:11px; }
+  .jp-badge { font-size:12px; margin-left:4px; }
+  .jp-close { position:absolute; top:12px; right:14px; background:none; border:none; font-size:18px; cursor:pointer; color:#94a3b8; }
+  .jp-close:hover { color:#1e293b; }
+
+  #app { display: none; }
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <h2>Corporate Tree</h2>
+  <div id="demo-note"><strong>Demo build.</strong> All entities are fabricated and no data leaves the page. Any Party ID loads the same sample family; switch provider to see a different tree shape.</div>
+  <label for="pid">Party ID</label>
+  <input id="pid" type="text" value="1096" placeholder="e.g. 1096, mstar, GB00633819" />
+  <label for="provider">Provider</label>
+  <select id="provider">
+    <option value="BureauVanDijk">Bureau van Dijk</option>
+    <option value="DunAndBradstreet">Dun &amp; Bradstreet</option>
+    <option value="Intapp">Intapp</option>
+  </select>
+  <button id="load-btn" onclick="loadParty()">Load</button>
+  <span id="lerr"></span>
+</div>
+
+<div id="app">
+<div id="header">
+  <span id="demo-badge">Demo</span>
+  <span id="header-title">Corporate tree</span>
+  <span id="node-count"></span>
+</div>
+
+<div id="controls">
+  <div id="filter-bar">
+    <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
+    <button id="clear-btn">Clear</button>
+    <div id="bulk-wrap">
+      <button id="bulk-btn" type="button" aria-haspopup="true" aria-expanded="false">Bulk select <span class="caret">▼</span></button>
+      <div id="bulk-menu" role="menu">
+        <div id="bulk-scope"></div>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="parents">Select all parents</button>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="direct">Select all direct subsidiaries</button>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="all">Select all subsidiaries</button>
+        <div class="bulk-sep"></div>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="none">Clear selection</button>
+      </div>
+    </div>
+  </div>
+  <div id="legend-strip"></div>
+</div>
+
+<div id="tree-wrap">
+  <div id="tree-container"></div>
+  <div id="no-results">No matching entities.</div>
+</div>
+
+<div id="sel-bar"><span id="sel-count">0 entities selected</span></div>
+</div>
+
+<div id="jp-backdrop" onclick="jpHandleBackdrop(event)">
+  <div class="jp-panel" style="position:relative;">
+    <button class="jp-close" onclick="jpClose()">&times;</button>
+    <div id="jp-title"></div>
+    <div id="jp-desc"></div>
+    <div class="jp-pills">
+      <button class="jp-pill active" id="jp-pill-reconciled" onclick="jpSwitchPill('reconciled')">Reconciled</button>
+      <button class="jp-pill" id="jp-pill-existing" onclick="jpSwitchPill('existing')">Existing</button>
+      <button class="jp-pill" id="jp-pill-provided" onclick="jpSwitchPill('provided')">Provided</button>
+    </div>
+    <div class="jp-legend" id="jp-legend"></div>
+    <div id="jp-tree"></div>
+  </div>
+</div>
+
+<script>
+/* ─── RESPONSE UNWRAPPER ─────────────────────────────────────────────── */
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && (key ? key in raw : true)) return raw;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var b = raw[i];
+      var v = (b && b.text != null) ? b.text : (b && b.content != null) ? b.content : (b && b.value != null) ? b.value : (b && b.data != null) ? b.data : b;
+      if (typeof v === "string") {
+        try { var p = JSON.parse(v); if (!key || key in p) return p; } catch(e) {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        var envs = ["result","data","value","payload"];
+        for (var j = 0; j < envs.length; j++) {
+          if (v[envs[j]] && typeof v[envs[j]] === "object" && (!key || key in v[envs[j]])) return v[envs[j]];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { var p2 = JSON.parse(raw); if (!key || key in p2) return p2; } catch(e2) {}
+  }
+  return null;
+}
+
+/* ─── TREE FLATTENER ─────────────────────────────────────────────────── */
+function flattenNode(node, parentId, out, seen) {
+  if (!node) return;
+  var id = node.externalId || node.key || null;
+  if (!id) return;
+  if (seen.has(id)) return;
+  seen.add(id);
+  out.push({
+    id: id,
+    name: node.name || node.displayName || node.nameWithoutHonorifics || id,
+    parentId: parentId
+  });
+  var children = node.subCompanies || node.children || [];
+  for (var i = 0; i < children.length; i++) {
+    flattenNode(children[i], id, out, seen);
+  }
+}
+
+/* ─── MAIN LOADER ────────────────────────────────────────────────────── */
+async function loadParty() {
+  var pidInput = document.getElementById("pid");
+  var providerSelect = document.getElementById("provider");
+  var errEl = document.getElementById("lerr");
+  var btn = document.getElementById("load-btn");
+  errEl.textContent = "";
+
+  var partyId = (pidInput.value || "").trim();
+  if (!partyId) {
+    errEl.textContent = "Please enter a Party ID.";
+    return;
+  }
+
+  var provider = providerSelect.value;
+  btn.textContent = "Loading\u2026";
+  btn.disabled = true;
+
+  try {
+    var partyRaw = await celeste.query(
+      "intapp_compliance__get_party",
+      { partyId: partyId, propertiesToLoad: ["CorporateFamily"] }
+    );
+    var party = extractObj(partyRaw, "partyId");
+    if (!party) throw new Error("Could not load party " + partyId + ". Check the ID and try again.");
+
+    var partyName = party.name || partyId;
+    var nodes = [];
+    var seen = new Set();
+    var usedExternalId = null;
+
+    var corpTrees = party.corporateTrees || [];
+    var matchedTree = null;
+
+    for (var i = 0; i < corpTrees.length; i++) {
+      if (corpTrees[i].providerType === provider) {
+        matchedTree = corpTrees[i];
+        break;
+      }
+    }
+    if (!matchedTree && corpTrees.length > 0) {
+      matchedTree = corpTrees[0];
+    }
+
+    if (matchedTree && matchedTree.rootCompany) {
+      usedExternalId = matchedTree.rootCompanyId || matchedTree.rootCompany.externalId;
+      flattenNode(matchedTree.rootCompany, null, nodes, seen);
+    }
+
+    if (nodes.length === 0) {
+      var extId = null;
+      if (provider === "BureauVanDijk") {
+        extId = party.bureauVanDijkId || party.externalId || null;
+      } else if (provider === "DunAndBradstreet") {
+        extId = party.dunsNumber || party.externalId || null;
+      } else {
+        extId = party.externalId || party.bureauVanDijkId || party.dunsNumber || null;
+      }
+
+      var corpFamily = party.corporateFamily || {};
+      var entries = corpFamily.entries || corpFamily.corporateFamilyEntries || [];
+      if (Array.isArray(entries) && entries.length > 0 && !extId) {
+        for (var k = 0; k < entries.length; k++) {
+          var e = entries[k];
+          if (e.provider === provider || e.dataProvider === provider) {
+            extId = e.externalId || e.key || e.id;
+            break;
+          }
+        }
+        if (!extId && entries[0]) {
+          extId = entries[0].externalId || entries[0].key || entries[0].id;
+        }
+      }
+
+      if (!extId) {
+        throw new Error("Party " + partyName + " (" + partyId + ") has no external ID for provider " + provider + ".");
+      }
+
+      usedExternalId = extId;
+
+      var treeRaw = await celeste.query(
+        "intapp_compliance__load_corporate_tree_data",
+        { externalId: extId, provider: provider }
+      );
+      var treeData = extractObj(treeRaw, "corporateTrees");
+      if (treeData && treeData.corporateTrees) {
+        for (var m = 0; m < treeData.corporateTrees.length; m++) {
+          flattenNode(treeData.corporateTrees[m], null, nodes, seen);
+        }
+      }
+    }
+
+    if (!nodes.length) {
+      throw new Error("Corporate tree was empty for " + partyName + ".");
+    }
+
+    // Locate the loaded party inside the flattened tree. Bulk selection is
+    // expressed relative to it (its parents / its subsidiaries), so fall back
+    // to the id the tree was resolved with when no node matches.
+    var anchorId = null;
+    var anchorCandidates = [party.bureauVanDijkId, party.dunsNumber, party.externalId, party.partyId];
+    for (var a = 0; a < anchorCandidates.length; a++) {
+      var cand = anchorCandidates[a];
+      if (cand != null && seen.has(String(cand))) { anchorId = String(cand); break; }
+    }
+    if (!anchorId && usedExternalId && seen.has(usedExternalId)) anchorId = usedExternalId;
+
+    var DATA = {
+      id: anchorId,
+      highlight: [],
+      trees: [],
+      legend: [],
+      nodes: nodes,
+      indicatorActions: {}
+    };
+    var META = {};
+
+    initApp(DATA, META, partyName);
+
+  } catch (e) {
+    errEl.textContent = "Error: " + e.message;
+    btn.textContent = "Load";
+    btn.disabled = false;
+  }
+}
+
+/* ─── APP INIT ───────────────────────────────────────────────────────── */
+function initApp(DATA, META, titleOverride) {
+  document.getElementById("loader").style.display = "none";
+  document.getElementById("app").style.display = "block";
+
+  var activeIcon = null;
+  var filterText = "";
+
+  var nodeMap = new Map();
+  DATA.nodes.forEach(function(n) { nodeMap.set(n.id, n); });
+
+  var childrenOf = new Map();
+  DATA.nodes.forEach(function(n) {
+    if (!childrenOf.has(n.parentId)) childrenOf.set(n.parentId, []);
+    childrenOf.get(n.parentId).push(n);
+  });
+
+  var roots = DATA.nodes.filter(function(n) {
+    return n.parentId === null || !nodeMap.has(n.parentId);
+  });
+
+  var anchorNode = DATA.id ? nodeMap.get(DATA.id) : null;
+  var headerTitle = document.getElementById("header-title");
+  headerTitle.textContent = titleOverride || (anchorNode ? anchorNode.name : "Corporate tree");
+
+  var selected = new Set();
+
+  function getAncestors(nodeId) {
+    var ancestors = new Set();
+    var cur = nodeMap.get(nodeId);
+    while (cur && cur.parentId != null && nodeMap.has(cur.parentId)) {
+      ancestors.add(cur.parentId);
+      cur = nodeMap.get(cur.parentId);
+    }
+    return ancestors;
+  }
+
+  function flattenTree(nodeList, depth, ancestorDepths) {
+    var rows = [];
+    nodeList.forEach(function(node, idx) {
+      var isLast = idx === nodeList.length - 1;
+      var newAncestorDepths = new Set(ancestorDepths);
+      if (!isLast) newAncestorDepths.add(depth);
+      rows.push({ node: node, depth: depth, isLast: isLast, ancestorDepths: new Set(ancestorDepths) });
+      var children = childrenOf.get(node.id) || [];
+      if (children.length) {
+        flattenTree(children, depth + 1, newAncestorDepths).forEach(function(r) { rows.push(r); });
+      }
+    });
+    return rows;
+  }
+
+  var allRows = flattenTree(roots, 0, new Set());
+
+  function getDescendants(nodeId, deep) {
+    var out = [];
+    (childrenOf.get(nodeId) || []).forEach(function(child) {
+      out.push(child.id);
+      if (deep) getDescendants(child.id, true).forEach(function(id) { out.push(id); });
+    });
+    return out;
+  }
+
+  function updateSelCount() {
+    var n = selected.size;
+    document.getElementById("sel-count").textContent =
+      n + (n === 1 ? " entity selected" : " entities selected");
+  }
+
+  function applyBulkScope(scope) {
+    if (scope === "none") {
+      selected.clear();
+    } else if (anchorNode) {
+      var ids = scope === "parents" ? Array.from(getAncestors(anchorNode.id))
+              : scope === "direct"  ? getDescendants(anchorNode.id, false)
+              :                       getDescendants(anchorNode.id, true);
+      ids.forEach(function(id) { selected.add(id); });
+    }
+    renderTree();
+  }
+
+  var legendStrip = document.getElementById("legend-strip");
+  if (!DATA.legend || DATA.legend.length === 0) {
+    legendStrip.classList.add("hidden");
+  }
+
+  function renderTree() {
+    var container = document.getElementById("tree-container");
+    container.innerHTML = "";
+
+    var legendVisible = null;
+    if (activeIcon) {
+      var matching = new Set(
+        DATA.nodes.filter(function(n) { return n.indicators && n.indicators.includes(activeIcon); }).map(function(n) { return n.id; })
+      );
+      legendVisible = new Set(matching);
+      matching.forEach(function(id) {
+        getAncestors(id).forEach(function(aid) { legendVisible.add(aid); });
+      });
+    }
+
+    var txt = filterText.trim().toLowerCase();
+    var textVisible = null;
+    if (txt) {
+      var matching2 = new Set(
+        DATA.nodes.filter(function(n) { return (n.name + " " + (n.id || "")).toLowerCase().includes(txt); }).map(function(n) { return n.id; })
+      );
+      textVisible = new Set(matching2);
+      matching2.forEach(function(id) {
+        getAncestors(id).forEach(function(aid) { textVisible.add(aid); });
+      });
+    }
+
+    var visibleCount = 0;
+
+    allRows.forEach(function(r) {
+      var node = r.node, depth = r.depth, isLast = r.isLast, ancestorDepths = r.ancestorDepths;
+      if (legendVisible !== null && !legendVisible.has(node.id)) return;
+      if (textVisible !== null && !textVisible.has(node.id)) return;
+
+      visibleCount++;
+
+      var row = document.createElement("div");
+      row.className = "tree-node";
+      if (DATA.highlight && DATA.highlight.includes(node.id)) {
+        row.classList.add("highlighted");
+      }
+      if (selected.has(node.id)) row.classList.add("selected");
+
+      var check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "row-check";
+      check.checked = selected.has(node.id);
+      check.setAttribute("aria-label", "Select " + node.name);
+      check.addEventListener("change", function() {
+        if (this.checked) selected.add(node.id); else selected.delete(node.id);
+        row.classList.toggle("selected", this.checked);
+        updateSelCount();
+      });
+      row.appendChild(check);
+
+      for (var d = 0; d < depth; d++) {
+        var ind = document.createElement("span");
+        ind.className = "indent";
+        ind.textContent = ancestorDepths.has(d) ? "\u2502" : " ";
+        row.appendChild(ind);
+      }
+
+      if (depth > 0) {
+        var conn = document.createElement("span");
+        conn.className = "connector";
+        conn.textContent = isLast ? "\u2514\u2500" : "\u251C\u2500";
+        row.appendChild(conn);
+      }
+
+      var content = document.createElement("span");
+      content.className = "node-content";
+
+      var nameSpan = document.createElement("span");
+      nameSpan.className = "node-name";
+      nameSpan.textContent = node.name;
+      content.appendChild(nameSpan);
+
+      var idSpan = document.createElement("span");
+      idSpan.className = "node-id";
+      idSpan.textContent = "(" + node.id + ")";
+      content.appendChild(idSpan);
+
+      if (node.indicators && node.indicators.length > 0) {
+        var indWrap = document.createElement("span");
+        indWrap.className = "node-indicators";
+        node.indicators.forEach(function(icon) {
+          var s = document.createElement("span");
+          s.textContent = icon;
+          indWrap.appendChild(s);
+        });
+        content.appendChild(indWrap);
+      }
+
+      row.appendChild(content);
+      container.appendChild(row);
+    });
+
+    document.getElementById("node-count").textContent =
+      visibleCount + " / " + DATA.nodes.length + " nodes";
+    document.getElementById("no-results").style.display =
+      visibleCount === 0 ? "block" : "none";
+    updateSelCount();
+  }
+
+  var filterInput = document.getElementById("filter-input");
+  filterInput.addEventListener("input", function() {
+    filterText = filterInput.value;
+    renderTree();
+  });
+
+  document.getElementById("clear-btn").addEventListener("click", function() {
+    filterInput.value = "";
+    filterText = "";
+    activeIcon = null;
+    document.querySelectorAll(".legend-pill").forEach(function(p) { p.classList.remove("active"); });
+    renderTree();
+  });
+
+  /* ── Bulk select menu ── */
+  var bulkBtn = document.getElementById("bulk-btn");
+  var bulkMenu = document.getElementById("bulk-menu");
+
+  document.getElementById("bulk-scope").textContent =
+    anchorNode ? "Relative to " + anchorNode.name : "Party not found in tree";
+
+  function closeBulkMenu() {
+    bulkMenu.classList.remove("open");
+    bulkBtn.setAttribute("aria-expanded", "false");
+  }
+
+  bulkBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    var open = !bulkMenu.classList.contains("open");
+    bulkMenu.classList.toggle("open", open);
+    bulkBtn.setAttribute("aria-expanded", String(open));
+  });
+
+  bulkMenu.querySelectorAll(".bulk-item").forEach(function(item) {
+    if (!anchorNode && item.dataset.scope !== "none") item.disabled = true;
+    item.addEventListener("click", function() {
+      applyBulkScope(item.dataset.scope);
+      closeBulkMenu();
+    });
+  });
+
+  document.addEventListener("click", function(e) {
+    if (!bulkMenu.contains(e.target)) closeBulkMenu();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeBulkMenu();
+  });
+
+  renderTree();
+}
+
+/* ── Judgement panel functions ── */
+function esc(s) { return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function jpOpen(action, nodeId) { /* placeholder */ }
+function jpSwitchPill(view) { /* placeholder */ }
+function jpClose() { document.getElementById("jp-backdrop").classList.remove("open"); }
+function jpHandleBackdrop(e) { if (e.target === document.getElementById("jp-backdrop")) jpClose(); }
+document.addEventListener("keydown", function(e) { if (e.key === "Escape") jpClose(); });
+</script>
+
+</body>
+</html>
