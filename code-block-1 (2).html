@@ -211,6 +211,67 @@
   }
   #clear-btn:hover { background: #f3f4f6; }
 
+  /* ── Bulk select menu ── */
+  #bulk-wrap { position: relative; }
+  #bulk-btn {
+    padding: 7px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .15s;
+  }
+  #bulk-btn:hover { background: #f3f4f6; }
+  #bulk-btn .caret { font-size: 9px; color: #6b7280; }
+
+  #bulk-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 230px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    padding: 4px;
+    z-index: 150;
+    display: none;
+  }
+  #bulk-menu.open { display: block; }
+  #bulk-scope {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #9ca3af;
+    font-weight: 600;
+    padding: 6px 10px 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+  }
+  .bulk-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 10px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    color: #374151;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .bulk-item:hover { background: #f3f4f6; }
+  .bulk-item:disabled { color: #9ca3af; cursor: not-allowed; background: none; }
+  .bulk-sep { height: 1px; background: #e5e7eb; margin: 4px 0; }
+
   /* ── Legend strip ── */
   #legend-strip {
     display: flex;
@@ -244,7 +305,7 @@
 
   /* ── Tree container ── */
   #tree-wrap {
-    padding: 16px 20px 40px;
+    padding: 16px 20px 64px;
     overflow-x: auto;
   }
 
@@ -260,6 +321,20 @@
   .tree-node.highlighted > .node-content {
     background: #fef9c3;
     border-radius: 4px;
+  }
+  .tree-node.selected > .node-content {
+    background: #eef2ff;
+    border-radius: 4px;
+  }
+
+  .row-check {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin: 0 8px 0 0;
+    align-self: center;
+    accent-color: #6366f1;
+    cursor: pointer;
   }
 
   .indent {
@@ -301,12 +376,6 @@
     color: #6b7280;
     font-size: 12px;
   }
-  .node-anchor {
-    color: #6366f1;
-    font-weight: 700;
-    font-size: 13px;
-    flex-shrink: 0;
-  }
   .node-indicators {
     display: inline-flex;
     gap: 2px;
@@ -314,11 +383,24 @@
     flex-shrink: 0;
   }
 
-  /* root crown */
-  .root-icon {
+  /* ── Selection counter bar ── */
+  #sel-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    padding: 10px 20px;
     font-size: 13px;
-    flex-shrink: 0;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 -1px 4px rgba(0,0,0,.05);
+    z-index: 90;
   }
+  #sel-count { font-weight: 600; color: #1a1a2e; }
 
   /* ── No-results message ── */
   #no-results {
@@ -378,6 +460,17 @@
   <div id="filter-bar">
     <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
     <button id="clear-btn">Clear</button>
+    <div id="bulk-wrap">
+      <button id="bulk-btn" type="button" aria-haspopup="true" aria-expanded="false">Bulk select <span class="caret">▼</span></button>
+      <div id="bulk-menu" role="menu">
+        <div id="bulk-scope"></div>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="parents">Select all parents</button>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="direct">Select all direct subsidiaries</button>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="all">Select all subsidiaries</button>
+        <div class="bulk-sep"></div>
+        <button class="bulk-item" type="button" role="menuitem" data-scope="none">Clear selection</button>
+      </div>
+    </div>
   </div>
   <div id="legend-strip"></div>
 </div>
@@ -386,6 +479,8 @@
   <div id="tree-container"></div>
   <div id="no-results">No matching entities.</div>
 </div>
+
+<div id="sel-bar"><span id="sel-count">0 entities selected</span></div>
 </div>
 
 <div id="jp-backdrop" onclick="jpHandleBackdrop(event)">
@@ -544,8 +639,19 @@ async function loadParty() {
       throw new Error("Corporate tree was empty for " + partyName + ".");
     }
 
+    // Locate the loaded party inside the flattened tree. Bulk selection is
+    // expressed relative to it (its parents / its subsidiaries), so fall back
+    // to the id the tree was resolved with when no node matches.
+    var anchorId = null;
+    var anchorCandidates = [party.bureauVanDijkId, party.dunsNumber, party.externalId, party.partyId];
+    for (var a = 0; a < anchorCandidates.length; a++) {
+      var cand = anchorCandidates[a];
+      if (cand != null && seen.has(String(cand))) { anchorId = String(cand); break; }
+    }
+    if (!anchorId && usedExternalId && seen.has(usedExternalId)) anchorId = usedExternalId;
+
     var DATA = {
-      id: usedExternalId,
+      id: anchorId,
       highlight: [],
       trees: [],
       legend: [],
@@ -584,9 +690,11 @@ function initApp(DATA, META, titleOverride) {
     return n.parentId === null || !nodeMap.has(n.parentId);
   });
 
-  var anchorNode = nodeMap.get(DATA.id);
+  var anchorNode = DATA.id ? nodeMap.get(DATA.id) : null;
   var headerTitle = document.getElementById("header-title");
   headerTitle.textContent = titleOverride || (anchorNode ? anchorNode.name : "Corporate tree");
+
+  var selected = new Set();
 
   function getAncestors(nodeId) {
     var ancestors = new Set();
@@ -614,6 +722,33 @@ function initApp(DATA, META, titleOverride) {
   }
 
   var allRows = flattenTree(roots, 0, new Set());
+
+  function getDescendants(nodeId, deep) {
+    var out = [];
+    (childrenOf.get(nodeId) || []).forEach(function(child) {
+      out.push(child.id);
+      if (deep) getDescendants(child.id, true).forEach(function(id) { out.push(id); });
+    });
+    return out;
+  }
+
+  function updateSelCount() {
+    var n = selected.size;
+    document.getElementById("sel-count").textContent =
+      n + (n === 1 ? " entity selected" : " entities selected");
+  }
+
+  function applyBulkScope(scope) {
+    if (scope === "none") {
+      selected.clear();
+    } else if (anchorNode) {
+      var ids = scope === "parents" ? Array.from(getAncestors(anchorNode.id))
+              : scope === "direct"  ? getDescendants(anchorNode.id, false)
+              :                       getDescendants(anchorNode.id, true);
+      ids.forEach(function(id) { selected.add(id); });
+    }
+    renderTree();
+  }
 
   var legendStrip = document.getElementById("legend-strip");
   if (!DATA.legend || DATA.legend.length === 0) {
@@ -661,6 +796,19 @@ function initApp(DATA, META, titleOverride) {
       if (DATA.highlight && DATA.highlight.includes(node.id)) {
         row.classList.add("highlighted");
       }
+      if (selected.has(node.id)) row.classList.add("selected");
+
+      var check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "row-check";
+      check.checked = selected.has(node.id);
+      check.setAttribute("aria-label", "Select " + node.name);
+      check.addEventListener("change", function() {
+        if (this.checked) selected.add(node.id); else selected.delete(node.id);
+        row.classList.toggle("selected", this.checked);
+        updateSelCount();
+      });
+      row.appendChild(check);
 
       for (var d = 0; d < depth; d++) {
         var ind = document.createElement("span");
@@ -679,14 +827,6 @@ function initApp(DATA, META, titleOverride) {
       var content = document.createElement("span");
       content.className = "node-content";
 
-      var isRoot = node.parentId === null || !nodeMap.has(node.parentId);
-      if (isRoot) {
-        var crown = document.createElement("span");
-        crown.className = "root-icon";
-        crown.textContent = "\uD83D\uDC51";
-        content.appendChild(crown);
-      }
-
       var nameSpan = document.createElement("span");
       nameSpan.className = "node-name";
       nameSpan.textContent = node.name;
@@ -696,13 +836,6 @@ function initApp(DATA, META, titleOverride) {
       idSpan.className = "node-id";
       idSpan.textContent = "(" + node.id + ")";
       content.appendChild(idSpan);
-
-      if (node.id === DATA.id) {
-        var anchor = document.createElement("span");
-        anchor.className = "node-anchor";
-        anchor.textContent = "\u25C6";
-        content.appendChild(anchor);
-      }
 
       if (node.indicators && node.indicators.length > 0) {
         var indWrap = document.createElement("span");
@@ -723,6 +856,7 @@ function initApp(DATA, META, titleOverride) {
       visibleCount + " / " + DATA.nodes.length + " nodes";
     document.getElementById("no-results").style.display =
       visibleCount === 0 ? "block" : "none";
+    updateSelCount();
   }
 
   var filterInput = document.getElementById("filter-input");
@@ -737,6 +871,40 @@ function initApp(DATA, META, titleOverride) {
     activeIcon = null;
     document.querySelectorAll(".legend-pill").forEach(function(p) { p.classList.remove("active"); });
     renderTree();
+  });
+
+  /* ── Bulk select menu ── */
+  var bulkBtn = document.getElementById("bulk-btn");
+  var bulkMenu = document.getElementById("bulk-menu");
+
+  document.getElementById("bulk-scope").textContent =
+    anchorNode ? "Relative to " + anchorNode.name : "Party not found in tree";
+
+  function closeBulkMenu() {
+    bulkMenu.classList.remove("open");
+    bulkBtn.setAttribute("aria-expanded", "false");
+  }
+
+  bulkBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    var open = !bulkMenu.classList.contains("open");
+    bulkMenu.classList.toggle("open", open);
+    bulkBtn.setAttribute("aria-expanded", String(open));
+  });
+
+  bulkMenu.querySelectorAll(".bulk-item").forEach(function(item) {
+    if (!anchorNode && item.dataset.scope !== "none") item.disabled = true;
+    item.addEventListener("click", function() {
+      applyBulkScope(item.dataset.scope);
+      closeBulkMenu();
+    });
+  });
+
+  document.addEventListener("click", function(e) {
+    if (!bulkMenu.contains(e.target)) closeBulkMenu();
+  });
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") closeBulkMenu();
   });
 
   renderTree();
