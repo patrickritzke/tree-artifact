@@ -2,52 +2,112 @@
 <html lang="en">
 <head><script>
 /* ─── OUTER BRIDGE ───────────────────────────────────────────────────────
-   Talks to the real Celeste host. Same protocol as any artifact, with two
-   additions: it exposes handshake state for the UI, and it fails the
-   handshake loudly after a deadline instead of leaving every call pending
-   forever.
+   Talks to the real Celeste host.
+
+   Some hosts inject their own bridge script into <head> ahead of this file's
+   own scripts. That bridge installs window.celeste as non-configurable, so a
+   second install throws "Cannot redefine property: celeste" and kills the
+   rest of whatever script attempted it. So this one adopts an existing bridge
+   rather than competing with it, publishes its state before anything that can
+   throw, and never assumes it is the only bridge on the page.
    ──────────────────────────────────────────────────────────────────────── */
 (function () {
   var VERSION = 1;
   var HANDSHAKE_MS = 8000;
-  var pending = {};
-  var seq = 0;
-  var ctx = {};
-  var nonce = null;
-  var ready, failReady;
+  var CALL_DEADLINE_MS = 25000;
   var t0 = Date.now();
 
-  var state = { ready: false, error: null, context: {}, handshakeMs: null, inFrame: window.parent !== window };
+  var state = {
+    ready: false, error: null, note: null, context: {},
+    handshakeMs: null, bridge: 'none', inFrame: window.parent !== window
+  };
 
-  var readyPromise = new Promise(function (resolve, reject) { ready = resolve; failReady = reject; });
-  readyPromise.catch(function () {});   // a rejected handshake is reported through state
+  /* Published first: every later failure should degrade to a message in the
+     UI, not an undefined read that takes the page down. */
+  try {
+    Object.defineProperty(window, '__celesteState', { get: function () { return state; } });
+  } catch (e) {
+    window.__celesteState = state;
+  }
 
-  function announce() { window.dispatchEvent(new Event('celeste-state')); }
+  function announce() {
+    try { window.dispatchEvent(new Event('celeste-state')); } catch (e) {}
+  }
 
   var hsTimer = setTimeout(function () {
     if (state.ready) return;
     state.error = state.inFrame
       ? 'the host never sent celeste.rpc.init within ' + HANDSHAKE_MS + 'ms'
       : 'not running inside a frame, so there is no host to talk to';
-    failReady(new Error('celeste: ' + state.error));
     announce();
   }, HANDSHAKE_MS);
+
+  /* The handshake is learned by observing the message, which works whether
+     the bridge making the calls is this one or the host's. */
+  window.addEventListener('message', function (event) {
+    if (event.source !== window.parent) return;
+    var msg = event.data;
+    if (!msg || msg.v !== VERSION || msg.type !== 'celeste.rpc.init') return;
+    clearTimeout(hsTimer);
+    state.ready = true;
+    state.error = null;
+    state.context = msg.context || {};
+    if (state.handshakeMs == null) state.handshakeMs = Date.now() - t0;
+    announce();
+  });
+
+  /* Every shell call goes through here, so a bridge whose handshake never
+     completed fails with a stated reason instead of hanging. */
+  window.__celesteCall = function (op, name, params) {
+    var b = window.celeste;
+    if (!b) return Promise.reject(new Error('there is no celeste bridge on this window'));
+    var call;
+    try {
+      call = op === 'action' ? b.action(name, params) : b.query(name, params);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    return Promise.race([call, new Promise(function (_, reject) {
+      setTimeout(function () {
+        reject(new Error('no response in ' + (CALL_DEADLINE_MS / 1000) +
+          's — the bridge may never have completed its handshake with the host'));
+      }, CALL_DEADLINE_MS);
+    })]);
+  };
+
+  if (window.celeste) {
+    /* The host got here first. Use its bridge: it queues internally until its
+       own init lands, so calls are safe to make right away. */
+    state.bridge = 'host-provided (adopted)';
+    state.ready = true;
+    state.handshakeMs = Date.now() - t0;
+    state.note = 'the host injected its bridge ahead of the shell; adopted it rather than installing a second one';
+    try {
+      var hostCtx = window.celeste.getContext();
+      if (hostCtx && Object.keys(hostCtx).length) state.context = hostCtx;
+    } catch (e) {}
+    clearTimeout(hsTimer);
+    announce();
+    return;
+  }
+
+  /* No bridge on the page, so install one. */
+  var pending = {};
+  var seq = 0;
+  var ctx = {};
+  var nonce = null;
+  var ready, failReady;
+  var readyPromise = new Promise(function (resolve, reject) { ready = resolve; failReady = reject; });
+  readyPromise.catch(function () {});
 
   window.addEventListener('message', function (event) {
     if (event.source !== window.parent) return;
     var msg = event.data;
     if (!msg || msg.v !== VERSION) return;
-
     if (msg.type === 'celeste.rpc.init') {
       nonce = msg.nonce || null;
       ctx = msg.context || {};
-      clearTimeout(hsTimer);
-      state.ready = true;
-      state.error = null;
-      state.context = ctx;
-      state.handshakeMs = Date.now() - t0;
       ready();
-      announce();
     } else if (msg.type === 'celeste.rpc.response') {
       var entry = pending[msg.id];
       if (!entry) return;
@@ -57,6 +117,10 @@
       else entry.reject(new Error((msg.error && msg.error.message) || 'celeste: request failed'));
     }
   });
+
+  setTimeout(function () {
+    if (!state.ready) failReady(new Error('celeste: ' + (state.error || 'handshake failed')));
+  }, HANDSHAKE_MS + 50);
 
   function rpc(op, name, params) {
     return readyPromise.then(function () {
@@ -80,8 +144,14 @@
     getContext: function () { return JSON.parse(JSON.stringify(ctx)); }
   };
   Object.freeze(celeste);
-  Object.defineProperty(window, 'celeste', { value: celeste, writable: false, configurable: false });
-  Object.defineProperty(window, '__celesteState', { get: function () { return state; } });
+  try {
+    Object.defineProperty(window, 'celeste', { value: celeste, writable: false, configurable: false });
+    state.bridge = 'installed by the shell';
+  } catch (e) {
+    state.bridge = 'host-provided (adopted late)';
+    state.note = 'could not install a bridge: ' + e.message;
+  }
+  announce();
 
   window.parent.postMessage({ v: VERSION, type: 'celeste.rpc.hello' }, '*');
 })();
@@ -474,6 +544,15 @@ const CHILD_NONCE = "shell-" + Math.random().toString(36).slice(2) + Date.now().
 const LS_KEY = "celeste-app-shell.src";
 
 const el = id => document.getElementById(id);
+
+/* Never read __celesteState directly: if the bridge script died, a bare read
+   throws and takes the whole UI with it — which is exactly how a host-injected
+   bridge broke this shell once. */
+const cstate = () => window.__celesteState || {
+  ready: false, error: "the shell's bridge script did not finish running",
+  note: null, context: {}, handshakeMs: null, bridge: "unknown",
+  inFrame: window.parent !== window
+};
 const frame = el("app-frame");
 let entries = [];
 
@@ -527,7 +606,7 @@ function renderLog() {
 
 /* ─── Status + diagnostics ────────────────────────────────────────────── */
 function paintStatus() {
-  const s = window.__celesteState;
+  const s = cstate();
   const pill = el("status"), detail = el("status-detail");
   if (s.ready) {
     pill.className = "ok"; pill.textContent = "connected";
@@ -543,10 +622,11 @@ function paintStatus() {
 }
 
 function paintDiag() {
-  const s = window.__celesteState;
+  const s = cstate();
   const lines = [
     "protocol version    1",
     "running in a frame  " + s.inFrame,
+    "bridge              " + s.bridge + (s.note ? "\n                    " + s.note : ""),
     "host handshake      " + (s.ready ? "ok in " + s.handshakeMs + "ms" : s.error ? "FAILED — " + s.error : "pending"),
     "host context        " + (s.ready ? shorten(s.context, 400) : "—"),
     "declared sources    " + DATA_SOURCES.join(", ") + "  (set host-side at publish, not in this file)",
@@ -580,7 +660,7 @@ window.addEventListener("message", event => {
   if (!msg || msg.v !== PROTO) return;
 
   if (msg.type === "celeste.rpc.hello") {
-    const s = window.__celesteState;
+    const s = cstate();
     frame.contentWindow.postMessage({
       v: PROTO, type: "celeste.rpc.init",
       nonce: CHILD_NONCE,
@@ -598,7 +678,7 @@ window.addEventListener("message", event => {
   if (typeof msg.name !== "string" || !msg.name) { respond(msg.id, false, "shell: missing tool name"); return; }
 
   const t0 = performance.now();
-  const call = msg.op === "query" ? celeste.query(msg.name, msg.params) : celeste.action(msg.name, msg.params);
+  const call = window.__celesteCall(msg.op, msg.name, msg.params);
   call.then(
     data => { respond(msg.id, true, data);  log("app", msg.op + " " + msg.name, "ok",  performance.now() - t0, describe(data)); },
     err  => { const m = (err && err.message) || String(err);
@@ -675,7 +755,7 @@ async function callTool(op) {
   out.textContent = "calling " + name + " …";
   const t0 = performance.now();
   try {
-    const data = op === "action" ? await celeste.action(name, params) : await celeste.query(name, params);
+    const data = await window.__celesteCall(op, name, params);
     const ms = Math.round(performance.now() - t0);
     window.__last = data;
     let body;
@@ -716,7 +796,7 @@ async function smokeTest() {
   for (const p of targets) {
     const t0 = performance.now();
     try {
-      const data = await celeste.query(p.tool, p.params);
+      const data = await window.__celesteCall("query", p.tool, p.params);
       const ms = Math.round(performance.now() - t0);
       rows.push({ source: p.source, ok: true, ms, note: describe(data) });
       log("smoke", "query " + p.tool, "ok", ms, describe(data));
@@ -759,8 +839,7 @@ el("copy").addEventListener("click", async () => {
 const saved = store.get();
 if (saved) { el("src").value = saved; el("src-note").textContent = "Restored the source you last ran."; }
 applyPreset(PRESETS[0]);
-paintStatus();
-renderLog();
+try { paintStatus(); renderLog(); } catch (e) { console.error("shell: boot paint failed", e); }
 frame.addEventListener("load", () => {
   if (!frame.hidden && el("frame-note").textContent === "loading…") el("frame-note").textContent = "loaded, waiting for bridge…";
   paintDiag();
