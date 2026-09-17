@@ -318,15 +318,24 @@
     white-space: nowrap;
     transition: background .15s, border-color .15s, color .15s;
   }
+  /* Hue says what a filter targets, fill says whether it is on. Deal party
+     filters carry the deal party row's indigo whether applied or not, so the
+     pill and the row read as one thing at rest; the issuers filters carry
+     their E and D badges the same way. */
+  .qf-btn.qf-party {
+    border-color: #c7d2fe;
+    color: #4338ca;
+  }
+
   .qf-btn:hover:not(:disabled):not(.active) { background: #f3f4f6; }
+  .qf-btn.qf-party:hover:not(:disabled):not(.active) { background: #eef2ff; }
+
   .qf-btn.active {
     background: #1a1a2e;
     border-color: #1a1a2e;
     color: #fff;
     font-weight: 600;
   }
-  /* Deal party filters carry the same indigo as the deal party row, so the
-     button and the row it targets read as one thing. */
   .qf-btn.qf-party.active { background: #4338ca; border-color: #4338ca; }
   .qf-btn:disabled { opacity: .45; cursor: default; }
   .qf-arrow { font-size: 12px; line-height: 1; }
