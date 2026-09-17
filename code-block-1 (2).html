@@ -251,30 +251,23 @@
     white-space: nowrap;
     transition: background .15s, border-color .15s, color .15s;
   }
-  /* Hue says what a filter targets, fill says whether it is on. Deal party
-     filters carry the deal party row's indigo whether applied or not, so the
-     pill and the row read as one thing at rest; the issuers filters carry
-     their E and D badges the same way. */
-  .qf-btn.qf-party {
-    border-color: #c7d2fe;
-    color: #4338ca;
-  }
-
   .qf-btn:hover:not(:disabled):not(.active) { background: #f3f4f6; }
-  .qf-btn.qf-party:hover:not(:disabled):not(.active) { background: #eef2ff; }
-
   .qf-btn.active {
     background: #1a1a2e;
     border-color: #1a1a2e;
     color: #fff;
     font-weight: 600;
   }
-  .qf-btn.qf-party.active { background: #4338ca; border-color: #4338ca; }
   .qf-btn:disabled { opacity: .45; cursor: default; }
   .qf-arrow { font-size: 12px; line-height: 1; }
 
-  .qf-btn .issuer-badge { width: 13px; height: 13px; font-size: 8px; }
+  .qf-btn .issuer-badge,
+  .qf-btn .dp-badge { height: 13px; font-size: 8px; }
+  .qf-btn .issuer-badge { width: 13px; }
   .qf-btn.active .issuer-badge { background: #fff; color: #1a1a2e; }
+  /* Stays blue on the dark active pill rather than going white like the
+     issuer badges, so the deal party colour never drops out. */
+  .qf-btn.active .dp-badge { background: #fff; color: #1d4ed8; }
 
   /* ── Per-row relationship menu ── */
   #row-menu {
@@ -380,15 +373,15 @@
   /* Deal party row. Listed after .selected so the stronger tint wins, with a
      combined rule so a selected deal party still reads as selected. */
   .tree-node.deal-party > .node-content {
-    background: #e0e7ff;
+    background: #dbeafe;
     border-radius: 4px;
   }
   .tree-node.deal-party .node-name {
     font-weight: 700;
-    color: #312e81;
+    color: #1e40af;
   }
   .tree-node.deal-party.selected > .node-content {
-    box-shadow: inset 0 0 0 1.5px #6366f1;
+    box-shadow: inset 0 0 0 1.5px #2563eb;
   }
 
   .row-check {
@@ -491,6 +484,25 @@
     display: inline-block;
     width: 18px;
     flex-shrink: 0;
+  }
+
+  /* ── Deal party badge ── */
+  .dp-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    height: 14px;
+    padding: 0 4px;
+    flex-shrink: 0;
+    border-radius: 2px;
+    background: #2563eb;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    line-height: 1;
+    cursor: default;
   }
 
   /* ── Issuer badges ── */
@@ -610,10 +622,14 @@
   </div>
   <div id="quick-filters">
     <span class="qf-label">Filters</span>
-    <button class="qf-btn qf-party" type="button" data-qf="deal-party-up" aria-pressed="false"
-            title="Show the deal party and its ownership chain up to the ultimate owner">Deal Party <span class="qf-arrow">&#8593;</span></button>
-    <button class="qf-btn qf-party" type="button" data-qf="deal-party-updown" aria-pressed="false"
-            title="Show the deal party, its chain up to the ultimate owner, and everything beneath it">Deal Party <span class="qf-arrow">&#8597;</span></button>
+    <button class="qf-btn" type="button" data-qf="deal-party-up" aria-pressed="false"
+            title="Show the deal party and its ownership chain up to the ultimate owner">Deal Party
+      <span class="dp-badge" aria-hidden="true">DP</span>
+      <span class="qf-arrow">&#8593;</span></button>
+    <button class="qf-btn" type="button" data-qf="deal-party-updown" aria-pressed="false"
+            title="Show the deal party, its chain up to the ultimate owner, and everything beneath it">Deal Party
+      <span class="dp-badge" aria-hidden="true">DP</span>
+      <span class="qf-arrow">&#8597;</span></button>
     <button class="qf-btn" type="button" data-qf="issuers-up" aria-pressed="false"
             title="Show every equity or fixed income issuer and its chain up to the ultimate owner">Issuers
       <span class="issuer-badge" aria-hidden="true">E</span><span class="issuer-badge" aria-hidden="true">D</span>
@@ -1155,6 +1171,15 @@ function initApp(DATA, META, titleOverride) {
       idSpan.className = "node-id";
       idSpan.textContent = "(" + node.id + ")";
       content.appendChild(idSpan);
+
+      if (isDealParty) {
+        var dp = document.createElement("span");
+        dp.className = "dp-badge";
+        dp.textContent = "DP";
+        dp.title = "Deal party";
+        dp.setAttribute("aria-label", "Deal party");
+        content.appendChild(dp);
+      }
 
       if (node.isEquityIssuer) {
         var eq = document.createElement("span");
