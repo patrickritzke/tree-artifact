@@ -1142,6 +1142,11 @@ function initApp(DATA, META, titleOverride) {
       nameSpan.textContent = node.name;
       content.appendChild(nameSpan);
 
+      var idSpan = document.createElement("span");
+      idSpan.className = "node-id";
+      idSpan.textContent = "(" + node.id + ")";
+      content.appendChild(idSpan);
+
       if (node.isEquityIssuer) {
         var eq = document.createElement("span");
         eq.className = "issuer-badge";
@@ -1158,11 +1163,6 @@ function initApp(DATA, META, titleOverride) {
         fi.setAttribute("aria-label", "Fixed Income Issuer");
         content.appendChild(fi);
       }
-
-      var idSpan = document.createElement("span");
-      idSpan.className = "node-id";
-      idSpan.textContent = "(" + node.id + ")";
-      content.appendChild(idSpan);
 
       if (node.indicators && node.indicators.length > 0) {
         var indWrap = document.createElement("span");
