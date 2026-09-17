@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><script>
+/* ─── OUTER BRIDGE ───────────────────────────────────────────────────────
+   Talks to the real Celeste host. Same protocol as any artifact, with two
+   additions: it exposes handshake state for the UI, and it fails the
+   handshake loudly after a deadline instead of leaving every call pending
+   forever.
+   ──────────────────────────────────────────────────────────────────────── */
+(function () {
+  var VERSION = 1;
+  var HANDSHAKE_MS = 8000;
+  var pending = {};
+  var seq = 0;
+  var ctx = {};
+  var nonce = null;
+  var ready, failReady;
+  var t0 = Date.now();
+
+  var state = { ready: false, error: null, context: {}, handshakeMs: null, inFrame: window.parent !== window };
+
+  var readyPromise = new Promise(function (resolve, reject) { ready = resolve; failReady = reject; });
+  readyPromise.catch(function () {});   // a rejected handshake is reported through state
+
+  function announce() { window.dispatchEvent(new Event('celeste-state')); }
+
+  var hsTimer = setTimeout(function () {
+    if (state.ready) return;
+    state.error = state.inFrame
+      ? 'the host never sent celeste.rpc.init within ' + HANDSHAKE_MS + 'ms'
+      : 'not running inside a frame, so there is no host to talk to';
+    failReady(new Error('celeste: ' + state.error));
+    announce();
+  }, HANDSHAKE_MS);
+
+  window.addEventListener('message', function (event) {
+    if (event.source !== window.parent) return;
+    var msg = event.data;
+    if (!msg || msg.v !== VERSION) return;
+
+    if (msg.type === 'celeste.rpc.init') {
+      nonce = msg.nonce || null;
+      ctx = msg.context || {};
+      clearTimeout(hsTimer);
+      state.ready = true;
+      state.error = null;
+      state.context = ctx;
+      state.handshakeMs = Date.now() - t0;
+      ready();
+      announce();
+    } else if (msg.type === 'celeste.rpc.response') {
+      var entry = pending[msg.id];
+      if (!entry) return;
+      delete pending[msg.id];
+      clearTimeout(entry.timer);
+      if (msg.ok) entry.resolve(msg.data);
+      else entry.reject(new Error((msg.error && msg.error.message) || 'celeste: request failed'));
+    }
+  });
+
+  function rpc(op, name, params) {
+    return readyPromise.then(function () {
+      return new Promise(function (resolve, reject) {
+        var id = 'c' + (++seq);
+        var timer = setTimeout(function () {
+          if (pending[id]) { delete pending[id]; reject(new Error('celeste: request timed out')); }
+        }, 30000);
+        pending[id] = { resolve: resolve, reject: reject, timer: timer };
+        window.parent.postMessage({
+          v: VERSION, type: 'celeste.rpc.request',
+          id: id, op: op, name: name, params: params || {}, nonce: nonce
+        }, '*');
+      });
+    });
+  }
+
+  var celeste = {
+    query: function (name, params) { return rpc('query', name, params); },
+    action: function (name, params) { return rpc('action', name, params); },
+    getContext: function () { return JSON.parse(JSON.stringify(ctx)); }
+  };
+  Object.freeze(celeste);
+  Object.defineProperty(window, 'celeste', { value: celeste, writable: false, configurable: false });
+  Object.defineProperty(window, '__celesteState', { get: function () { return state; } });
+
+  window.parent.postMessage({ v: VERSION, type: 'celeste.rpc.hello' }, '*');
+})();
+</script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Celeste App Shell</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    background: #f5f6f8;
+    color: #1a1a2e;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  code, pre, textarea, input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+  /* ── Top bar ── */
+  #top {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+  }
+  #brand { font-weight: 600; letter-spacing: .02em; }
+  #status {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: #6b7280;
+    white-space: nowrap;
+  }
+  #status.ok   { background: #15803d; }
+  #status.bad  { background: #b91c1c; }
+  #status.wait { background: #a16207; }
+  #status-detail { font-size: 11px; color: #9ca3af; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── Layout ── */
+  #cols { flex: 1; display: flex; min-height: 0; }
+  #left {
+    width: 46%;
+    min-width: 340px;
+    max-width: 640px;
+    overflow-y: auto;
+    padding: 12px 14px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-right: 1px solid #e5e7eb;
+  }
+  #right { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #fff; }
+
+  section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  section h2 {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+  .hint { font-size: 11px; color: #6b7280; line-height: 1.5; margin-bottom: 8px; }
+  .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+  textarea, input[type=text] {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 7px 9px;
+    font-size: 12px;
+    background: #fff;
+    color: #1a1a2e;
+    outline: none;
+    resize: vertical;
+  }
+  textarea:focus, input[type=text]:focus { border-color: #6366f1; }
+  #src { height: 150px; white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+  #params { height: 74px; }
+
+  button {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    font: inherit;
+    font-size: 12px;
+    color: #374151;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #f3f4f6; }
+  button.primary { background: #1a1a2e; border-color: #1a1a2e; color: #fff; font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #2d2d4e; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  pre.out {
+    margin-top: 8px;
+    background: #f8f9fb;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    max-height: 220px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  pre.out:empty { display: none; }
+
+  /* ── Call log ── */
+  #log { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  #log:empty::after { content: "No calls yet."; font-size: 11px; color: #9ca3af; }
+  .entry {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 5px 7px;
+    border-radius: 5px;
+    background: #f8f9fb;
+    font-size: 11px;
+    border-left: 3px solid #d1d5db;
+  }
+  .entry.ok  { border-left-color: #15803d; }
+  .entry.err { border-left-color: #b91c1c; background: #fef2f2; }
+  .entry .who { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; font-weight: 700; flex-shrink: 0; }
+  .entry .nm { font-family: ui-monospace, Menlo, monospace; color: #111827; word-break: break-all; }
+  .entry .ms { margin-left: auto; color: #6b7280; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .entry .detail { color: #6b7280; word-break: break-word; }
+
+  /* ── App frame ── */
+  #frame-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafbfc;
+    font-size: 11px;
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+  #frame-bar strong { color: #1a1a2e; font-size: 11px; }
+  #frame-note { margin-left: auto; }
+  #app-frame { flex: 1; width: 100%; border: none; background: #fff; }
+  /* An id rule setting `display` out-specifies the UA's [hidden] rule, so
+     both panes need their hidden state spelled out. */
+  #app-frame[hidden], #frame-empty[hidden] { display: none; }
+  #frame-empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 820px) {
+    body { height: auto; }
+    #cols { flex-direction: column; }
+    #left { width: 100%; max-width: none; border-right: none; border-bottom: 1px solid #e5e7eb; }
+    #right { min-height: 70vh; }
+  }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <span id="brand">Celeste App Shell</span>
+  <span id="status" class="wait">connecting</span>
+  <span id="status-detail"></span>
+</div>
+
+<div id="cols">
+  <div id="left">
+
+    <section>
+      <h2>1 &middot; App source</h2>
+      <p class="hint">Paste a complete HTML app. If it already carries a Celeste bridge it is left
+        untouched and this shell answers as its host; if it has none, the standard bridge is injected.
+        Either way its tool calls are proxied through this shell's live connection.</p>
+      <textarea id="src" spellcheck="false" placeholder="<!DOCTYPE html> ..."></textarea>
+      <div class="row">
+        <button id="run" class="primary">Run app</button>
+        <button id="sample">Load probe app</button>
+        <button id="clear">Clear</button>
+      </div>
+      <div class="hint" id="src-note" style="margin:6px 0 0"></div>
+    </section>
+
+    <section>
+      <h2>2 &middot; Tool console</h2>
+      <p class="hint">Call a tool directly, with no app involved &mdash; the quickest way to confirm the
+        connectors are reachable.</p>
+      <input id="tool" type="text" class="mono" spellcheck="false" placeholder="tool name" />
+      <div class="row" style="margin-top:6px"><button class="preset" data-t="get_party">get_party</button><button class="preset" data-t="tree">load_corporate_tree_data</button></div>
+      <textarea id="params" class="mono" spellcheck="false" placeholder='{ "key": "value" }'></textarea>
+      <div class="row">
+        <button id="call" class="primary">Call tool</button>
+        <button id="call-action">Call as action</button>
+      </div>
+      <pre class="out" id="result"></pre>
+    </section>
+
+    <section>
+      <h2>3 &middot; Call log</h2>
+      <p class="hint">Every proxied and direct call, newest first. Results are summarised, never dumped.</p>
+      <div class="row" style="margin-top:0">
+        <button id="copy">Copy log</button>
+        <button id="wipe">Clear</button>
+      </div>
+      <div id="log"></div>
+    </section>
+
+    <section>
+      <h2>4 &middot; Diagnostics</h2>
+      <pre class="out" id="diag" style="max-height:none"></pre>
+    </section>
+
+  </div>
+
+  <div id="right">
+    <div id="frame-bar">
+      <strong>Running app</strong>
+      <span id="frame-note">nothing loaded</span>
+    </div>
+    <div id="frame-empty">Paste an app on the left and press <strong>Run app</strong>,<br />or load the probe app to test the connectors.</div>
+    <iframe id="app-frame" title="Running app" hidden
+            sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe>
+  </div>
+</div>
+
+<script>
+/* ─── The bridge we hand to a pasted app ─────────────────────────────────
+   Byte-for-byte the protocol the real host speaks, so an app written for
+   Celeste runs here unmodified. Injected only when the pasted HTML has no
+   bridge of its own.
+   ──────────────────────────────────────────────────────────────────────── */
+const CHILD_BRIDGE = `<script>
+(function () {
+  var VERSION = 1, pending = {}, seq = 0, ctx = {}, nonce = null, ready;
+  var readyPromise = new Promise(function (r) { ready = r; });
+  window.addEventListener('message', function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data; if (!m || m.v !== VERSION) return;
+    if (m.type === 'celeste.rpc.init') { nonce = m.nonce || null; ctx = m.context || {}; ready(); }
+    else if (m.type === 'celeste.rpc.response') {
+      var en = pending[m.id]; if (!en) return;
+      delete pending[m.id]; clearTimeout(en.timer);
+      if (m.ok) en.resolve(m.data);
+      else en.reject(new Error((m.error && m.error.message) || 'celeste: request failed'));
+    }
+  });
+  function rpc(op, name, params) {
+    return readyPromise.then(function () {
+      return new Promise(function (resolve, reject) {
+        var id = 'a' + (++seq);
+        var timer = setTimeout(function () {
+          if (pending[id]) { delete pending[id]; reject(new Error('celeste: request timed out')); }
+        }, 60000);
+        pending[id] = { resolve: resolve, reject: reject, timer: timer };
+        window.parent.postMessage({ v: VERSION, type: 'celeste.rpc.request',
+          id: id, op: op, name: name, params: params || {}, nonce: nonce }, '*');
+      });
+    });
+  }
+  var celeste = {
+    query: function (n, p) { return rpc('query', n, p); },
+    action: function (n, p) { return rpc('action', n, p); },
+    getContext: function () { return JSON.parse(JSON.stringify(ctx)); }
+  };
+  Object.freeze(celeste);
+  Object.defineProperty(window, 'celeste', { value: celeste, writable: false, configurable: false });
+  window.parent.postMessage({ v: VERSION, type: 'celeste.rpc.hello' }, '*');
+})();
+<\/script>`;
+
+const PRESETS = {
+  get_party: {
+    tool: "intapp_compliance__get_party",
+    params: { partyId: "BR07644868000173", propertiesToLoad: ["CorporateFamily"] }
+  },
+  tree: {
+    tool: "intapp_compliance__load_corporate_tree_data",
+    params: { externalId: "BR07644868000173", provider: "BureauVanDijk" }
+  }
+};
+
+/* A tiny app with no bridge of its own, so running it also proves the
+   injection path. It answers the question the tree app cannot: what the
+   payload actually contains. */
+const PROBE_APP = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+ body{font:13px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px;color:#1a1a2e}
+ h1{font-size:14px;margin:0 0 10px}
+ input{padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font:inherit;width:230px}
+ button{padding:6px 12px;border:none;border-radius:6px;background:#1a1a2e;color:#fff;font:inherit;font-weight:600;cursor:pointer;margin-left:6px}
+ pre{margin-top:12px;background:#f8f9fb;border:1px solid #e5e7eb;border-radius:6px;padding:10px;
+     font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+</style></head><body>
+<h1>Payload probe</h1>
+<div><input id="pid" value="BR07644868000173" /><button onclick="go()">Inspect party</button></div>
+<pre id="out">Ready.</pre>
+<script>
+var out = document.getElementById('out');
+function say(s) { out.textContent += "\\n" + s; }
+async function go() {
+  out.textContent = "calling intapp_compliance__get_party ...";
+  try {
+    var raw = await celeste.query("intapp_compliance__get_party",
+      { partyId: document.getElementById('pid').value.trim(), propertiesToLoad: ["CorporateFamily"] });
+
+    var p = raw;
+    if (Array.isArray(raw)) {
+      for (var i = 0; i < raw.length; i++) {
+        var v = raw[i] && (raw[i].text != null ? raw[i].text : raw[i]);
+        if (typeof v === "string") { try { v = JSON.parse(v); } catch (e) {} }
+        if (v && typeof v === "object" && "partyId" in v) { p = v; break; }
+      }
+    }
+    say("envelope: " + (Array.isArray(raw) ? "array of blocks" : typeof raw));
+    if (!p || typeof p !== "object") { say("could not find a party object"); return; }
+    say("top-level keys: " + Object.keys(p).sort().join(", "));
+
+    var trees = p.corporateTrees || [];
+    say("corporateTrees: " + trees.length + " -> " + trees.map(function (t) { return t.providerType; }).join(", "));
+
+    var nodes = [];
+    (function walk(n) { if (!n) return; nodes.push(n); (n.subCompanies || n.children || []).forEach(walk); })
+      (trees[0] && trees[0].rootCompany);
+    say("nodes in first tree: " + nodes.length);
+    if (nodes[1]) say("keys on a child node: " + Object.keys(nodes[1]).sort().join(", "));
+
+    ["is_equity_issuer","isEquityIssuer","is_fixed_income_issuer","isFixedIncomeIssuer"].forEach(function (k) {
+      say("  " + k + ": present on " + nodes.filter(function (n) { return k in n; }).length +
+          ", truthy on " + nodes.filter(function (n) { return n[k]; }).length);
+    });
+
+    var hits = [];
+    (function scan(v, path) {
+      if (Array.isArray(v)) return v.forEach(function (x) { scan(x, path + "[]"); });
+      if (v && typeof v === "object") return Object.keys(v).forEach(function (k) { scan(v[k], path ? path + "." + k : k); });
+      if (/issuer|equity|fixed|income|listed|quoted|securit|ticker|exchange|isin/i.test(path)) hits.push(path);
+    })(p, "");
+    say("issuer-shaped key paths: " + (hits.length ? [...new Set(hits)].join(" | ") : "none"));
+  } catch (err) {
+    say("ERROR: " + err.message);
+  }
+}
+<\/script></body></html>`;
+
+/* ─── Shell state ─────────────────────────────────────────────────────── */
+const PROTO = 1;
+const CHILD_NONCE = "shell-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+const LS_KEY = "celeste-app-shell.src";
+
+const el = id => document.getElementById(id);
+const frame = el("app-frame");
+let entries = [];
+
+/* localStorage is unavailable when the host sandboxes us onto an opaque
+   origin, so every access is guarded and the shell works without it. */
+const store = {
+  get() { try { return localStorage.getItem(LS_KEY); } catch (e) { return null; } },
+  set(v) { try { localStorage.setItem(LS_KEY, v); return true; } catch (e) { return false; } },
+  works() { try { localStorage.setItem(LS_KEY + ".t", "1"); localStorage.removeItem(LS_KEY + ".t"); return true; }
+            catch (e) { return false; } }
+};
+
+/* ─── Logging ─────────────────────────────────────────────────────────── */
+function shorten(v, n) {
+  let s;
+  try { s = typeof v === "string" ? v : JSON.stringify(v); } catch (e) { s = String(v); }
+  if (s == null) s = String(v);
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+function describe(data) {
+  if (data == null) return String(data);
+  if (Array.isArray(data)) return "array[" + data.length + "]";
+  if (typeof data === "object") {
+    const k = Object.keys(data);
+    return "object{" + k.length + "}: " + shorten(k.slice(0, 8).join(", "), 90);
+  }
+  return shorten(data, 90);
+}
+
+function log(who, name, status, ms, detail) {
+  entries.unshift({ at: new Date().toISOString(), who, name, status, ms: ms == null ? null : Math.round(ms), detail });
+  if (entries.length > 300) entries.length = 300;
+  renderLog();
+}
+
+function renderLog() {
+  const box = el("log");
+  box.innerHTML = "";
+  entries.forEach(e => {
+    const row = document.createElement("div");
+    row.className = "entry " + (e.status === "ok" ? "ok" : e.status === "err" ? "err" : "");
+    const who = document.createElement("span"); who.className = "who"; who.textContent = e.who;
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = e.name;
+    row.appendChild(who); row.appendChild(nm);
+    if (e.detail) { const d = document.createElement("span"); d.className = "detail"; d.textContent = e.detail; row.appendChild(d); }
+    if (e.ms != null) { const t = document.createElement("span"); t.className = "ms"; t.textContent = e.ms + "ms"; row.appendChild(t); }
+    box.appendChild(row);
+  });
+}
+
+/* ─── Status + diagnostics ────────────────────────────────────────────── */
+function paintStatus() {
+  const s = window.__celesteState;
+  const pill = el("status"), detail = el("status-detail");
+  if (s.ready) {
+    pill.className = "ok"; pill.textContent = "connected";
+    detail.textContent = "host handshake in " + s.handshakeMs + "ms";
+  } else if (s.error) {
+    pill.className = "bad"; pill.textContent = "no host";
+    detail.textContent = s.error;
+  } else {
+    pill.className = "wait"; pill.textContent = "connecting";
+    detail.textContent = "waiting for celeste.rpc.init…";
+  }
+  paintDiag();
+}
+
+function paintDiag() {
+  const s = window.__celesteState;
+  const lines = [
+    "protocol version    1",
+    "running in a frame  " + s.inFrame,
+    "host handshake      " + (s.ready ? "ok in " + s.handshakeMs + "ms" : s.error ? "FAILED — " + s.error : "pending"),
+    "host context        " + (s.ready ? shorten(s.context, 400) : "—"),
+    "localStorage        " + (store.works() ? "available" : "blocked (opaque origin) — source not persisted"),
+    "app frame sandbox   " + frame.getAttribute("sandbox"),
+    "app frame loaded    " + (frame.hidden ? "no" : "yes"),
+    "child nonce         " + CHILD_NONCE,
+    "",
+    "The app frame is sandboxed WITHOUT allow-same-origin, so its messages",
+    "arrive with origin \"null\". This shell authenticates them by comparing",
+    "event.source against the frame's contentWindow and by checking the",
+    "nonce it issued — never by origin."
+  ];
+  el("diag").textContent = lines.join("\n");
+}
+
+window.addEventListener("celeste-state", paintStatus);
+
+/* ─── Proxy: stand in as the host for the pasted app ──────────────────── */
+function respond(id, ok, payload) {
+  if (!frame.contentWindow) return;
+  frame.contentWindow.postMessage(ok
+    ? { v: PROTO, type: "celeste.rpc.response", id, ok: true, data: payload }
+    : { v: PROTO, type: "celeste.rpc.response", id, ok: false, error: { message: String(payload) } }, "*");
+}
+
+window.addEventListener("message", event => {
+  // Identity, not origin: a sandboxed frame reports origin "null".
+  if (!frame.contentWindow || event.source !== frame.contentWindow) return;
+  const msg = event.data;
+  if (!msg || msg.v !== PROTO) return;
+
+  if (msg.type === "celeste.rpc.hello") {
+    const s = window.__celesteState;
+    frame.contentWindow.postMessage({
+      v: PROTO, type: "celeste.rpc.init",
+      nonce: CHILD_NONCE,
+      context: Object.assign({}, s.ready ? s.context : {}, { viaShell: true })
+    }, "*");
+    el("frame-note").textContent = "bridge connected";
+    log("app", "handshake", "ok", null, "said hello, sent init");
+    return;
+  }
+
+  if (msg.type !== "celeste.rpc.request") return;
+
+  if (msg.nonce !== CHILD_NONCE) { respond(msg.id, false, "shell: bad nonce"); log("app", "rejected", "err", null, "bad nonce"); return; }
+  if (msg.op !== "query" && msg.op !== "action") { respond(msg.id, false, "shell: unsupported op " + msg.op); return; }
+  if (typeof msg.name !== "string" || !msg.name) { respond(msg.id, false, "shell: missing tool name"); return; }
+
+  const t0 = performance.now();
+  const call = msg.op === "query" ? celeste.query(msg.name, msg.params) : celeste.action(msg.name, msg.params);
+  call.then(
+    data => { respond(msg.id, true, data);  log("app", msg.op + " " + msg.name, "ok",  performance.now() - t0, describe(data)); },
+    err  => { const m = (err && err.message) || String(err);
+              respond(msg.id, false, m);   log("app", msg.op + " " + msg.name, "err", performance.now() - t0, m); }
+  );
+});
+
+/* ─── Running an app ──────────────────────────────────────────────────── */
+function runApp(html) {
+  const note = el("src-note");
+  if (!html.trim()) { note.textContent = "Nothing to run — paste some HTML first."; return; }
+
+  const hasBridge = /celeste\.rpc\.hello/.test(html);
+  const src = hasBridge ? html : CHILD_BRIDGE + "\n" + html;
+  note.textContent = hasBridge
+    ? "App carries its own Celeste bridge — left as written, this shell answers as its host."
+    : "No bridge found in the source, so the standard one was injected.";
+
+  el("frame-empty").hidden = true;
+  frame.hidden = false;
+  el("frame-note").textContent = "loading…";
+  frame.srcdoc = src;
+  log("shell", "run app", "ok", null, (hasBridge ? "own bridge" : "bridge injected") + ", " + src.length + " bytes");
+  paintDiag();
+}
+
+el("run").addEventListener("click", () => {
+  const v = el("src").value;
+  if (!store.set(v)) el("src-note").textContent += " (source not saved — storage is blocked here)";
+  runApp(v);
+});
+
+el("sample").addEventListener("click", () => {
+  el("src").value = PROBE_APP;
+  store.set(PROBE_APP);
+  runApp(PROBE_APP);
+});
+
+el("clear").addEventListener("click", () => {
+  el("src").value = "";
+  store.set("");
+  frame.srcdoc = "";
+  frame.hidden = true;
+  el("frame-empty").hidden = false;
+  el("frame-note").textContent = "nothing loaded";
+  el("src-note").textContent = "";
+  paintDiag();
+});
+
+/* ─── Tool console ────────────────────────────────────────────────────── */
+function applyPreset(key) {
+  const p = PRESETS[key];
+  el("tool").value = p.tool;
+  el("params").value = JSON.stringify(p.params, null, 2);
+}
+
+document.querySelectorAll(".preset").forEach(b =>
+  b.addEventListener("click", () => applyPreset(b.dataset.t)));
+
+async function callTool(op) {
+  const out = el("result");
+  const name = el("tool").value.trim();
+  if (!name) { out.textContent = "Enter a tool name."; return; }
+
+  let params;
+  try { params = el("params").value.trim() ? JSON.parse(el("params").value) : {}; }
+  catch (e) { out.textContent = "Params are not valid JSON: " + e.message; return; }
+
+  el("call").disabled = el("call-action").disabled = true;
+  out.textContent = "calling " + name + " …";
+  const t0 = performance.now();
+  try {
+    const data = op === "action" ? await celeste.action(name, params) : await celeste.query(name, params);
+    const ms = Math.round(performance.now() - t0);
+    window.__last = data;
+    let body;
+    try { body = JSON.stringify(data, null, 2); } catch (e) { body = String(data); }
+    const clipped = body.length > 20000;
+    out.textContent = "ok in " + ms + "ms — " + describe(data)
+      + "\n(parked on window.__last)\n\n" + (clipped ? body.slice(0, 20000) + "\n… truncated" : body);
+    log("console", op + " " + name, "ok", ms, describe(data));
+  } catch (err) {
+    const ms = Math.round(performance.now() - t0);
+    out.textContent = "FAILED in " + ms + "ms\n" + ((err && err.message) || String(err));
+    log("console", op + " " + name, "err", ms, (err && err.message) || String(err));
+  } finally {
+    el("call").disabled = el("call-action").disabled = false;
+  }
+}
+
+el("call").addEventListener("click", () => callTool("query"));
+el("call-action").addEventListener("click", () => callTool("action"));
+
+/* ─── Log tools ───────────────────────────────────────────────────────── */
+el("wipe").addEventListener("click", () => { entries = []; renderLog(); });
+
+el("copy").addEventListener("click", async () => {
+  const text = entries.slice().reverse()
+    .map(e => [e.at, e.who, e.status, e.ms == null ? "-" : e.ms + "ms", e.name, e.detail || ""].join("  "))
+    .join("\n") || "(empty)";
+  try {
+    await navigator.clipboard.writeText(text);
+    el("copy").textContent = "copied";
+    setTimeout(() => { el("copy").textContent = "Copy log"; }, 1200);
+  } catch (e) {
+    const out = el("result");
+    out.textContent = "Clipboard blocked here — select and copy this:\n\n" + text;
+  }
+});
+
+/* ─── Boot ────────────────────────────────────────────────────────────── */
+const saved = store.get();
+if (saved) { el("src").value = saved; el("src-note").textContent = "Restored the source you last ran."; }
+applyPreset("get_party");
+paintStatus();
+renderLog();
+frame.addEventListener("load", () => {
+  if (!frame.hidden && el("frame-note").textContent === "loading…") el("frame-note").textContent = "loaded, waiting for bridge…";
+  paintDiag();
+});
+</script>
+
+</body>
+</html>
