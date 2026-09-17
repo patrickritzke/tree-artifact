@@ -295,11 +295,12 @@
       <p class="hint">Call a tool directly, with no app involved &mdash; the quickest way to confirm the
         connectors are reachable.</p>
       <input id="tool" type="text" class="mono" spellcheck="false" placeholder="tool name" />
-      <div class="row" style="margin-top:6px"><button class="preset" data-t="get_party">get_party</button><button class="preset" data-t="tree">load_corporate_tree_data</button></div>
+      <div class="row" id="presets" style="margin-top:6px"></div>
       <textarea id="params" class="mono" spellcheck="false" placeholder='{ "key": "value" }'></textarea>
       <div class="row">
         <button id="call" class="primary">Call tool</button>
         <button id="call-action">Call as action</button>
+        <button id="smoke">Smoke test all connectors</button>
       </div>
       <pre class="out" id="result"></pre>
     </section>
@@ -377,16 +378,32 @@ const CHILD_BRIDGE = `<script>
 })();
 <\/script>`;
 
-const PRESETS = {
-  get_party: {
+/* data_sources is declared host-side at publish time and never appears in
+   this file. The four marked `smoke` are one call per declared connector,
+   chosen to be cheap and to prove the binding rather than to return
+   anything useful. */
+const DATA_SOURCES = ["intapp_compliance", "web_search", "intapp_graph", "dealcloud"];
+
+const PRESETS = [
+  { label: "search_entities",   source: "intapp_compliance", smoke: true,
+    tool: "intapp_compliance__search_entities",
+    params: { keyword: "Arm", entityTypes: ["Party"] } },
+  { label: "dc_list_objects",   source: "dealcloud", smoke: true,
+    tool: "dealcloud__dc_list_objects",
+    params: {} },
+  { label: "web search",        source: "web_search", smoke: true,
+    tool: "web_search__search",
+    params: { query: "Intapp", num_results: 2 } },
+  { label: "search_companies",  source: "intapp_graph", smoke: true,
+    tool: "intapp_graph__search_companies",
+    params: { query: "Arm Holdings", size: 3 } },
+  { label: "get_party",         source: "intapp_compliance",
     tool: "intapp_compliance__get_party",
-    params: { partyId: "BR07644868000173", propertiesToLoad: ["CorporateFamily"] }
-  },
-  tree: {
+    params: { partyId: "BR07644868000173", propertiesToLoad: ["CorporateFamily"] } },
+  { label: "corporate tree",    source: "intapp_compliance",
     tool: "intapp_compliance__load_corporate_tree_data",
-    params: { externalId: "BR07644868000173", provider: "BureauVanDijk" }
-  }
-};
+    params: { externalId: "BR07644868000173", provider: "BureauVanDijk" } }
+];
 
 /* A tiny app with no bridge of its own, so running it also proves the
    injection path. It answers the question the tree app cannot: what the
@@ -532,6 +549,7 @@ function paintDiag() {
     "running in a frame  " + s.inFrame,
     "host handshake      " + (s.ready ? "ok in " + s.handshakeMs + "ms" : s.error ? "FAILED — " + s.error : "pending"),
     "host context        " + (s.ready ? shorten(s.context, 400) : "—"),
+    "declared sources    " + DATA_SOURCES.join(", ") + "  (set host-side at publish, not in this file)",
     "localStorage        " + (store.works() ? "available" : "blocked (opaque origin) — source not persisted"),
     "app frame sandbox   " + frame.getAttribute("sandbox"),
     "app frame loaded    " + (frame.hidden ? "no" : "yes"),
@@ -631,14 +649,18 @@ el("clear").addEventListener("click", () => {
 });
 
 /* ─── Tool console ────────────────────────────────────────────────────── */
-function applyPreset(key) {
-  const p = PRESETS[key];
+function applyPreset(p) {
   el("tool").value = p.tool;
   el("params").value = JSON.stringify(p.params, null, 2);
 }
 
-document.querySelectorAll(".preset").forEach(b =>
-  b.addEventListener("click", () => applyPreset(b.dataset.t)));
+PRESETS.forEach(p => {
+  const b = document.createElement("button");
+  b.textContent = p.label;
+  b.title = p.tool + "   [" + p.source + "]";
+  b.addEventListener("click", () => applyPreset(p));
+  el("presets").appendChild(b);
+});
 
 async function callTool(op) {
   const out = el("result");
@@ -674,6 +696,48 @@ async function callTool(op) {
 el("call").addEventListener("click", () => callTool("query"));
 el("call-action").addEventListener("click", () => callTool("action"));
 
+/* One cheap call per declared connector, run in sequence, so a broken
+   binding is attributable to a specific data source rather than to the
+   bridge as a whole. */
+async function smokeTest() {
+  const targets = PRESETS.filter(p => p.smoke);
+  const out = el("result");
+  const btns = [el("call"), el("call-action"), el("smoke")];
+  btns.forEach(b => { b.disabled = true; });
+
+  const rows = [];
+  const paint = () => {
+    out.textContent = "Connector smoke test — " + rows.length + " / " + targets.length + "\n\n"
+      + rows.map(r => (r.ok ? "  ok   " : "  FAIL ")
+          + r.source.padEnd(19) + String(r.ms + "ms").padStart(7) + "   " + r.note).join("\n");
+  };
+  paint();
+
+  for (const p of targets) {
+    const t0 = performance.now();
+    try {
+      const data = await celeste.query(p.tool, p.params);
+      const ms = Math.round(performance.now() - t0);
+      rows.push({ source: p.source, ok: true, ms, note: describe(data) });
+      log("smoke", "query " + p.tool, "ok", ms, describe(data));
+    } catch (err) {
+      const ms = Math.round(performance.now() - t0);
+      const m = (err && err.message) || String(err);
+      rows.push({ source: p.source, ok: false, ms, note: m });
+      log("smoke", "query " + p.tool, "err", ms, m);
+    }
+    paint();
+  }
+
+  const bad = rows.filter(r => !r.ok);
+  out.textContent += "\n\n" + (bad.length
+    ? bad.length + " of " + rows.length + " connector(s) failed: " + bad.map(r => r.source).join(", ")
+    : "All " + rows.length + " connectors responded.");
+  btns.forEach(b => { b.disabled = false; });
+}
+
+el("smoke").addEventListener("click", smokeTest);
+
 /* ─── Log tools ───────────────────────────────────────────────────────── */
 el("wipe").addEventListener("click", () => { entries = []; renderLog(); });
 
@@ -694,7 +758,7 @@ el("copy").addEventListener("click", async () => {
 /* ─── Boot ────────────────────────────────────────────────────────────── */
 const saved = store.get();
 if (saved) { el("src").value = saved; el("src-note").textContent = "Restored the source you last ran."; }
-applyPreset("get_party");
+applyPreset(PRESETS[0]);
 paintStatus();
 renderLog();
 frame.addEventListener("load", () => {
