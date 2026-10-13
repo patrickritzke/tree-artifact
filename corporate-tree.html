@@ -346,30 +346,47 @@ var MODES = {
   independence: { label: "Independence" }
 };
 /* Audit rules. Driven only by each entity's relToTarget metadata (the target has none, so it is not marked).
-   Per relationships-by-audit-rule guide, translated to this page's relationship labels:
-   Restricted     : Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
-   Materiality    : Sibling, Cousin; entities related to the target only through close affiliates (a CA - label)
-   Strictest wins. Anything outside the rule is left unmarked. Listing status is not known here, so IESBA (non-PIE)
-   leaves its Materiality types unmarked. */
+   Each rule says what its relationship groups are: "restricted", "materiality", or null (out of scope).
+     parent  : Ultimate / Immediate / Indirect Parent
+     sub     : Immediate / Indirect Subsidiary
+     common  : Sibling, Cousin (common control)
+     caOnly  : entities related to the target only through close affiliates (CA - labels)
+   Strictest wins (restricted > materiality > out of scope). Source: jurisdiction screening guide;
+   the guide's "not confirmed" items are noted per rule. */
 var RULES = [
-  { key: "SEC",      label: "SEC",         cite: "17 CFR 210.2-01" },
-  { key: "AICPA",    label: "AICPA",       cite: "Code of Professional Conduct, ET 0.400.02" },
-  { key: "IESBA-PIE", label: "IESBA (PIE)", cite: "IESBA Code of Ethics, related entities (PIE audit client)" },
-  { key: "IESBA",    label: "IESBA",       cite: "IESBA Code of Ethics, related entities (non-PIE). Materiality types need confirmed listing status.", needsListing: true },
-  { key: "EU",       label: "EU",          cite: "Regulation (EU) 537/2014, Art. 5" },
-  { key: "UK",       label: "UK",          cite: "FRC Ethical Standard (same assignment as EU)" }
+  { key: "SEC", label: "SEC", parent: "restricted", sub: "restricted", common: "materiality", caOnly: "materiality",
+    cite: "17 CFR 210.2-01(f)(4). Parents and subsidiaries restricted; siblings and cousins need the two-sided materiality test." },
+  { key: "AICPA", label: "AICPA", parent: "restricted", sub: "restricted", common: "materiality", caOnly: "materiality",
+    cite: "ET 0.400.02. Subsidiaries restricted; siblings and cousins materiality check. Parent treatment not confirmed (shown as restricted)." },
+  { key: "IESBA-PIE", label: "IESBA (PIE)", parent: "materiality", sub: "restricted", common: "materiality", caOnly: "materiality",
+    cite: "IESBA related entities, PIE. Subsidiaries restricted; parents and siblings and cousins materiality check." },
+  { key: "IESBA", label: "IESBA", parent: null, sub: "restricted", common: null, caOnly: "materiality",
+    cite: "IESBA related entities, non-PIE. Subsidiaries restricted; parents, siblings and cousins out of scope (likely)." },
+  { key: "EU", label: "EU", parent: "restricted", sub: "restricted", common: null, caOnly: "materiality",
+    cite: "Regulation (EU) 537/2014, Art. 5. Parent and controlled undertakings restricted; siblings and cousins out of scope. Geography not applied." },
+  { key: "UK", label: "UK", parent: "restricted", sub: "restricted", common: null, caOnly: "materiality",
+    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings and cousins out of scope." }
 ];
-var RESTRICTED_RELS = ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary", "Indirect Subsidiary"];
-var MATERIALITY_RELS = ["Sibling", "Cousin"];
+var REL_GROUP = {
+  "Ultimate Parent": "parent", "Immediate Parent": "parent", "Indirect Parent": "parent",
+  "Immediate Subsidiary": "sub", "Indirect Subsidiary": "sub",
+  "Sibling": "common", "Cousin": "common"
+};
+var LEVEL_RANK = { restricted: 2, materiality: 1 };
 
 /* "restricted" | "materiality" | null (not part of the rule) for one entity under one rule */
 function screen(node, rule) {
   var rels = node.relToTarget || [];
+  var treeRels = rels.filter(function (r) { return r.indexOf(AFF_PREFIX) !== 0; });
   var level = null;
-  if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
-  else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
-  else if (rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) level = "materiality"; /* only CA - labels: close-affiliate-only */
-  if (level === "materiality" && rule.needsListing) return null; /* not in scope until listing is confirmed */
+  if (treeRels.length) {
+    treeRels.forEach(function (r) {
+      var l = rule[REL_GROUP[r]];
+      if (l && (!level || LEVEL_RANK[l] > LEVEL_RANK[level])) level = l;
+    });
+  } else if (rels.length) {
+    level = rule.caOnly; /* only CA - labels: close-affiliate-only */
+  }
   return level;
 }
 
