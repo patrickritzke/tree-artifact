@@ -15,6 +15,7 @@
     --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --hdr-accent: #c7d2fe;
     --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
     --shadow: rgba(0,0,0,.18);
+    --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -24,6 +25,7 @@
       --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
       --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
       --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+      --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
       color-scheme: dark;
     }
   }
@@ -34,6 +36,7 @@
     --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
     --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
     --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+    --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
     color-scheme: dark;
   }
 
@@ -120,6 +123,23 @@
   table.grid td { padding: 4px 12px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
   table.grid tr:last-child td { border-bottom: none; }
   table.grid tr.anchor td { background: var(--hl); }
+  table.grid tr.restricted td { background: var(--restr-bg); }
+  table.grid tr.materiality td { background: var(--mat-bg); }
+  table.grid tr.undetermined td { background: var(--hover); }
+  .rule-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+  .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
+  .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
+  .rule-badge.undetermined { color: var(--muted); border: 1px solid var(--border-2); }
+  [hidden] { display: none !important; }
+  .mode-bar { margin: 10px 20px 0; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  .mode-bar .summary { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .pill {
+    display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; border: 1.5px solid var(--border-2);
+    background: var(--surface); color: var(--fg); font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .pill:hover { background: var(--hover); }
+  .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  #rule-pills { display: flex; flex-wrap: wrap; gap: 6px; }
   td.name-cell { display: flex; align-items: center; }
   .indent { display: inline-block; flex-shrink: 0; }
   .toggle {
@@ -167,6 +187,13 @@
 
 <div id="app">
   <div class="toolbar" id="owner-bar"><div id="owner-chips"></div></div>
+
+  <!-- Independence (gear) -->
+  <div class="toolbar mode-bar" id="bar-independence" hidden>
+    <label>Apply Audit Rule:</label>
+    <div id="rule-pills"></div>
+    <span class="summary" id="rule-summary"></span>
+  </div>
 
   <!-- General: filter / search -->
   <div class="toolbar" id="filter-bar">
@@ -316,8 +343,43 @@ var MODES = {
   updates:      { label: "Tree Updates" },
   independence: { label: "Independence" }
 };
+/* Audit rules. Per relationships-by-audit-rule guide, translated to this page's relationship labels:
+   Restricted     : the target; Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
+   Materiality    : Sibling, Cousin; entities that are only in close affiliates (no tree relationship)
+   Strictest wins. Listing status is not known here, so IESBA (non-PIE) shows its Materiality types as Undetermined. */
+var RULES = [
+  { key: "SEC",      label: "SEC",         cite: "17 CFR 210.2-01" },
+  { key: "AICPA",    label: "AICPA",       cite: "Code of Professional Conduct, ET 0.400.02" },
+  { key: "IESBA-PIE", label: "IESBA (PIE)", cite: "IESBA Code of Ethics, related entities (PIE audit client)" },
+  { key: "IESBA",    label: "IESBA",       cite: "IESBA Code of Ethics, related entities (non-PIE). Materiality types need confirmed listing status.", needsListing: true },
+  { key: "EU",       label: "EU",          cite: "Regulation (EU) 537/2014, Art. 5" },
+  { key: "UK",       label: "UK",          cite: "FRC Ethical Standard (same assignment as EU)" }
+];
+var RESTRICTED_RELS = ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary", "Indirect Subsidiary"];
+var MATERIALITY_RELS = ["Sibling", "Cousin"];
+
+/* "restricted" | "materiality" | "undetermined" | null for one entity under one rule */
+function screen(node, rule, affIds) {
+  var level = null;
+  if (node.isTarget) level = "restricted";
+  else {
+    var rels = node.relToTarget || [];
+    if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
+    else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
+    else if (affIds.has(node.id)) level = "materiality"; /* close-affiliate-only */
+  }
+  if (level === "materiality" && rule.needsListing) return "undetermined";
+  return level;
+}
+
+function activeRule() {
+  if (state.mode !== "independence" || !state.auditRule) return null;
+  return RULES.filter(function (r) { return r.key === state.auditRule; })[0] || null;
+}
+
 var state = {
   mode: "general",
+  auditRule: null,
   data: null,
   target: null,
   owners: [],
@@ -519,7 +581,26 @@ function renderOwners() {
    plus extra columns contributed by the active mode.
    ═══════════════════════════════════════════════════════════════════ */
 /* Mode-specific columns are added here once Tree Updates / Independence are built. */
-function extraColumns() { return []; }
+function extraColumns() {
+  var rule = activeRule();
+  if (!rule) return [];
+  var LABELS = { restricted: "Restricted", materiality: "Materiality check", undetermined: "Undetermined" };
+  return [{
+    title: rule.label,
+    cell: function (n, td) {
+      var level = screen(n, rule, affIdSet());
+      if (!level) return;
+      var b = document.createElement("span");
+      b.className = "rule-badge " + level;
+      b.textContent = LABELS[level];
+      td.appendChild(b);
+    }
+  }];
+}
+
+function affIdSet() {
+  return new Set(state.data.affiliates.map(function (a) { return a.id; }));
+}
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
 function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
@@ -566,6 +647,11 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     var tr = document.createElement("tr");
     if (node.group) tr.className = "group";
     if (state.target && node.id === state.target.id && !node.group) tr.className = "anchor";
+    var ruleNow = activeRule();
+    if (ruleNow) {
+      var lvl = screen(node, ruleNow, affIdSet());
+      if (lvl) tr.className = lvl;
+    }
 
     var nameTd = document.createElement("td");
     nameTd.className = "name-cell";
@@ -655,6 +741,41 @@ function renderAll() {
 
   $("node-count").textContent = treeNodes.length + " in tree · " +
     affNodes.length + " affiliates";
+  renderRuleBar();
+}
+
+function renderRuleBar() {
+  var bar = $("bar-independence");
+  bar.hidden = state.mode !== "independence";
+  if (bar.hidden) return;
+  var host = $("rule-pills");
+  host.innerHTML = "";
+  RULES.forEach(function (r) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill" + (state.auditRule === r.key ? " active" : "");
+    b.textContent = r.label;
+    b.title = r.cite;
+    b.setAttribute("aria-pressed", state.auditRule === r.key ? "true" : "false");
+    b.addEventListener("click", function () {
+      state.auditRule = state.auditRule === r.key ? null : r.key;
+      renderAll();
+    });
+    host.appendChild(b);
+  });
+
+  var rule = activeRule(), sum = $("rule-summary");
+  if (!state.data) { sum.textContent = "Load a target company first."; return; }
+  if (!rule) { sum.textContent = "Select a rule to mark restricted and materiality-check entities."; return; }
+  var affIds = affIdSet(), seen = new Set(), c = { restricted: 0, materiality: 0, undetermined: 0 };
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
+    if (seen.has(n.id)) return;
+    seen.add(n.id);
+    var l = screen(n, rule, affIds);
+    if (l) c[l]++;
+  });
+  sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check" +
+    (c.undetermined ? " \u00B7 " + c.undetermined + " undetermined" : "");
 }
 
 /* ═══ MODES (gear) — selection only; features land per mode later ═══ */
@@ -668,6 +789,7 @@ function setMode(mode) {
   badge.classList.toggle("show", mode !== "general");
   closeGear();
   renderAll();
+  renderRuleBar(); /* also runs before any target is loaded */
 }
 
 function closeGear() {
