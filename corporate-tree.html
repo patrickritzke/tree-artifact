@@ -204,7 +204,7 @@
    Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
    Same id => same values everywhere, tree or close affiliates.
    affiliate: { id, name, parent: id|null, idParty? }  (its own hierarchy; include the target in it
-              so entities there get "Close Aff - ..." relationships)
+              so entities there get "CA - ..." relationships)
    ═══════════════════════════════════════════════════════════════════════ */
 var SAMPLE = {
   nodes: [
@@ -428,10 +428,10 @@ function classify(nodes, targetId) {
   return result;
 }
 
-var AFF_PREFIX = "Close Aff - ";
+var AFF_PREFIX = "CA - ";
 
 /* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
-   gets the same values. Tree labels come first, then the same labels prefixed with "Close Aff - ". */
+   gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
 function computeEntityMeta(nodes, affiliates, targetId) {
   var affNodes = affiliates.map(function (a) { return { id: a.id, parents: a.parent ? [a.parent] : [] }; });
   var treeRels = classify(nodes, targetId);
