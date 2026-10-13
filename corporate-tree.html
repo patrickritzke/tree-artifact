@@ -104,7 +104,6 @@
   table.grid td { padding: 4px 12px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
   table.grid tr:last-child td { border-bottom: none; }
   table.grid tr.anchor td { background: #fef9c3; }
-  table.grid tr.group td { background: #f9fafb; }
   td.name-cell { display: flex; align-items: center; }
   .indent { display: inline-block; flex-shrink: 0; }
   .toggle {
@@ -114,10 +113,7 @@
   .toggle:hover { background: #e5e7eb; }
   .toggle.leaf { visibility: hidden; cursor: default; }
   .node-name { font-weight: 500; color: #111827; margin-left: 2px; }
-  tr.group .node-name { font-weight: 600; }
   .node-id { color: #6b7280; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .anchor-mark { color: #6366f1; font-weight: 700; margin-left: 6px; }
-  .crown { margin-right: 4px; font-size: 13px; }
   .badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
   .badge.automatic { background: #fee2e2; color: #b91c1c; }
   .badge.materiality { background: #ffedd5; color: #c2410c; }
@@ -199,8 +195,6 @@
     <div class="section-head">
       <h2>Close affiliates</h2>
       <span class="count" id="aff-count"></span>
-      <button class="icon-btn" data-grid="aff" data-act="expand">Expand all</button>
-      <button class="icon-btn" data-grid="aff" data-act="collapse">Collapse all</button>
     </div>
     <div class="grid-wrap" id="aff-grid"></div>
   </div>
@@ -211,7 +205,7 @@
    Swap this for a live source. Contract:
      getData(target) -> { nodes: [...], affiliates: [...] }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
-   affiliate: { id, name, parent: id|null, group?: true }
+   affiliate: { id, name }                         (flat list, names only)
    Optional per-node fields used by modes:
      indicators: ["added" | "matched" | "judgement"]          (Tree Updates)
      restriction: "automatic"|"materiality"|"judgment"|"undetermined", code (Independence)
@@ -237,15 +231,11 @@ var SAMPLE = {
     { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"], indicators: ["added"], restriction: "undetermined", code: "U2" }
   ],
   affiliates: [
-    { id: "g-sib", name: "Siblings", parent: null, group: true },
-    { id: "g-cous", name: "Cousins", parent: null, group: true },
-    { id: "g-assoc", name: "Associates", parent: null, group: true },
-    { id: "NW-0006", name: "Northwind Canada Ltd.", parent: "g-sib", restriction: "automatic", code: "A1" },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: "g-sib", restriction: "materiality", code: "M2" },
-    { id: "NW-0004", name: "Northwind Real Estate Fund I", parent: "NW-0003", restriction: "judgment", code: "J1" },
-    { id: "NW-0007", name: "Northwind Europe plc", parent: "g-cous", restriction: "automatic", code: "A1" },
-    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parent: "g-cous", restriction: "materiality", code: "M1" },
-    { id: "KG-0002", name: "Kestrel Industrial Holdings", parent: "g-assoc", restriction: "undetermined", code: "U3" }
+    { id: "NW-0006", name: "Northwind Canada Ltd.", restriction: "automatic", code: "A1" },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", restriction: "materiality", code: "M2" },
+    { id: "NW-0007", name: "Northwind Europe plc", restriction: "automatic", code: "A1" },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", restriction: "materiality", code: "M1" },
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", restriction: "undetermined", code: "U3" }
   ]
 };
 
@@ -348,7 +338,6 @@ function loadTarget() {
     /* Default expansion: path from each owner down to the target */
     owners.forEach(function (o) { state.expanded.tree.add(o.id); });
     anc.forEach(function (id) { state.expanded.tree.add(id); });
-    data.affiliates.forEach(function (a) { if (a.group) state.expanded.aff.add(a.id); });
 
     $("header-title").textContent = target.name;
     $("app").style.display = "block";
@@ -419,7 +408,7 @@ function modeMatches(n) {
 }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
-function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
+function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat) {
   var idx = indexNodes(nodes, parentsOf);
   var txt = state.filter.trim().toLowerCase();
   var modeFilter = state.modeFilter[state.mode];
@@ -443,7 +432,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   table.className = "grid";
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
-  ["Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
+  (flat ? ["Name"] : ["Name", "ID"]).concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
     var th = document.createElement("th");
     th.textContent = t;
     hr.appendChild(th);
@@ -470,7 +459,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     var ind = document.createElement("span");
     ind.className = "indent";
     ind.style.width = (depth * 20) + "px";
-    nameTd.appendChild(ind);
+    if (!flat) nameTd.appendChild(ind);
 
     var tg = document.createElement("button");
     tg.className = "toggle" + (kids.length ? "" : " leaf");
@@ -483,32 +472,22 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
         renderAll();
       });
     }
-    nameTd.appendChild(tg);
+    if (!flat) nameTd.appendChild(tg);
 
-    if (gridKey === "tree" && depth === 0) {
-      var crown = document.createElement("span");
-      crown.className = "crown";
-      crown.textContent = "👑";
-      nameTd.appendChild(crown);
-    }
     var nm = document.createElement("span");
     nm.className = "node-name";
     nm.textContent = node.name;
     nameTd.appendChild(nm);
-    if (state.target && node.id === state.target.id && !node.group) {
-      var a = document.createElement("span");
-      a.className = "anchor-mark";
-      a.textContent = "◆";
-      nameTd.appendChild(a);
-    }
     tr.appendChild(nameTd);
 
-    var idTd = document.createElement("td");
-    var idSp = document.createElement("span");
-    idSp.className = "node-id";
-    idSp.textContent = node.group ? "" : node.id;
-    idTd.appendChild(idSp);
-    tr.appendChild(idTd);
+    if (!flat) {
+      var idTd = document.createElement("td");
+      var idSp = document.createElement("span");
+      idSp.className = "node-id";
+      idSp.textContent = node.id;
+      idTd.appendChild(idSp);
+      tr.appendChild(idTd);
+    }
 
     cols.forEach(function (c) {
       var td = document.createElement("td");
@@ -558,12 +537,11 @@ function renderAll() {
 
   /* Close affiliates grid */
   var affNodes = state.data.affiliates;
-  var affRoots = affNodes.filter(function (n) { return !n.parent; });
-  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parent ? [n.parent] : []; });
+  renderGrid("aff", "aff-grid", "aff-count", affNodes, affNodes, function () { return []; }, true);
 
   renderModeBars();
   $("node-count").textContent = treeNodes.length + " in tree · " +
-    affNodes.filter(function (n) { return !n.group; }).length + " affiliates";
+    affNodes.length + " affiliates";
 }
 
 /* ═══ MODES (gear) ════════════════════════════════════════════════════ */
@@ -584,7 +562,7 @@ function buildPills(hostId, entries, modeKey) {
 
 function countBy(fn) {
   var c = {};
-  var all = state.data.nodes.concat(state.data.affiliates.filter(function (a) { return !a.group; }));
+  var all = state.data.nodes.concat(state.data.affiliates);
   var seen = new Set();
   all.forEach(function (n) {
     if (seen.has(n.id)) return;
@@ -662,8 +640,7 @@ document.querySelectorAll(".icon-btn").forEach(function (b) {
     var set = state.expanded[key];
     set.clear();
     if (b.getAttribute("data-act") === "expand") {
-      var list = key === "tree" ? state.data.nodes : state.data.affiliates;
-      list.forEach(function (n) { set.add(n.id); });
+      state.data.nodes.forEach(function (n) { set.add(n.id); });
     }
     renderAll();
   });
