@@ -345,7 +345,7 @@ var MODES = {
 };
 /* Audit rules. Per relationships-by-audit-rule guide, translated to this page's relationship labels:
    Restricted     : the target; Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
-   Materiality    : Sibling, Cousin; entities that are only in close affiliates (no tree relationship)
+   Materiality    : Sibling, Cousin; entities related to the target only through close affiliates (a CA - label)
    Strictest wins. Listing status is not known here, so IESBA (non-PIE) shows its Materiality types as Undetermined. */
 var RULES = [
   { key: "SEC",      label: "SEC",         cite: "17 CFR 210.2-01" },
@@ -366,7 +366,9 @@ function screen(node, rule, affIds) {
     var rels = node.relToTarget || [];
     if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
     else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
-    else if (affIds.has(node.id)) level = "materiality"; /* close-affiliate-only */
+    else if (affIds.has(node.id) && rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) {
+      level = "materiality"; /* close-affiliate-only: needs a CA - relationship to the target */
+    }
   }
   if (level === "materiality" && rule.needsListing) return "undetermined";
   return level;
