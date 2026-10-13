@@ -241,6 +241,9 @@
    Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
    Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
    Same id => same values everywhere, tree or close affiliates.
+   trees / affTrees (optional): nested placements { id, name, children: [...] } exactly as the provider drew them,
+              one entry per place an entity appears; also accepted as [id, name, [children]] arrays. When absent they
+              are derived from the flat parents. The grids show these; the flat lists drive metadata.
    affiliate: { id, name, parents: [id, ...], idParty? }  (its own hierarchy; include the target in it
               so entities there get "CA - ..." relationships)
    ═══════════════════════════════════════════════════════════════════════ */
@@ -304,17 +307,23 @@ function extractObj(raw, key) {
   return null;
 }
 
-/* Merge a provider hierarchy into one node per id. An entity placed under several parents (or in several
-   trees) keeps all of them in `parents`; a node is only skipped when it is already in its own ancestry. */
-function mergeHierarchy(root, map, idOf, nameOf, kidsOf) {
-  (function walk(node, parentId, stack) {
+/* Read a provider hierarchy two ways at once.
+   flat map: one node per id, `parents` unions every place it appears (used for relationships and metadata).
+   return:   the nested placements as drawn, one object per place (used for display). A node is only skipped
+             when it is already in its own ancestry. */
+function readHierarchy(root, map, idOf, nameOf, kidsOf) {
+  return (function walk(node, parentId, stack) {
     var id = node && idOf(node);
-    if (!id || stack.indexOf(id) !== -1) return;
+    if (!id || stack.indexOf(id) !== -1) return null;
     var rec = map.get(id);
     if (!rec) { rec = { id: id, name: nameOf(node) || id, parents: [] }; map.set(id, rec); }
     if (parentId && rec.parents.indexOf(parentId) === -1) rec.parents.push(parentId);
-    var next = stack.concat(id);
-    (kidsOf(node) || []).forEach(function (k) { walk(k, id, next); });
+    var next = stack.concat(id), kids = [];
+    (kidsOf(node) || []).forEach(function (k) {
+      var c = walk(k, id, next);
+      if (c) kids.push(c);
+    });
+    return { id: id, name: rec.name, children: kids };
   })(root, null, []);
 }
 
@@ -334,23 +343,25 @@ function loadLive(partyId) {
       var treeName = function (n) { return n.name || n.displayName || n.nameWithoutHonorifics; };
       var treeKids = function (n) { return n.subCompanies || n.children || []; };
 
-      var map = new Map();
+      var map = new Map(), treeRoots = [];
       var all = party.corporateTrees || [];
       var trees = all.filter(function (t) { return t.providerType === provider; });
       (trees.length ? trees : all).forEach(function (t) {
-        if (t.rootCompany) mergeHierarchy(t.rootCompany, map, treeNode, treeName, treeKids);
+        var r = t.rootCompany && readHierarchy(t.rootCompany, map, treeNode, treeName, treeKids);
+        if (r) treeRoots.push(r);
       });
 
       /* Close affiliates arrive as their own nested hierarchy (id / name / closeAffiliates) */
-      var aff = new Map();
+      var aff = new Map(), affRoots = [];
       var ca = party.closeAffiliates && party.closeAffiliates.closeAffiliates;
       (ca || []).forEach(function (r) {
-        mergeHierarchy(r, aff, function (n) { return n.id; }, function (n) { return n.name; }, function (n) { return n.closeAffiliates; });
+        var pr = readHierarchy(r, aff, function (n) { return n.id; }, function (n) { return n.name; }, function (n) { return n.closeAffiliates; });
+        if (pr) affRoots.push(pr);
       });
       var affiliates = Array.from(aff.values());
 
       if (map.size) {
-        return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId };
+        return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId, trees: treeRoots, affTrees: affRoots };
       }
 
       throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
@@ -480,6 +491,8 @@ var state = {
   mode: "general",
   auditRule: null,
   loadSeq: 0,
+  trees: [],
+  affTrees: [],
   filterPill: null,
   data: null,
   target: null,
@@ -622,6 +635,44 @@ function computeEntityMeta(nodes, affiliates, targetId) {
   });
 }
 
+/* ═══ PLACEMENTS ══════════════════════════════════════════════════════
+   The grids draw placements: one row per place an entity appears, children exactly as the provider listed them.
+   Each placement gets a key (its path of positions) and hasTarget (the target is this node or below it).
+   ═══════════════════════════════════════════════════════════════════ */
+function normTree(t) {
+  return Array.isArray(t) ? { id: t[0], name: t[1], children: (t[2] || []).map(normTree) } : t;
+}
+
+/* Derive placements from a flat parents list (every parent gets a copy of the subtree). */
+function placementsFromFlat(list, parentsOf) {
+  var idx = indexNodes(list, parentsOf);
+  var roots = list.filter(function (n) { return !parentsOf(n).some(function (p) { return idx.byId.has(p); }); });
+  function build(n, stack) {
+    var kids = [];
+    (idx.kids.get(n.id) || []).forEach(function (k) {
+      if (stack.indexOf(k.id) === -1) kids.push(build(k, stack.concat(n.id)));
+    });
+    return { id: n.id, name: n.name, children: kids };
+  }
+  return roots.map(function (r) { return build(r, []); });
+}
+
+function ensurePlacements(data) {
+  data.trees = data.trees ? data.trees.map(normTree) : placementsFromFlat(data.nodes, function (n) { return n.parents; });
+  data.affTrees = data.affTrees ? data.affTrees.map(normTree)
+    : placementsFromFlat(data.affiliates, function (n) { return n.parents; });
+}
+
+function annotate(roots, targetId) {
+  (function walk(list, parentKey) {
+    list.forEach(function (p, i) {
+      p.key = parentKey === null ? String(i) : parentKey + "/" + i;
+      walk(p.children, p.key);
+      p.hasTarget = p.id === targetId || p.children.some(function (c) { return c.hasTarget; });
+    });
+  })(roots, null);
+}
+
 /* ═══ LOAD TARGET ═════════════════════════════════════════════════════ */
 function loadTarget() {
   var err = $("target-err");
@@ -633,30 +684,35 @@ function loadTarget() {
     var target = (data.targetId && data.nodes.filter(function (n) { return n.id === data.targetId; })[0]) || resolveTarget(query, data.nodes);
     if (!target) { err.textContent = "No company found for “" + query.trim() + "”."; return; }
 
-    var idx = indexNodes(data.nodes, function (n) { return n.parents; });
-    var anc = ancestorsOf(target.id, idx, function (n) { return n.parents; });
-    var chain = anc.size ? Array.from(anc) : [];
-    /* Ultimate owners: ancestors (or the target itself) with no parents */
-    var owners = (chain.length ? chain : [target.id])
-      .map(function (id) { return idx.byId.get(id); })
-      .filter(function (n) { return n.parents.length === 0; });
+    ensurePlacements(data);
+    annotate(data.trees, target.id);
+    annotate(data.affTrees, target.id);
+    /* Ultimate owners: the roots of the trees that contain the target */
+    var shown = data.trees.filter(function (r) { return r.hasTarget; });
+    if (!shown.length) shown = data.trees;
+    var owners = shown.map(function (r) { return { id: r.id, name: r.name }; });
 
     computeEntityMeta(data.nodes, data.affiliates, target.id);
     state.data = data;
     state.target = target;
     state.owners = owners;
+    state.trees = shown;
+    state.affTrees = data.affTrees;
     state.expanded.tree = new Set();
     state.expanded.aff = new Set();
     state.filter = "";
     state.filterPill = null;
     $("filter-input").value = "";
 
-    /* Default expansion: path from each owner down to the target */
-    owners.forEach(function (o) { state.expanded.tree.add(o.id); });
-    anc.forEach(function (id) { state.expanded.tree.add(id); });
-    /* Close affiliates: open the chain down to the target so its pin is visible */
-    var affIdx0 = indexNodes(data.affiliates, function (n) { return n.parents; });
-    ancestorsOf(target.id, affIdx0, function (n) { return n.parents; }).forEach(function (id) { state.expanded.aff.add(id); });
+    /* Default expansion: every placement on a path down to the target, in both grids */
+    [["tree", state.trees], ["aff", state.affTrees]].forEach(function (g) {
+      (function open(list) {
+        list.forEach(function (pl) {
+          if (pl.hasTarget && pl.id !== target.id) state.expanded[g[0]].add(pl.key);
+          open(pl.children);
+        });
+      })(g[1]);
+    });
 
     $("app").style.display = "block";
     renderTitle();
@@ -738,45 +794,29 @@ var FILTER_PILLS = [
   { key: "parentsSubs", label: "Target + Parents/Subs Only" }
 ];
 
-/* Ids matching a quick filter within one grid (structure given by idx/parentsOf) */
-function pillMatches(key, nodes, idx, parentsOf) {
-  var hit = new Set();
-  if (key === "party") {
-    nodes.forEach(function (n) { if (n.idParty) hit.add(n.id); });
-    return hit;
-  }
-  var tid = state.target && state.target.id;
-  if (!tid || !idx.byId.has(tid)) return hit;
-  hit.add(tid);
-  ancestorsOf(tid, idx, parentsOf).forEach(function (a) { hit.add(a); });
-  if (key === "parentsSubs") {
-    (function down(id, stack) {
-      (idx.kids.get(id) || []).forEach(function (k) {
-        if (stack.indexOf(k.id) !== -1) return;
-        hit.add(k.id);
-        down(k.id, stack.concat(id));
-      });
-    })(tid, []);
-  }
-  return hit;
-}
-
-function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
-  var idx = indexNodes(nodes, parentsOf);
+function renderGrid(gridKey, containerId, countId, roots, byId) {
+  var metaOf = function (pl) { return byId.get(pl.id) || pl; };
   var txt = state.filter.trim().toLowerCase();
   var filtering = !!txt || !!state.filterPill;
+  var tid = state.target && state.target.id;
 
-  /* Visible set = matches + their ancestors (upward is always kept); filtering force-expands */
-  var visible = null;
+  /* Visible placements = matches + everything above them (upward is always kept); filtering force-expands */
+  var vis = null;
   if (filtering) {
-    visible = new Set();
-    var matched = state.filterPill ? pillMatches(state.filterPill, nodes, idx, parentsOf) : null;
-    nodes.forEach(function (n) {
-      var hit = matched ? matched.has(n.id) : (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1;
-      if (!hit) return;
-      visible.add(n.id);
-      ancestorsOf(n.id, idx, parentsOf).forEach(function (a) { visible.add(a); });
-    });
+    vis = new Set();
+    (function mark(pl, underTarget) {
+      var isT = pl.id === tid;
+      var kidVisible = false;
+      pl.children.forEach(function (c) { if (mark(c, underTarget || isT)) kidVisible = true; });
+      var m = metaOf(pl), self;
+      if (state.filterPill === "party") self = !!m.idParty;
+      else if (state.filterPill === "parents") self = isT;
+      else if (state.filterPill === "parentsSubs") self = isT || underTarget;
+      else self = (pl.name + " " + pl.id).toLowerCase().indexOf(txt) !== -1;
+      var v = self || kidVisible;
+      if (v) vis.add(pl.key);
+      return v;
+    })({ children: roots, id: null, name: "", key: "" }, false);
   }
 
   var cols = extraColumns();
@@ -790,9 +830,15 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   hr.appendChild(pinTh);
 
   /* Expand/collapse everything in this grid */
-  var expandable = [];
-  idx.kids.forEach(function (list, id) { if (list.length) expandable.push(id); });
-  var allOpen = expandable.length > 0 && expandable.every(function (id) { return state.expanded[gridKey].has(id); });
+  var expandable = [], uniq = new Set();
+  (function scan(list) {
+    list.forEach(function (pl) {
+      uniq.add(pl.id);
+      if (pl.children.length) expandable.push(pl.key);
+      scan(pl.children);
+    });
+  })(roots);
+  var allOpen = expandable.length > 0 && expandable.every(function (k) { return state.expanded[gridKey].has(k); });
   var nameTh = document.createElement("th");
   nameTh.className = "name-col";
   if (expandable.length) {
@@ -804,7 +850,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     all.addEventListener("click", function () {
       var set = state.expanded[gridKey];
       if (allOpen) set.clear();
-      else expandable.forEach(function (id) { set.add(id); });
+      else expandable.forEach(function (k) { set.add(k); });
       renderAll();
     });
     nameTh.appendChild(all);
@@ -826,15 +872,14 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   var tbody = document.createElement("tbody");
   var shown = 0;
 
-  function walk(node, depth, trail) {
-    if (visible && !visible.has(node.id)) return;
-    if (trail.indexOf(node.id) !== -1) return; /* cycle guard */
-    var kids = (idx.kids.get(node.id) || []).filter(function (k) { return !visible || visible.has(k.id); });
-    var open = filtering || state.expanded[gridKey].has(node.id);
+  function walk(pl, depth) {
+    if (vis && !vis.has(pl.key)) return;
+    var node = metaOf(pl);
+    var kids = pl.children.filter(function (c) { return !vis || vis.has(c.key); });
+    var open = filtering || state.expanded[gridKey].has(pl.key);
     shown++;
 
     var tr = document.createElement("tr");
-    if (node.group) tr.className = "group";
     var ruleNow = activeRule();
     if (ruleNow) {
       var lvl = screen(node, ruleNow);
@@ -863,7 +908,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     if (kids.length) {
       tg.addEventListener("click", function () {
         var set = state.expanded[gridKey];
-        if (set.has(node.id)) set.delete(node.id); else set.add(node.id);
+        if (set.has(pl.key)) set.delete(pl.key); else set.add(pl.key);
         renderAll();
       });
     }
@@ -871,13 +916,13 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
 
     var nm = document.createElement("span");
     nm.className = "node-name";
-    nm.textContent = node.name;
+    nm.textContent = pl.name;
     if (node.idParty) nm.classList.add("has-party"); /* bold = entity has an Intapp party record */
     nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
     inner.appendChild(nm);
     var idSp = document.createElement("span");
     idSp.className = "node-id";
-    idSp.textContent = "(" + node.id + ")";
+    idSp.textContent = "(" + pl.id + ")";
     inner.appendChild(idSp);
     tr.appendChild(nameTd);
 
@@ -885,7 +930,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     cols.forEach(function (c) {
       var td = document.createElement("td");
       td.className = "icon-col";
-      if (!node.group) c.cell(node, td);
+      c.cell(node, td);
       tr.appendChild(td);
     });
     var fillTd = document.createElement("td");
@@ -893,10 +938,10 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     tr.appendChild(fillTd);
     tbody.appendChild(tr);
 
-    if (open) kids.forEach(function (k) { walk(k, depth + 1, trail.concat(node.id)); });
+    if (open) kids.forEach(function (k) { walk(k, depth + 1); });
   }
 
-  roots.forEach(function (r) { walk(r, 0, []); });
+  roots.forEach(function (r) { walk(r, 0); });
   table.appendChild(tbody);
 
   var host = $(containerId);
@@ -909,37 +954,22 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   } else {
     host.appendChild(table);
   }
-  var real = 0;
-  nodes.forEach(function (n) { if (!n.group) real++; });
-  $(countId).textContent = (filtering ? "filtered · " : "") + real + " entities";
-  return idx;
+  $(countId).textContent = (filtering ? "filtered · " : "") + uniq.size + " entities";
+  return uniq.size;
 }
 
 /* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
 function renderAll() {
   if (!state.data) return;
 
-  /* Tree grid: only the tree(s) beneath the ultimate owner(s) */
-  var allIdx = indexNodes(state.data.nodes, function (n) { return n.parents; });
-  var inTree = new Set();
-  (function collect(list) {
-    list.forEach(function (n) {
-      if (inTree.has(n.id)) return;
-      inTree.add(n.id);
-      collect(allIdx.kids.get(n.id) || []);
-    });
-  })(state.owners);
-  var treeNodes = state.data.nodes.filter(function (n) { return inTree.has(n.id); });
-  renderGrid("tree", "tree-grid", "tree-count", treeNodes, state.owners, function (n) { return n.parents; });
+  /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
+  var treeByid = new Map(), affById = new Map();
+  state.data.nodes.forEach(function (n) { treeByid.set(n.id, n); });
+  state.data.affiliates.forEach(function (n) { affById.set(n.id, n); });
+  var treeCount = renderGrid("tree", "tree-grid", "tree-count", state.trees, treeByid);
+  var affCount = renderGrid("aff", "aff-grid", "aff-count", state.affTrees, affById);
 
-  /* Close affiliates grid */
-  var affNodes = state.data.affiliates;
-  var affIdx = indexNodes(affNodes, function (n) { return n.parents; });
-  var affRoots = affNodes.filter(function (n) { return !n.parents.some(function (p) { return affIdx.byId.has(p); }); });
-  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parents; });
-
-  $("node-count").textContent = treeNodes.length + " in tree · " +
-    affNodes.length + " affiliates";
+  $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
   renderRuleBar();
   renderFilterPills();
 }
