@@ -372,22 +372,21 @@ function pickSample(query) {
 
 /* Party ids: the component group of each ultimate owner tree id lists its Party members. Tree nodes are keyed by
    the external id of the active provider, so each member is keyed by that same external id and maps to its
-   Intapp partyId. Any tree id that matches gets that idParty, wherever the entity sits.
-   Failures and missing groups are ignored. */
-function memberExternalId(m, provider) {
-  var field = provider === "BureauVanDijk" ? "bureauVanDijkId" : provider === "DunAndBradstreet" ? "dunsNumber" : "externalId";
-  return m[field] || m.externalId || m.partyId; /* partyId only when the member carries no external id */
-}
-
+   Intapp partyId. Members without an external id for the provider are skipped. Any tree id that matches gets
+   that idParty, wherever the entity sits. Failures and missing groups are ignored. */
 function fetchPartyIds(groupId) {
   var provider = $("provider").value;
   try {
     return celeste.query("intapp_compliance__get_component_group", { groupId: groupId })
       .then(function (raw) {
-        var out = new Map();
         var g = extractObj(raw, "groupMembers");
+        var out = new Map();
         ((g && g.groupMembers) || []).forEach(function (m) {
-          if (m && m.type === "Party" && m.partyId) out.set(memberExternalId(m, provider), m.partyId);
+          if (!m || m.type !== "Party" || !m.partyId) return;
+          var extId = provider === "BureauVanDijk" ? m.bureauVanDijkId
+                    : provider === "DunAndBradstreet" ? m.dunsNumber
+                    : m.externalId;
+          if (extId) out.set(extId, m.partyId);
         });
         return out;
       })
