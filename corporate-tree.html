@@ -200,26 +200,28 @@
    Swap this for a live source. Contract:
      getData(target) -> { nodes: [...], affiliates: [...], targetId?: id }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
+   Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
+   Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty
    affiliate: { id, name, parent: id|null }      (hierarchical, like nodes)
    ═══════════════════════════════════════════════════════════════════════ */
 var SAMPLE = {
   nodes: [
     { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
     { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"] },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"] },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417" },
     { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
     { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"] },
     { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"] },
     { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"] },
-    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"] },
+    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"], idParty: "P-31882" },
     { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"] },
     { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"] },
     { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"] },
     { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"] },
     { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"] },
-    { id: "KG-0001", name: "Kestrel Group SA", parents: [] },
+    { id: "KG-0001", name: "Kestrel Group SA", parents: [], idParty: "P-10552" },
     { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"] },
-    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"] },
+    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"], idParty: "P-44071" },
     { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"] }
   ],
   affiliates: [
@@ -358,6 +360,74 @@ function resolveTarget(query, nodes) {
   return partial.length ? partial[0] : null;
 }
 
+/* ═══ ENTITY METADATA ═════════════════════════════════════════════════
+   Stored on each tree node; nothing in the UI reads it yet.
+     isTarget       boolean, true for the target company
+     relToTarget    array of labels (Ultimate Parent, Immediate Parent, Indirect Parent,
+                    Immediate Subsidiary, Indirect Subsidiary, Sibling, Cousin) in that order.
+                    An entity holds every label any of its placements supports.
+     idParty        Intapp party id, or null when the entity has no party record
+   Classification follows entity-relationship-classification.md.
+   ═══════════════════════════════════════════════════════════════════ */
+var REL_ORDER = ["Ultimate Parent", "Immediate Parent", "Indirect Parent",
+                 "Immediate Subsidiary", "Indirect Subsidiary", "Sibling", "Cousin"];
+
+/* Every upward path from id, as arrays [id, parent, ..., top]. A path stops at a repeat (cycle guard). */
+function upwardPaths(id, byId) {
+  var out = [];
+  (function walk(path) {
+    var n = byId.get(path[path.length - 1]);
+    var ps = n ? n.parents.filter(function (p) { return byId.has(p) && path.indexOf(p) === -1; }) : [];
+    if (!ps.length) { out.push(path); return; }
+    ps.forEach(function (p) { walk(path.concat(p)); });
+  })([id]);
+  return out;
+}
+
+function computeEntityMeta(nodes, targetId) {
+  var byId = new Map();
+  nodes.forEach(function (n) { byId.set(n.id, n); });
+  var tPaths = upwardPaths(targetId, byId);
+
+  nodes.forEach(function (n) {
+    n.isTarget = n.id === targetId;
+    n.idParty = n.idParty || null;
+    n.relToTarget = [];
+    if (n.isTarget) return;
+
+    var rels = new Set();
+    var isRoot = !n.parents.some(function (p) { return byId.has(p); });
+
+    /* Above the target: n appears on a path up from the target */
+    tPaths.forEach(function (path) {
+      var d = path.indexOf(n.id);
+      if (d < 1) return;
+      if (isRoot) rels.add("Ultimate Parent");
+      if (d === 1) rels.add("Immediate Parent");
+      else if (!isRoot) rels.add("Indirect Parent");
+    });
+
+    var ePaths = upwardPaths(n.id, byId);
+    ePaths.forEach(function (ep) {
+      /* Below the target: the target appears on a path up from n */
+      var d = ep.indexOf(targetId);
+      if (d >= 1) rels.add(d === 1 ? "Immediate Subsidiary" : "Indirect Subsidiary");
+
+      /* Sibling / Cousin: for each pair of placements, the lowest common ancestor on those two paths */
+      tPaths.forEach(function (tp) {
+        for (var dt = 0; dt < tp.length; dt++) {
+          var de = ep.indexOf(tp[dt]);
+          if (de === -1) continue;
+          if (dt > 0 && de > 0) rels.add(dt === 1 && de === 1 ? "Sibling" : "Cousin");
+          break; /* first shared node is the lowest; one is an ancestor of the other if either index is 0 */
+        }
+      });
+    });
+
+    n.relToTarget = REL_ORDER.filter(function (r) { return rels.has(r); });
+  });
+}
+
 /* ═══ LOAD TARGET ═════════════════════════════════════════════════════ */
 function loadTarget() {
   var err = $("target-err");
@@ -377,6 +447,7 @@ function loadTarget() {
       .map(function (id) { return idx.byId.get(id); })
       .filter(function (n) { return n.parents.length === 0; });
 
+    computeEntityMeta(data.nodes, target.id);
     state.data = data;
     state.target = target;
     state.owners = owners;
