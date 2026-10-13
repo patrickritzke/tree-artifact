@@ -239,7 +239,7 @@
    Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
    Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
    Same id => same values everywhere, tree or close affiliates.
-   affiliate: { id, name, parent: id|null, idParty? }  (its own hierarchy; include the target in it
+   affiliate: { id, name, parents: [id, ...], idParty? }  (its own hierarchy; include the target in it
               so entities there get "CA - ..." relationships)
    ═══════════════════════════════════════════════════════════════════════ */
 var SAMPLE = {
@@ -263,13 +263,13 @@ var SAMPLE = {
     { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"] }
   ],
   affiliates: [
-    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parent: null },
-    { id: "NW-0002", name: "Northwind Americas LLC", parent: "NW-0001" },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: "NW-0002", idParty: "P-20417" },
-    { id: "NW-0004", name: "Northwind Real Estate Fund I", parent: "NW-0003" },
-    { id: "NW-0007", name: "Northwind Europe plc", parent: "NW-0001" },
-    { id: "AF-0001", name: "Harbor Advisory Group", parent: null, idParty: "P-50219" },
-    { id: "AF-0002", name: "Harbor Trust Co.", parent: "AF-0001" }
+    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"] },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417" },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"] },
+    { id: "AF-0001", name: "Harbor Advisory Group", parents: [], idParty: "P-50219" },
+    { id: "AF-0002", name: "Harbor Trust Co.", parents: ["AF-0001"] }
   ]
 };
 
@@ -302,14 +302,18 @@ function extractObj(raw, key) {
   return null;
 }
 
-/* Flatten a provider tree into nodes with a parents array (first parent wins on repeats). */
-function flattenTree(node, parentId, out, seen) {
-  if (!node) return;
-  var id = node.externalId || node.key || null;
-  if (!id || seen.has(id)) return;
-  seen.add(id);
-  out.push({ id: id, name: node.name || node.displayName || node.nameWithoutHonorifics || id, parents: parentId ? [parentId] : [] });
-  (node.subCompanies || node.children || []).forEach(function (c) { flattenTree(c, id, out, seen); });
+/* Merge a provider hierarchy into one node per id. An entity placed under several parents (or in several
+   trees) keeps all of them in `parents`; a node is only skipped when it is already in its own ancestry. */
+function mergeHierarchy(root, map, idOf, nameOf, kidsOf) {
+  (function walk(node, parentId, stack) {
+    var id = node && idOf(node);
+    if (!id || stack.indexOf(id) !== -1) return;
+    var rec = map.get(id);
+    if (!rec) { rec = { id: id, name: nameOf(node) || id, parents: [] }; map.set(id, rec); }
+    if (parentId && rec.parents.indexOf(parentId) === -1) rec.parents.push(parentId);
+    var next = stack.concat(id);
+    (kidsOf(node) || []).forEach(function (k) { walk(k, id, next); });
+  })(root, null, []);
 }
 
 function loadLive(partyId) {
@@ -318,26 +322,42 @@ function loadLive(partyId) {
     .then(function (raw) {
       var party = extractObj(raw, "partyId");
       if (!party) throw new Error("Could not load party " + partyId + ".");
-      var nodes = [], seen = new Set();
-      var trees = party.corporateTrees || [];
-      var match = trees.filter(function (t) { return t.providerType === provider; })[0] || trees[0];
-      var targetId = null;
-      if (match && match.rootCompany) {
-        targetId = match.rootCompanyId || match.rootCompany.externalId;
-        flattenTree(match.rootCompany, null, nodes, seen);
-      }
-      if (nodes.length) return { nodes: nodes, affiliates: [], targetId: targetId };
 
-      var extId = provider === "BureauVanDijk" ? (party.bureauVanDijkId || party.externalId)
-                : provider === "DunAndBradstreet" ? (party.dunsNumber || party.externalId)
-                : party.externalId;
-      if (!extId) throw new Error("Party " + (party.name || partyId) + " has no external ID for " + provider + ".");
-      return celeste.query("intapp_compliance__load_corporate_tree_data", { externalId: extId, provider: provider })
+      /* The target is the party itself, identified by its provider id (not the tree root). */
+      var targetId = (provider === "BureauVanDijk" ? party.bureauVanDijkId
+                    : provider === "DunAndBradstreet" ? party.dunsNumber : party.externalId)
+        || party.externalId || party.bureauVanDijkId || party.dunsNumber || party.partyId;
+
+      var treeNode = function (n) { return n.externalId || n.key || null; };
+      var treeName = function (n) { return n.name || n.displayName || n.nameWithoutHonorifics; };
+      var treeKids = function (n) { return n.subCompanies || n.children || []; };
+
+      var map = new Map();
+      var all = party.corporateTrees || [];
+      var trees = all.filter(function (t) { return t.providerType === provider; });
+      (trees.length ? trees : all).forEach(function (t) {
+        if (t.rootCompany) mergeHierarchy(t.rootCompany, map, treeNode, treeName, treeKids);
+      });
+
+      /* Close affiliates arrive as their own nested hierarchy (id / name / closeAffiliates) */
+      var aff = new Map();
+      var ca = party.closeAffiliates && party.closeAffiliates.closeAffiliates;
+      (ca || []).forEach(function (r) {
+        mergeHierarchy(r, aff, function (n) { return n.id; }, function (n) { return n.name; }, function (n) { return n.closeAffiliates; });
+      });
+      var affiliates = Array.from(aff.values());
+
+      if (map.size) {
+        return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId };
+      }
+
+      if (!targetId) throw new Error("Party " + (party.name || partyId) + " has no external ID for " + provider + ".");
+      return celeste.query("intapp_compliance__load_corporate_tree_data", { externalId: targetId, provider: provider })
         .then(function (r2) {
           var td = extractObj(r2, "corporateTrees");
-          ((td && td.corporateTrees) || []).forEach(function (t) { flattenTree(t, null, nodes, seen); });
-          if (!nodes.length) throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
-          return { nodes: nodes, affiliates: [], targetId: extId };
+          ((td && td.corporateTrees) || []).forEach(function (t) { mergeHierarchy(t, map, treeNode, treeName, treeKids); });
+          if (!map.size) throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
+          return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId };
         });
     });
 }
@@ -519,9 +539,8 @@ var AFF_PREFIX = "CA - ";
 /* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
    gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
 function computeEntityMeta(nodes, affiliates, targetId) {
-  var affNodes = affiliates.map(function (a) { return { id: a.id, parents: a.parent ? [a.parent] : [] }; });
   var treeRels = classify(nodes, targetId);
-  var affRels = classify(affNodes, targetId);
+  var affRels = classify(affiliates, targetId);
   var everyone = nodes.concat(affiliates);
 
   var parties = new Map();
@@ -578,13 +597,8 @@ function loadTarget() {
     owners.forEach(function (o) { state.expanded.tree.add(o.id); });
     anc.forEach(function (id) { state.expanded.tree.add(id); });
     /* Close affiliates: open the chain down to the target so its pin is visible */
-    var affById = new Map();
-    data.affiliates.forEach(function (x) { affById.set(x.id, x); });
-    var cur = affById.get(target.id), guard = 0;
-    while (cur && cur.parent && affById.has(cur.parent) && guard++ < 1000) {
-      state.expanded.aff.add(cur.parent);
-      cur = affById.get(cur.parent);
-    }
+    var affIdx0 = indexNodes(data.affiliates, function (n) { return n.parents; });
+    ancestorsOf(target.id, affIdx0, function (n) { return n.parents; }).forEach(function (id) { state.expanded.aff.add(id); });
 
     $("app").style.display = "block";
     renderTitle();
@@ -829,9 +843,9 @@ function renderAll() {
 
   /* Close affiliates grid */
   var affNodes = state.data.affiliates;
-  var affIdx = indexNodes(affNodes, function (n) { return n.parent ? [n.parent] : []; });
-  var affRoots = affNodes.filter(function (n) { return !n.parent || !affIdx.byId.has(n.parent); });
-  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parent ? [n.parent] : []; });
+  var affIdx = indexNodes(affNodes, function (n) { return n.parents; });
+  var affRoots = affNodes.filter(function (n) { return !n.parents.some(function (p) { return affIdx.byId.has(p); }); });
+  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parents; });
 
   $("node-count").textContent = treeNodes.length + " in tree · " +
     affNodes.length + " affiliates";
