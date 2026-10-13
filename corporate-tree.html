@@ -156,7 +156,8 @@
   }
   .toggle:hover { background: var(--border); }
   .toggle.leaf { visibility: hidden; cursor: default; }
-  .node-name { font-weight: 500; color: var(--fg-strong); margin-left: 2px; }
+  .node-name { font-weight: 400; color: var(--fg-strong); margin-left: 2px; }
+  .node-name.has-party { font-weight: 700; }
   .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .empty { padding: 24px; color: var(--muted); font-size: 13px; }
   #app { display: none; padding-bottom: 40px; }
@@ -795,6 +796,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     var nm = document.createElement("span");
     nm.className = "node-name";
     nm.textContent = node.name;
+    if (node.idParty) nm.classList.add("has-party"); /* bold = entity has an Intapp party record */
     nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
     inner.appendChild(nm);
     var idSp = document.createElement("span");
