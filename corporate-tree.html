@@ -558,6 +558,9 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     var nm = document.createElement("span");
     nm.className = "node-name";
     nm.textContent = node.name;
+    if (gridKey === "tree") {
+      nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
+    }
     nameTd.appendChild(nm);
     tr.appendChild(nameTd);
 
