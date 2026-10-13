@@ -72,22 +72,6 @@
   .chip { font-size: 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 999px; padding: 3px 10px; color: #374151; }
   .chip b { color: #6b7280; font-weight: 600; margin-right: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
 
-  /* mode toolbars (gear-driven) */
-  .mode-bar {
-    display: none; margin: 10px 20px 0; padding: 8px 12px; background: #eef2ff;
-    border: 1px solid #c7d2fe; border-radius: 8px; flex-wrap: wrap; align-items: center; gap: 8px;
-  }
-  .mode-bar.show { display: flex; }
-  .mode-bar .spacer { flex: 1; }
-  .mode-bar .summary { font-size: 12px; color: #4b5563; }
-  .pill {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 999px;
-    border: 1.5px solid #d1d5db; background: #fff; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap;
-    transition: background .15s, border-color .15s;
-  }
-  .pill:hover { background: #f3f4f6; }
-  .pill.active { background: #e0e7ff; border-color: #6366f1; color: #4338ca; font-weight: 600; }
-
   /* ── Grids ── */
   .section { margin: 16px 20px 0; }
   .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -114,12 +98,6 @@
   .toggle.leaf { visibility: hidden; cursor: default; }
   .node-name { font-weight: 500; color: #111827; margin-left: 2px; }
   .node-id { color: #6b7280; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
-  .badge.automatic { background: #fee2e2; color: #b91c1c; }
-  .badge.materiality { background: #ffedd5; color: #c2410c; }
-  .badge.judgment { background: #fef9c3; color: #a16207; }
-  .badge.undetermined { background: #e5e7eb; color: #4b5563; }
-  .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; }
   .empty { padding: 24px; color: #6b7280; font-size: 13px; }
   #app { display: none; padding-bottom: 40px; }
 </style>
@@ -153,28 +131,6 @@
 <div id="app">
   <div class="toolbar" id="owner-bar"><div id="owner-chips"></div></div>
 
-  <!-- Mode-specific toolbars (shown via gear) -->
-  <div class="mode-bar" id="bar-updates">
-    <label>Tree updates</label>
-    <span id="updates-pills"></span>
-    <span class="spacer"></span>
-    <span class="summary" id="updates-summary"></span>
-  </div>
-  <div class="mode-bar" id="bar-independence">
-    <label>Framework</label>
-    <select id="framework">
-      <option>SEC / PCAOB</option>
-      <option>EU 537/2014</option>
-      <option>UK FRC</option>
-      <option>IESBA</option>
-      <option>AICPA</option>
-    </select>
-    <label>Restriction</label>
-    <span id="indep-pills"></span>
-    <span class="spacer"></span>
-    <span class="summary" id="indep-summary"></span>
-  </div>
-
   <!-- General: filter / search -->
   <div class="toolbar" id="filter-bar">
     <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
@@ -195,6 +151,8 @@
     <div class="section-head">
       <h2>Close affiliates</h2>
       <span class="count" id="aff-count"></span>
+      <button class="icon-btn" data-grid="aff" data-act="expand">Expand all</button>
+      <button class="icon-btn" data-grid="aff" data-act="collapse">Collapse all</button>
     </div>
     <div class="grid-wrap" id="aff-grid"></div>
   </div>
@@ -205,37 +163,36 @@
    Swap this for a live source. Contract:
      getData(target) -> { nodes: [...], affiliates: [...] }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
-   affiliate: { id, name }                         (flat list, names only)
-   Optional per-node fields used by modes:
-     indicators: ["added" | "matched" | "judgement"]          (Tree Updates)
-     restriction: "automatic"|"materiality"|"judgment"|"undetermined", code (Independence)
+   affiliate: { id, name, parent: id|null }      (hierarchical, like nodes)
    ═══════════════════════════════════════════════════════════════════════ */
 var SAMPLE = {
   nodes: [
     { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
-    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"], restriction: "automatic", code: "A1" },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], indicators: ["matched"], restriction: "materiality", code: "M2" },
-    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"], restriction: "judgment", code: "J1" },
-    { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"], indicators: ["added"], restriction: "undetermined", code: "U1" },
-    { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"], restriction: "automatic", code: "A1" },
-    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"], restriction: "automatic", code: "A1" },
-    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"], indicators: ["matched"], restriction: "materiality", code: "M1" },
-    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"], restriction: "materiality", code: "M1" },
-    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"], indicators: ["judgement"], restriction: "judgment", code: "J2" },
-    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"], restriction: "materiality", code: "M1" },
-    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"], restriction: "undetermined", code: "U1" },
-    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"], indicators: ["added"], restriction: "judgment", code: "J1" },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"] },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"] },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
+    { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"] },
+    { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"] },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"] },
+    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"] },
+    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"] },
+    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"] },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"] },
+    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"] },
+    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"] },
     { id: "KG-0001", name: "Kestrel Group SA", parents: [] },
-    { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"], restriction: "automatic", code: "A2" },
-    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"], indicators: ["judgement"], restriction: "judgment", code: "J3" },
-    { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"], indicators: ["added"], restriction: "undetermined", code: "U2" }
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"] },
+    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"] },
+    { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"] }
   ],
   affiliates: [
-    { id: "NW-0006", name: "Northwind Canada Ltd.", restriction: "automatic", code: "A1" },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", restriction: "materiality", code: "M2" },
-    { id: "NW-0007", name: "Northwind Europe plc", restriction: "automatic", code: "A1" },
-    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", restriction: "materiality", code: "M1" },
-    { id: "KG-0002", name: "Kestrel Industrial Holdings", restriction: "undetermined", code: "U3" }
+    { id: "NW-0006", name: "Northwind Canada Ltd.", parent: null },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: null },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parent: "NW-0003" },
+    { id: "NW-0005", name: "Northwind Real Estate Fund II", parent: "NW-0003" },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parent: null },
+    { id: "NW-0012", name: "Northwind Japan K.K.", parent: "NW-0011" },
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", parent: null }
   ]
 };
 
@@ -249,25 +206,12 @@ var MODES = {
   updates:      { label: "Tree Updates" },
   independence: { label: "Independence" }
 };
-var UPDATE_KINDS = {
-  added:     { icon: "➕", label: "Added" },
-  matched:   { icon: "✅", label: "Matched" },
-  judgement: { icon: "❗", label: "Judgement" }
-};
-var RESTRICTIONS = {
-  automatic:    "Automatic",
-  materiality:  "Materiality",
-  judgment:     "Judgment",
-  undetermined: "Undetermined"
-};
-
 var state = {
   mode: "general",
   data: null,
   target: null,
   owners: [],
   filter: "",
-  modeFilter: { updates: null, independence: null },
   expanded: { tree: new Set(), aff: new Set() }
 };
 
@@ -365,54 +309,14 @@ function renderOwners() {
    One renderer for both grids: expand/collapse toggle, indent, name, id,
    plus extra columns contributed by the active mode.
    ═══════════════════════════════════════════════════════════════════ */
-function extraColumns() {
-  if (state.mode === "updates") {
-    return [{
-      title: "Update",
-      cell: function (n, td) {
-        (n.indicators || []).forEach(function (k) {
-          var s = document.createElement("span");
-          s.textContent = UPDATE_KINDS[k].icon + " " + UPDATE_KINDS[k].label + " ";
-          td.appendChild(s);
-        });
-      }
-    }];
-  }
-  if (state.mode === "independence") {
-    return [
-      { title: "Restriction", cell: function (n, td) {
-          if (!n.restriction) return;
-          var b = document.createElement("span");
-          b.className = "badge " + n.restriction;
-          b.textContent = RESTRICTIONS[n.restriction];
-          td.appendChild(b);
-      } },
-      { title: "Code", cell: function (n, td) {
-          if (!n.code) return;
-          var s = document.createElement("span");
-          s.className = "code";
-          s.textContent = n.code;
-          td.appendChild(s);
-      } }
-    ];
-  }
-  return [];
-}
-
-function modeMatches(n) {
-  var f = state.modeFilter[state.mode];
-  if (!f) return true;
-  if (state.mode === "updates") return (n.indicators || []).indexOf(f) !== -1;
-  if (state.mode === "independence") return n.restriction === f;
-  return true;
-}
+/* Mode-specific columns are added here once Tree Updates / Independence are built. */
+function extraColumns() { return []; }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
-function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat) {
+function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   var idx = indexNodes(nodes, parentsOf);
   var txt = state.filter.trim().toLowerCase();
-  var modeFilter = state.modeFilter[state.mode];
-  var filtering = !!txt || !!modeFilter;
+  var filtering = !!txt;
 
   /* Visible set = matches + their ancestors; filtering force-expands */
   var visible = null;
@@ -420,7 +324,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat
     visible = new Set();
     nodes.forEach(function (n) {
       if (n.group) return;
-      var hit = (!txt || (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1) && modeMatches(n);
+      var hit = (!txt || (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1);
       if (!hit) return;
       visible.add(n.id);
       ancestorsOf(n.id, idx, parentsOf).forEach(function (a) { visible.add(a); });
@@ -432,7 +336,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat
   table.className = "grid";
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
-  (flat ? ["Name"] : ["Name", "ID"]).concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
+  ["Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
     var th = document.createElement("th");
     th.textContent = t;
     hr.appendChild(th);
@@ -459,7 +363,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat
     var ind = document.createElement("span");
     ind.className = "indent";
     ind.style.width = (depth * 20) + "px";
-    if (!flat) nameTd.appendChild(ind);
+    nameTd.appendChild(ind);
 
     var tg = document.createElement("button");
     tg.className = "toggle" + (kids.length ? "" : " leaf");
@@ -472,7 +376,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat
         renderAll();
       });
     }
-    if (!flat) nameTd.appendChild(tg);
+    nameTd.appendChild(tg);
 
     var nm = document.createElement("span");
     nm.className = "node-name";
@@ -480,14 +384,12 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf, flat
     nameTd.appendChild(nm);
     tr.appendChild(nameTd);
 
-    if (!flat) {
-      var idTd = document.createElement("td");
-      var idSp = document.createElement("span");
-      idSp.className = "node-id";
-      idSp.textContent = node.id;
-      idTd.appendChild(idSp);
-      tr.appendChild(idTd);
-    }
+    var idTd = document.createElement("td");
+    var idSp = document.createElement("span");
+    idSp.className = "node-id";
+    idSp.textContent = node.id;
+    idTd.appendChild(idSp);
+    tr.appendChild(idTd);
 
     cols.forEach(function (c) {
       var td = document.createElement("td");
@@ -537,61 +439,15 @@ function renderAll() {
 
   /* Close affiliates grid */
   var affNodes = state.data.affiliates;
-  renderGrid("aff", "aff-grid", "aff-count", affNodes, affNodes, function () { return []; }, true);
+  var affIdx = indexNodes(affNodes, function (n) { return n.parent ? [n.parent] : []; });
+  var affRoots = affNodes.filter(function (n) { return !n.parent || !affIdx.byId.has(n.parent); });
+  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parent ? [n.parent] : []; });
 
-  renderModeBars();
   $("node-count").textContent = treeNodes.length + " in tree · " +
     affNodes.length + " affiliates";
 }
 
-/* ═══ MODES (gear) ════════════════════════════════════════════════════ */
-function buildPills(hostId, entries, modeKey) {
-  var host = $(hostId);
-  host.innerHTML = "";
-  entries.forEach(function (e) {
-    var p = document.createElement("span");
-    p.className = "pill" + (state.modeFilter[modeKey] === e.key ? " active" : "");
-    p.textContent = e.label;
-    p.addEventListener("click", function () {
-      state.modeFilter[modeKey] = state.modeFilter[modeKey] === e.key ? null : e.key;
-      renderAll();
-    });
-    host.appendChild(p);
-  });
-}
-
-function countBy(fn) {
-  var c = {};
-  var all = state.data.nodes.concat(state.data.affiliates);
-  var seen = new Set();
-  all.forEach(function (n) {
-    if (seen.has(n.id)) return;
-    seen.add(n.id);
-    fn(n).forEach(function (k) { c[k] = (c[k] || 0) + 1; });
-  });
-  return c;
-}
-
-function renderModeBars() {
-  $("bar-updates").classList.toggle("show", state.mode === "updates");
-  $("bar-independence").classList.toggle("show", state.mode === "independence");
-
-  if (state.mode === "updates") {
-    var uc = countBy(function (n) { return n.indicators || []; });
-    buildPills("updates-pills", Object.keys(UPDATE_KINDS).map(function (k) {
-      return { key: k, label: UPDATE_KINDS[k].icon + " " + UPDATE_KINDS[k].label + " (" + (uc[k] || 0) + ")" };
-    }), "updates");
-    $("updates-summary").textContent = "Press a pill to show only those entities and their parents.";
-  }
-  if (state.mode === "independence") {
-    var rc = countBy(function (n) { return n.restriction ? [n.restriction] : []; });
-    buildPills("indep-pills", Object.keys(RESTRICTIONS).map(function (k) {
-      return { key: k, label: RESTRICTIONS[k] + " (" + (rc[k] || 0) + ")" };
-    }), "independence");
-    $("indep-summary").textContent = "Governing framework: " + $("framework").value;
-  }
-}
-
+/* ═══ MODES (gear) — selection only; features land per mode later ═══ */
 function setMode(mode) {
   state.mode = mode;
   document.querySelectorAll(".gear-opt").forEach(function (b) {
@@ -628,11 +484,9 @@ $("target-input").addEventListener("keydown", function (e) { if (e.key === "Ente
 $("filter-input").addEventListener("input", function () { state.filter = this.value; renderAll(); });
 $("clear-btn").addEventListener("click", function () {
   state.filter = "";
-  state.modeFilter = { updates: null, independence: null };
   $("filter-input").value = "";
   renderAll();
 });
-$("framework").addEventListener("change", renderModeBars);
 
 document.querySelectorAll(".icon-btn").forEach(function (b) {
   b.addEventListener("click", function () {
@@ -640,7 +494,7 @@ document.querySelectorAll(".icon-btn").forEach(function (b) {
     var set = state.expanded[key];
     set.clear();
     if (b.getAttribute("data-act") === "expand") {
-      state.data.nodes.forEach(function (n) { set.add(n.id); });
+      (key === "tree" ? state.data.nodes : state.data.affiliates).forEach(function (n) { set.add(n.id); });
     }
     renderAll();
   });
