@@ -127,13 +127,11 @@
   table.grid tr:last-child td { border-bottom: none; }
   table.grid tr.restricted td { background: var(--restr-bg); }
   table.grid tr.materiality td { background: var(--mat-bg); }
-  table.grid tr.undetermined td { background: var(--hover); }
   th.pin-col, td.pin-col { width: 28px; padding-left: 10px; padding-right: 0; text-align: center; }
   .pin { display: block; width: 14px; height: 14px; color: var(--pin); }
   .rule-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
-  .rule-badge.undetermined { color: var(--muted); border: 1px solid var(--border-2); }
   [hidden] { display: none !important; }
   .mode-bar { margin: 10px 20px 0; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
   .mode-bar .summary { font-size: 12px; color: var(--muted); margin-left: auto; }
@@ -351,7 +349,8 @@ var MODES = {
    Per relationships-by-audit-rule guide, translated to this page's relationship labels:
    Restricted     : Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
    Materiality    : Sibling, Cousin; entities related to the target only through close affiliates (a CA - label)
-   Strictest wins. Listing status is not known here, so IESBA (non-PIE) shows its Materiality types as Undetermined. */
+   Strictest wins. Anything outside the rule is left unmarked. Listing status is not known here, so IESBA (non-PIE)
+   leaves its Materiality types unmarked. */
 var RULES = [
   { key: "SEC",      label: "SEC",         cite: "17 CFR 210.2-01" },
   { key: "AICPA",    label: "AICPA",       cite: "Code of Professional Conduct, ET 0.400.02" },
@@ -363,14 +362,14 @@ var RULES = [
 var RESTRICTED_RELS = ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary", "Indirect Subsidiary"];
 var MATERIALITY_RELS = ["Sibling", "Cousin"];
 
-/* "restricted" | "materiality" | "undetermined" | null for one entity under one rule */
+/* "restricted" | "materiality" | null (not part of the rule) for one entity under one rule */
 function screen(node, rule) {
   var rels = node.relToTarget || [];
   var level = null;
   if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
   else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
   else if (rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) level = "materiality"; /* only CA - labels: close-affiliate-only */
-  if (level === "materiality" && rule.needsListing) return "undetermined";
+  if (level === "materiality" && rule.needsListing) return null; /* not in scope until listing is confirmed */
   return level;
 }
 
@@ -612,7 +611,7 @@ function pinIcon() {
 function extraColumns() {
   var rule = activeRule();
   if (!rule) return [];
-  var LABELS = { restricted: "Restricted", materiality: "Materiality check", undetermined: "Undetermined" };
+  var LABELS = { restricted: "Restricted", materiality: "Materiality check" };
   return [{
     title: rule.label,
     cell: function (n, td) {
@@ -794,15 +793,14 @@ function renderRuleBar() {
   var rule = activeRule(), sum = $("rule-summary");
   if (!state.data) { sum.textContent = "Load a target company first."; return; }
   if (!rule) { sum.textContent = "Select a rule to mark restricted and materiality-check entities."; return; }
-  var seen = new Set(), c = { restricted: 0, materiality: 0, undetermined: 0 };
+  var seen = new Set(), c = { restricted: 0, materiality: 0 };
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
     if (seen.has(n.id)) return;
     seen.add(n.id);
     var l = screen(n, rule);
     if (l) c[l]++;
   });
-  sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check" +
-    (c.undetermined ? " \u00B7 " + c.undetermined + " undetermined" : "");
+  sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check";
 }
 
 /* ═══ MODES (gear) — selection only; features land per mode later ═══ */
