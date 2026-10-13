@@ -201,8 +201,10 @@
      getData(target) -> { nodes: [...], affiliates: [...], targetId?: id }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
    Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
-   Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty
-   affiliate: { id, name, parent: id|null }      (hierarchical, like nodes)
+   Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
+   Same id => same values everywhere, tree or close affiliates.
+   affiliate: { id, name, parent: id|null, idParty? }  (its own hierarchy; include the target in it
+              so entities there get "Close Aff - ..." relationships)
    ═══════════════════════════════════════════════════════════════════════ */
 var SAMPLE = {
   nodes: [
@@ -225,13 +227,13 @@ var SAMPLE = {
     { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"] }
   ],
   affiliates: [
-    { id: "NW-0006", name: "Northwind Canada Ltd.", parent: null },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: null },
+    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parent: null },
+    { id: "NW-0002", name: "Northwind Americas LLC", parent: "NW-0001" },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: "NW-0002", idParty: "P-20417" },
     { id: "NW-0004", name: "Northwind Real Estate Fund I", parent: "NW-0003" },
-    { id: "NW-0005", name: "Northwind Real Estate Fund II", parent: "NW-0003" },
-    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parent: null },
-    { id: "NW-0012", name: "Northwind Japan K.K.", parent: "NW-0011" },
-    { id: "KG-0002", name: "Kestrel Industrial Holdings", parent: null }
+    { id: "NW-0007", name: "Northwind Europe plc", parent: "NW-0001" },
+    { id: "AF-0001", name: "Harbor Advisory Group", parent: null, idParty: "P-50219" },
+    { id: "AF-0002", name: "Harbor Trust Co.", parent: "AF-0001" }
   ]
 };
 
@@ -384,18 +386,18 @@ function upwardPaths(id, byId) {
   return out;
 }
 
-function computeEntityMeta(nodes, targetId) {
-  var byId = new Map();
+/* Classify every node in one hierarchy relative to the target: id -> Set of REL_ORDER labels.
+   If the target is not in this hierarchy nothing in it is related to it. */
+function classify(nodes, targetId) {
+  var byId = new Map(), result = new Map();
   nodes.forEach(function (n) { byId.set(n.id, n); });
+  if (!byId.has(targetId)) return result;
   var tPaths = upwardPaths(targetId, byId);
 
   nodes.forEach(function (n) {
-    n.isTarget = n.id === targetId;
-    n.idParty = n.idParty || null;
-    n.relToTarget = [];
-    if (n.isTarget) return;
-
-    var rels = new Set();
+    if (n.id === targetId) return;
+    var rels = result.get(n.id) || new Set();
+    result.set(n.id, rels);
     var isRoot = !n.parents.some(function (p) { return byId.has(p); });
 
     /* Above the target: n appears on a path up from the target */
@@ -407,8 +409,7 @@ function computeEntityMeta(nodes, targetId) {
       else if (!isRoot) rels.add("Indirect Parent");
     });
 
-    var ePaths = upwardPaths(n.id, byId);
-    ePaths.forEach(function (ep) {
+    upwardPaths(n.id, byId).forEach(function (ep) {
       /* Below the target: the target appears on a path up from n */
       var d = ep.indexOf(targetId);
       if (d >= 1) rels.add(d === 1 ? "Immediate Subsidiary" : "Indirect Subsidiary");
@@ -423,8 +424,39 @@ function computeEntityMeta(nodes, targetId) {
         }
       });
     });
+  });
+  return result;
+}
 
-    n.relToTarget = REL_ORDER.filter(function (r) { return rels.has(r); });
+var AFF_PREFIX = "Close Aff - ";
+
+/* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
+   gets the same values. Tree labels come first, then the same labels prefixed with "Close Aff - ". */
+function computeEntityMeta(nodes, affiliates, targetId) {
+  var affNodes = affiliates.map(function (a) { return { id: a.id, parents: a.parent ? [a.parent] : [] }; });
+  var treeRels = classify(nodes, targetId);
+  var affRels = classify(affNodes, targetId);
+  var everyone = nodes.concat(affiliates);
+
+  var parties = new Map();
+  everyone.forEach(function (n) {
+    if (n.idParty && !parties.has(n.id)) parties.set(n.id, n.idParty);
+  });
+
+  var meta = new Map();
+  everyone.forEach(function (n) {
+    if (meta.has(n.id)) return;
+    var t = treeRels.get(n.id), a = affRels.get(n.id);
+    var rels = REL_ORDER.filter(function (r) { return t && t.has(r); })
+      .concat(REL_ORDER.filter(function (r) { return a && a.has(r); }).map(function (r) { return AFF_PREFIX + r; }));
+    meta.set(n.id, { isTarget: n.id === targetId, relToTarget: rels, idParty: parties.get(n.id) || null });
+  });
+
+  everyone.forEach(function (n) {
+    var m = meta.get(n.id);
+    n.isTarget = m.isTarget;
+    n.relToTarget = m.relToTarget;
+    n.idParty = m.idParty;
   });
 }
 
@@ -447,7 +479,7 @@ function loadTarget() {
       .map(function (id) { return idx.byId.get(id); })
       .filter(function (n) { return n.parents.length === 0; });
 
-    computeEntityMeta(data.nodes, target.id);
+    computeEntityMeta(data.nodes, data.affiliates, target.id);
     state.data = data;
     state.target = target;
     state.owners = owners;
@@ -558,9 +590,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     var nm = document.createElement("span");
     nm.className = "node-name";
     nm.textContent = node.name;
-    if (gridKey === "tree") {
-      nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
-    }
+    nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
     nameTd.appendChild(nm);
     tr.appendChild(nameTd);
 
