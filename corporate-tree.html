@@ -15,6 +15,7 @@
     --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --hdr-accent: #c7d2fe;
     --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
     --shadow: rgba(0,0,0,.18);
+    --pin: #2563eb;
     --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c;
   }
   @media (prefers-color-scheme: dark) {
@@ -25,6 +26,7 @@
       --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
       --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
       --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+      --pin: #60a5fa;
       --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
       color-scheme: dark;
     }
@@ -36,6 +38,7 @@
     --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
     --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
     --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+    --pin: #60a5fa;
     --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
     color-scheme: dark;
   }
@@ -126,6 +129,8 @@
   table.grid tr.restricted td { background: var(--restr-bg); }
   table.grid tr.materiality td { background: var(--mat-bg); }
   table.grid tr.undetermined td { background: var(--hover); }
+  th.pin-col, td.pin-col { width: 28px; padding-left: 10px; padding-right: 0; text-align: center; }
+  .pin { display: block; width: 14px; height: 14px; color: var(--pin); }
   .rule-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
@@ -343,9 +348,9 @@ var MODES = {
   updates:      { label: "Tree Updates" },
   independence: { label: "Independence" }
 };
-/* Audit rules. Driven only by each entity's isTarget and relToTarget metadata.
+/* Audit rules. Driven only by each entity's relToTarget metadata (the target has none, so it is not marked).
    Per relationships-by-audit-rule guide, translated to this page's relationship labels:
-   Restricted     : the target; Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
+   Restricted     : Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
    Materiality    : Sibling, Cousin; entities related to the target only through close affiliates (a CA - label)
    Strictest wins. Listing status is not known here, so IESBA (non-PIE) shows its Materiality types as Undetermined. */
 var RULES = [
@@ -361,16 +366,11 @@ var MATERIALITY_RELS = ["Sibling", "Cousin"];
 
 /* "restricted" | "materiality" | "undetermined" | null for one entity under one rule */
 function screen(node, rule) {
+  var rels = node.relToTarget || [];
   var level = null;
-  if (node.isTarget) level = "restricted";
-  else {
-    var rels = node.relToTarget || [];
-    if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
-    else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
-    else if (rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) {
-      level = "materiality"; /* only CA - labels left: close-affiliate-only */
-    }
-  }
+  if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
+  else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
+  else if (rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) level = "materiality"; /* only CA - labels: close-affiliate-only */
   if (level === "materiality" && rule.needsListing) return "undetermined";
   return level;
 }
@@ -556,6 +556,14 @@ function loadTarget() {
     /* Default expansion: path from each owner down to the target */
     owners.forEach(function (o) { state.expanded.tree.add(o.id); });
     anc.forEach(function (id) { state.expanded.tree.add(id); });
+    /* Close affiliates: open the chain down to the target so its pin is visible */
+    var affById = new Map();
+    data.affiliates.forEach(function (x) { affById.set(x.id, x); });
+    var cur = affById.get(target.id), guard = 0;
+    while (cur && cur.parent && affById.has(cur.parent) && guard++ < 1000) {
+      state.expanded.aff.add(cur.parent);
+      cur = affById.get(cur.parent);
+    }
 
     $("header-title").textContent = target.name;
     $("app").style.display = "block";
@@ -583,6 +591,24 @@ function renderOwners() {
    One renderer for both grids: expand/collapse toggle, indent, name, id,
    plus extra columns contributed by the active mode.
    ═══════════════════════════════════════════════════════════════════ */
+/* Blue map pin marking the target company wherever it appears */
+function pinIcon() {
+  var ns = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "pin");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Target company");
+  var title = document.createElementNS(ns, "title");
+  title.textContent = "Target company";
+  svg.appendChild(title);
+  var path = document.createElementNS(ns, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z");
+  svg.appendChild(path);
+  return svg;
+}
+
 /* Mode-specific columns: Independence adds the audit rule result. */
 function extraColumns() {
   var rule = activeRule();
@@ -625,8 +651,9 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   table.className = "grid";
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
-  ["Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
+  ["", "Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t, i) {
     var th = document.createElement("th");
+    if (i === 0) { th.className = "pin-col"; th.setAttribute("aria-label", "Target company"); }
     th.textContent = t;
     hr.appendChild(th);
   });
@@ -651,6 +678,11 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
       var lvl = screen(node, ruleNow);
       if (lvl) tr.className = lvl;
     }
+
+    var pinTd = document.createElement("td");
+    pinTd.className = "pin-col";
+    if (node.isTarget) pinTd.appendChild(pinIcon());
+    tr.appendChild(pinTd);
 
     var nameTd = document.createElement("td");
     nameTd.className = "name-cell";
