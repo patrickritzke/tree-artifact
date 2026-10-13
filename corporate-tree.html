@@ -370,25 +370,34 @@ function pickSample(query) {
   return hit || SAMPLE;
 }
 
-/* Party ids: the component group of each ultimate owner tree id lists its Party members. Tree nodes are keyed by
-   the external id of the active provider, so each member is keyed by that same external id and maps to its
-   Intapp partyId. Members without an external id for the provider are skipped. Any tree id that matches gets
-   that idParty, wherever the entity sits. Failures and missing groups are ignored. */
-function fetchPartyIds(groupId) {
+/* Party ids: the component group named after each ultimate owner tree id lists its Party members, but members
+   carry no external ids. So each Party member is looked up with get_party to read its external id for the
+   active provider; the map is external id -> partyId. Any tree id that matches gets that idParty, wherever
+   the entity sits. Failures and missing groups are ignored. */
+function fetchPartyIds(groupName) {
   var provider = $("provider").value;
   try {
-    return celeste.query("intapp_compliance__get_component_group", { groupId: groupId })
+    return celeste.query("intapp_compliance__get_component_group", { componentGroupName: groupName })
       .then(function (raw) {
         var g = extractObj(raw, "groupMembers");
-        var out = new Map();
-        ((g && g.groupMembers) || []).forEach(function (m) {
-          if (!m || m.type !== "Party" || !m.partyId) return;
-          var extId = provider === "BureauVanDijk" ? m.bureauVanDijkId
-                    : provider === "DunAndBradstreet" ? m.dunsNumber
-                    : m.externalId;
-          if (extId) out.set(extId, m.partyId);
+        var members = ((g && g.groupMembers) || [])
+          .filter(function (m) { return m && m.type === "Party" && m.partyId; });
+
+        return Promise.all(members.map(function (m) {
+          return celeste.query("intapp_compliance__get_party", { partyId: m.partyId, propertiesToLoad: ["ExternalContent"] })
+            .then(function (praw) {
+              var p = extractObj(praw, "partyId") || {};
+              var extId = provider === "BureauVanDijk" ? p.bureauVanDijkId
+                        : provider === "DunAndBradstreet" ? p.dunsNumber
+                        : p.externalId;
+              return extId ? [extId, m.partyId] : null;
+            })
+            .catch(function () { return null; });
+        })).then(function (pairs) {
+          var out = new Map();
+          pairs.forEach(function (pr) { if (pr) out.set(pr[0], pr[1]); });
+          return out;
         });
-        return out;
       })
       .catch(function () { return new Map(); });
   } catch (e) {
