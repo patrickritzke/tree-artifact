@@ -10,7 +10,7 @@
     --bg: #f5f6f8; --surface: #ffffff; --head: #f9fafb; --hover: #f3f4f6;
     --fg: #1a1a2e; --fg-strong: #111827; --fg-2: #374151; --muted: #6b7280; --faint: #9ca3af;
     --border: #e5e7eb; --border-2: #d1d5db;
-    --accent: #6366f1; --accent-fg: #4338ca; --hl: #fef9c3; --err: #dc2626;
+    --accent: #6366f1; --accent-fg: #4338ca; --err: #dc2626;
     --btn-bg: #1a1a2e; --btn-fg: #ffffff; --btn-hover: #2d2d4e;
     --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --hdr-accent: #c7d2fe;
     --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
@@ -23,7 +23,7 @@
       --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
       --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
       --border: #2d303d; --border-2: #3a3e4e;
-      --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
+      --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
       --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
       --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
       --pin: #60a5fa;
@@ -35,7 +35,7 @@
     --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
     --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
     --border: #2d303d; --border-2: #3a3e4e;
-    --accent: #8b8ff5; --accent-fg: #a5a8ff; --hl: #3b3a1c; --err: #f87171;
+    --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
     --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
     --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
     --pin: #60a5fa;
@@ -125,7 +125,6 @@
   }
   table.grid td { padding: 4px 12px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
   table.grid tr:last-child td { border-bottom: none; }
-  table.grid tr.anchor td { background: var(--hl); }
   table.grid tr.restricted td { background: var(--restr-bg); }
   table.grid tr.materiality td { background: var(--mat-bg); }
   table.grid tr.undetermined td { background: var(--hover); }
@@ -154,7 +153,7 @@
   .toggle:hover { background: var(--border); }
   .toggle.leaf { visibility: hidden; cursor: default; }
   .node-name { font-weight: 500; color: var(--fg-strong); margin-left: 2px; }
-  .node-id { color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .empty { padding: 24px; color: var(--muted); font-size: 13px; }
   #app { display: none; padding-bottom: 40px; }
 </style>
@@ -651,7 +650,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   table.className = "grid";
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
-  ["", "Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t, i) {
+  ["", "Name"].concat(cols.map(function (c) { return c.title; })).forEach(function (t, i) {
     var th = document.createElement("th");
     if (i === 0) { th.className = "pin-col"; th.setAttribute("aria-label", "Target company"); }
     th.textContent = t;
@@ -672,7 +671,6 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
 
     var tr = document.createElement("tr");
     if (node.group) tr.className = "group";
-    if (state.target && node.id === state.target.id && !node.group) tr.className = "anchor";
     var ruleNow = activeRule();
     if (ruleNow) {
       var lvl = screen(node, ruleNow);
@@ -709,14 +707,12 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     nm.textContent = node.name;
     nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
     nameTd.appendChild(nm);
-    tr.appendChild(nameTd);
-
-    var idTd = document.createElement("td");
     var idSp = document.createElement("span");
     idSp.className = "node-id";
-    idSp.textContent = node.id;
-    idTd.appendChild(idSp);
-    tr.appendChild(idTd);
+    idSp.textContent = "(" + node.id + ")";
+    nameTd.appendChild(idSp);
+    tr.appendChild(nameTd);
+
 
     cols.forEach(function (c) {
       var td = document.createElement("td");
