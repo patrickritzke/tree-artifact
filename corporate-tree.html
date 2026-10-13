@@ -362,8 +362,21 @@ function loadLive(partyId) {
     });
 }
 
+/* Sample datasets: the built-in one, plus any a host page supplies as window.EXTRA_SAMPLES
+   (each { nodes, affiliates, targetId }). The one containing the typed target is used. */
+function sampleSets() { return [SAMPLE].concat(window.EXTRA_SAMPLES || []); }
+
+function pickSample(query) {
+  var q = (query || "").trim().toLowerCase();
+  if (!q) return SAMPLE;
+  var hit = sampleSets().filter(function (set) {
+    return set.nodes.some(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase().indexOf(q) !== -1; });
+  })[0];
+  return hit || SAMPLE;
+}
+
 function getData(target) {
-  return isLive() ? loadLive((target || "").trim()) : Promise.resolve(SAMPLE);
+  return isLive() ? loadLive((target || "").trim()) : Promise.resolve(pickSample(target));
 }
 
 /* ═══ STATE ═══════════════════════════════════════════════════════════ */
@@ -934,11 +947,14 @@ if (isLive()) {
   $("target-input").placeholder = "Party ID, e.g. 1096";
   $("target-input").removeAttribute("list");
 } else {
-  SAMPLE.nodes.forEach(function (n) {
-    var o = document.createElement("option");
-    o.value = n.id;
-    o.label = n.name;
-    $("target-list").appendChild(o);
+  sampleSets().forEach(function (set, i) {
+    var list = i === 0 ? set.nodes : set.nodes.filter(function (n) { return n.id === set.targetId; });
+    list.forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = n.id;
+      o.label = n.name;
+      $("target-list").appendChild(o);
+    });
   });
 }
 </script>
