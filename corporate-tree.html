@@ -583,7 +583,7 @@ function renderOwners() {
    One renderer for both grids: expand/collapse toggle, indent, name, id,
    plus extra columns contributed by the active mode.
    ═══════════════════════════════════════════════════════════════════ */
-/* Mode-specific columns are added here once Tree Updates / Independence are built. */
+/* Mode-specific columns: Independence adds the audit rule result. */
 function extraColumns() {
   var rule = activeRule();
   if (!rule) return [];
@@ -599,8 +599,6 @@ function extraColumns() {
       td.appendChild(b);
     }
   }];
-}
-));
 }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
