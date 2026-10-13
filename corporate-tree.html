@@ -343,7 +343,8 @@ var MODES = {
   updates:      { label: "Tree Updates" },
   independence: { label: "Independence" }
 };
-/* Audit rules. Per relationships-by-audit-rule guide, translated to this page's relationship labels:
+/* Audit rules. Driven only by each entity's isTarget and relToTarget metadata.
+   Per relationships-by-audit-rule guide, translated to this page's relationship labels:
    Restricted     : the target; Ultimate / Immediate / Indirect Parent; Immediate / Indirect Subsidiary
    Materiality    : Sibling, Cousin; entities related to the target only through close affiliates (a CA - label)
    Strictest wins. Listing status is not known here, so IESBA (non-PIE) shows its Materiality types as Undetermined. */
@@ -359,15 +360,15 @@ var RESTRICTED_RELS = ["Ultimate Parent", "Immediate Parent", "Indirect Parent",
 var MATERIALITY_RELS = ["Sibling", "Cousin"];
 
 /* "restricted" | "materiality" | "undetermined" | null for one entity under one rule */
-function screen(node, rule, affIds) {
+function screen(node, rule) {
   var level = null;
   if (node.isTarget) level = "restricted";
   else {
     var rels = node.relToTarget || [];
     if (rels.some(function (r) { return RESTRICTED_RELS.indexOf(r) !== -1; })) level = "restricted";
     else if (rels.some(function (r) { return MATERIALITY_RELS.indexOf(r) !== -1; })) level = "materiality";
-    else if (affIds.has(node.id) && rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) {
-      level = "materiality"; /* close-affiliate-only: needs a CA - relationship to the target */
+    else if (rels.some(function (r) { return r.indexOf(AFF_PREFIX) === 0; })) {
+      level = "materiality"; /* only CA - labels left: close-affiliate-only */
     }
   }
   if (level === "materiality" && rule.needsListing) return "undetermined";
@@ -590,7 +591,7 @@ function extraColumns() {
   return [{
     title: rule.label,
     cell: function (n, td) {
-      var level = screen(n, rule, affIdSet());
+      var level = screen(n, rule);
       if (!level) return;
       var b = document.createElement("span");
       b.className = "rule-badge " + level;
@@ -599,9 +600,7 @@ function extraColumns() {
     }
   }];
 }
-
-function affIdSet() {
-  return new Set(state.data.affiliates.map(function (a) { return a.id; }));
+));
 }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
@@ -651,7 +650,7 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
     if (state.target && node.id === state.target.id && !node.group) tr.className = "anchor";
     var ruleNow = activeRule();
     if (ruleNow) {
-      var lvl = screen(node, ruleNow, affIdSet());
+      var lvl = screen(node, ruleNow);
       if (lvl) tr.className = lvl;
     }
 
@@ -769,11 +768,11 @@ function renderRuleBar() {
   var rule = activeRule(), sum = $("rule-summary");
   if (!state.data) { sum.textContent = "Load a target company first."; return; }
   if (!rule) { sum.textContent = "Select a rule to mark restricted and materiality-check entities."; return; }
-  var affIds = affIdSet(), seen = new Set(), c = { restricted: 0, materiality: 0, undetermined: 0 };
+  var seen = new Set(), c = { restricted: 0, materiality: 0, undetermined: 0 };
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
     if (seen.has(n.id)) return;
     seen.add(n.id);
-    var l = screen(n, rule, affIds);
+    var l = screen(n, rule);
     if (l) c[l]++;
   });
   sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check" +
