@@ -147,7 +147,7 @@
   }
   .pill:hover { background: var(--hover); }
   .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
-  #rule-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  #rule-pills, #filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
   .name-inner { display: flex; align-items: center; }
   .indent { display: inline-block; flex-shrink: 0; }
   .toggle {
@@ -212,6 +212,7 @@
   <div class="toolbar" id="filter-bar">
     <label class="panel-title" for="filter-input">Filter:</label>
     <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
+    <div id="filter-pills"></div>
     <button class="btn" id="clear-btn">Clear</button>
   </div>
 
@@ -463,6 +464,7 @@ var state = {
   mode: "general",
   auditRule: null,
   loadSeq: 0,
+  filterPill: null,
   data: null,
   target: null,
   owners: [],
@@ -630,6 +632,7 @@ function loadTarget() {
     state.expanded.tree = new Set();
     state.expanded.aff = new Set();
     state.filter = "";
+    state.filterPill = null;
     $("filter-input").value = "";
 
     /* Default expansion: path from each owner down to the target */
@@ -711,18 +714,49 @@ function extraColumns() {
 }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
+/* Quick filters. Exclusive with each other and with the text search. Every filter keeps the chain above each
+   match; the parents/subs filter also keeps everything below the target. */
+var FILTER_PILLS = [
+  { key: "party",      label: "Intapp Parties Only" },
+  { key: "parents",    label: "Target + Parents Only" },
+  { key: "parentsSubs", label: "Target + Parents/Subs Only" }
+];
+
+/* Ids matching a quick filter within one grid (structure given by idx/parentsOf) */
+function pillMatches(key, nodes, idx, parentsOf) {
+  var hit = new Set();
+  if (key === "party") {
+    nodes.forEach(function (n) { if (n.idParty) hit.add(n.id); });
+    return hit;
+  }
+  var tid = state.target && state.target.id;
+  if (!tid || !idx.byId.has(tid)) return hit;
+  hit.add(tid);
+  ancestorsOf(tid, idx, parentsOf).forEach(function (a) { hit.add(a); });
+  if (key === "parentsSubs") {
+    (function down(id, stack) {
+      (idx.kids.get(id) || []).forEach(function (k) {
+        if (stack.indexOf(k.id) !== -1) return;
+        hit.add(k.id);
+        down(k.id, stack.concat(id));
+      });
+    })(tid, []);
+  }
+  return hit;
+}
+
 function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
   var idx = indexNodes(nodes, parentsOf);
   var txt = state.filter.trim().toLowerCase();
-  var filtering = !!txt;
+  var filtering = !!txt || !!state.filterPill;
 
-  /* Visible set = matches + their ancestors; filtering force-expands */
+  /* Visible set = matches + their ancestors (upward is always kept); filtering force-expands */
   var visible = null;
   if (filtering) {
     visible = new Set();
+    var matched = state.filterPill ? pillMatches(state.filterPill, nodes, idx, parentsOf) : null;
     nodes.forEach(function (n) {
-      if (n.group) return;
-      var hit = (!txt || (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1);
+      var hit = matched ? matched.has(n.id) : (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1;
       if (!hit) return;
       visible.add(n.id);
       ancestorsOf(n.id, idx, parentsOf).forEach(function (a) { visible.add(a); });
@@ -891,6 +925,27 @@ function renderAll() {
   $("node-count").textContent = treeNodes.length + " in tree · " +
     affNodes.length + " affiliates";
   renderRuleBar();
+  renderFilterPills();
+}
+
+function renderFilterPills() {
+  var host = $("filter-pills");
+  host.innerHTML = "";
+  FILTER_PILLS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill" + (state.filterPill === f.key ? " active" : "");
+    b.textContent = f.label;
+    b.setAttribute("aria-pressed", state.filterPill === f.key ? "true" : "false");
+    b.addEventListener("click", function () {
+      /* exclusive: choosing a pill clears the search text; choosing the active pill turns it off */
+      state.filterPill = state.filterPill === f.key ? null : f.key;
+      state.filter = "";
+      $("filter-input").value = "";
+      renderAll();
+    });
+    host.appendChild(b);
+  });
 }
 
 function renderRuleBar() {
@@ -961,9 +1016,14 @@ document.querySelectorAll(".gear-opt").forEach(function (b) {
 
 $("load-btn").addEventListener("click", loadTarget);
 $("target-input").addEventListener("keydown", function (e) { if (e.key === "Enter") loadTarget(); });
-$("filter-input").addEventListener("input", function () { state.filter = this.value; renderAll(); });
+$("filter-input").addEventListener("input", function () {
+  state.filter = this.value;
+  state.filterPill = null; /* typing replaces any active pill */
+  renderAll();
+});
 $("clear-btn").addEventListener("click", function () {
   state.filter = "";
+  state.filterPill = null;
   $("filter-input").value = "";
   renderAll();
 });
