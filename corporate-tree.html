@@ -156,6 +156,11 @@
   <label for="target-input">Target company</label>
   <input id="target-input" type="text" list="target-list" placeholder="Name or ID, e.g. NW-0002 or Orion" autocomplete="off" />
   <datalist id="target-list"></datalist>
+  <select id="provider" hidden>
+    <option value="BureauVanDijk">Bureau van Dijk</option>
+    <option value="DunAndBradstreet">Dun &amp; Bradstreet</option>
+    <option value="Intapp">Intapp</option>
+  </select>
   <button class="btn primary" id="load-btn">Load</button>
   <span id="target-err"></span>
 </div>
@@ -193,7 +198,7 @@
 <script>
 /* ═══ DATA PROVIDER ═══════════════════════════════════════════════════════
    Swap this for a live source. Contract:
-     getData(target) -> { nodes: [...], affiliates: [...] }
+     getData(target) -> { nodes: [...], affiliates: [...], targetId?: id }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
    affiliate: { id, name, parent: id|null }      (hierarchical, like nodes)
    ═══════════════════════════════════════════════════════════════════════ */
@@ -228,8 +233,77 @@ var SAMPLE = {
   ]
 };
 
-function getData(/* target */) {
-  return Promise.resolve(SAMPLE);
+/* Live data comes from the Intapp host, which injects window.celeste.
+   Anywhere else (a browser tab, the published artifact) the sample is used. */
+function isLive() { return typeof window.celeste !== "undefined"; }
+
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (typeof raw === "object" && !Array.isArray(raw) && (!key || key in raw)) return raw;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var b = raw[i];
+      var v = (b && b.text != null) ? b.text : (b && b.content != null) ? b.content : (b && b.value != null) ? b.value : (b && b.data != null) ? b.data : b;
+      if (typeof v === "string") {
+        try { var p = JSON.parse(v); if (!key || key in p) return p; } catch (e) {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        var envs = ["result", "data", "value", "payload"];
+        for (var j = 0; j < envs.length; j++) {
+          if (v[envs[j]] && typeof v[envs[j]] === "object" && (!key || key in v[envs[j]])) return v[envs[j]];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { var p2 = JSON.parse(raw); if (!key || key in p2) return p2; } catch (e2) {}
+  }
+  return null;
+}
+
+/* Flatten a provider tree into nodes with a parents array (first parent wins on repeats). */
+function flattenTree(node, parentId, out, seen) {
+  if (!node) return;
+  var id = node.externalId || node.key || null;
+  if (!id || seen.has(id)) return;
+  seen.add(id);
+  out.push({ id: id, name: node.name || node.displayName || node.nameWithoutHonorifics || id, parents: parentId ? [parentId] : [] });
+  (node.subCompanies || node.children || []).forEach(function (c) { flattenTree(c, id, out, seen); });
+}
+
+function loadLive(partyId) {
+  var provider = $("provider").value;
+  return celeste.query("intapp_compliance__get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] })
+    .then(function (raw) {
+      var party = extractObj(raw, "partyId");
+      if (!party) throw new Error("Could not load party " + partyId + ".");
+      var nodes = [], seen = new Set();
+      var trees = party.corporateTrees || [];
+      var match = trees.filter(function (t) { return t.providerType === provider; })[0] || trees[0];
+      var targetId = null;
+      if (match && match.rootCompany) {
+        targetId = match.rootCompanyId || match.rootCompany.externalId;
+        flattenTree(match.rootCompany, null, nodes, seen);
+      }
+      if (nodes.length) return { nodes: nodes, affiliates: [], targetId: targetId };
+
+      var extId = provider === "BureauVanDijk" ? (party.bureauVanDijkId || party.externalId)
+                : provider === "DunAndBradstreet" ? (party.dunsNumber || party.externalId)
+                : party.externalId;
+      if (!extId) throw new Error("Party " + (party.name || partyId) + " has no external ID for " + provider + ".");
+      return celeste.query("intapp_compliance__load_corporate_tree_data", { externalId: extId, provider: provider })
+        .then(function (r2) {
+          var td = extractObj(r2, "corporateTrees");
+          ((td && td.corporateTrees) || []).forEach(function (t) { flattenTree(t, null, nodes, seen); });
+          if (!nodes.length) throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
+          return { nodes: nodes, affiliates: [], targetId: extId };
+        });
+    });
+}
+
+function getData(target) {
+  return isLive() ? loadLive((target || "").trim()) : Promise.resolve(SAMPLE);
 }
 
 /* ═══ STATE ═══════════════════════════════════════════════════════════ */
@@ -292,7 +366,7 @@ function loadTarget() {
   if (!query.trim()) { err.textContent = "Enter a target company."; return; }
 
   getData(query).then(function (data) {
-    var target = resolveTarget(query, data.nodes);
+    var target = (data.targetId && data.nodes.filter(function (n) { return n.id === data.targetId; })[0]) || resolveTarget(query, data.nodes);
     if (!target) { err.textContent = "No company found for “" + query.trim() + "”."; return; }
 
     var idx = indexNodes(data.nodes, function (n) { return n.parents; });
@@ -319,7 +393,7 @@ function loadTarget() {
     $("app").style.display = "block";
     renderOwners();
     renderAll();
-  });
+  }).catch(function (e) { err.textContent = e.message; });
 }
 
 function renderOwners() {
@@ -532,16 +606,19 @@ document.querySelectorAll(".icon-btn").forEach(function (b) {
   });
 });
 
-/* Target suggestions come from the data provider */
-getData().then(function (d) {
-  var dl = $("target-list");
-  d.nodes.forEach(function (n) {
+/* Sample mode suggests its IDs; live mode takes a Party ID and a provider. */
+if (isLive()) {
+  $("provider").hidden = false;
+  $("target-input").placeholder = "Party ID, e.g. 1096";
+  $("target-input").removeAttribute("list");
+} else {
+  SAMPLE.nodes.forEach(function (n) {
     var o = document.createElement("option");
     o.value = n.id;
     o.label = n.name;
-    dl.appendChild(o);
+    $("target-list").appendChild(o);
   });
-});
+}
 </script>
 </body>
 </html>
