@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Corporate Tree</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; background: #f5f6f8; color: #1a1a2e; min-height: 100vh;
+  }
+  button { font: inherit; }
+
+  /* ── Header ── */
+  #header {
+    background: #1a1a2e; color: #fff; padding: 12px 20px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  }
+  #header-title { font-size: 15px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mode-badge {
+    font-size: 11px; color: #c7d2fe; border: 1px solid #4b4b7a; border-radius: 999px;
+    padding: 2px 9px; display: none;
+  }
+  #mode-badge.show { display: inline-block; }
+  #node-count { font-size: 12px; color: #9ca3af; white-space: nowrap; }
+
+  /* ── Gear ── */
+  #gear-wrap { position: relative; }
+  #gear-btn {
+    background: none; border: none; color: #9ca3af; cursor: pointer; font-size: 17px;
+    width: 28px; height: 28px; border-radius: 6px; line-height: 1; opacity: .75;
+    transition: opacity .15s, background .15s, color .15s;
+  }
+  #gear-btn:hover, #gear-btn[aria-expanded="true"] { opacity: 1; background: rgba(255,255,255,.1); color: #fff; }
+  #gear-menu {
+    display: none; position: absolute; right: 0; top: 34px; min-width: 170px;
+    background: #fff; color: #1a1a2e; border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0,0,0,.18); padding: 4px; z-index: 150;
+  }
+  #gear-menu.open { display: block; }
+  .gear-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; font-weight: 600; padding: 6px 10px 4px; }
+  .gear-opt {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 7px 10px; border: none; background: none; border-radius: 5px; cursor: pointer; font-size: 13px; color: #374151;
+  }
+  .gear-opt:hover { background: #f3f4f6; }
+  .gear-opt .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #d1d5db; flex-shrink: 0; }
+  .gear-opt.active { color: #4338ca; font-weight: 600; }
+  .gear-opt.active .dot { background: #6366f1; border-color: #6366f1; }
+
+  /* ── Toolbars ── */
+  .toolbar { padding: 12px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .toolbar label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #6b7280; font-weight: 600; }
+  .toolbar input[type=text], .toolbar select {
+    padding: 7px 12px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; font-size: 13px;
+    background: #fff; color: #1a1a2e; outline: none; transition: border-color .15s;
+  }
+  .toolbar input:focus, .toolbar select:focus { border-color: #6366f1; }
+  #target-input { width: 320px; max-width: 100%; }
+  #filter-input { flex: 1; max-width: 420px; }
+  .btn {
+    padding: 7px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
+    font-size: 13px; cursor: pointer; color: #374151; transition: background .15s;
+  }
+  .btn:hover { background: #f3f4f6; }
+  .btn.primary { background: #1a1a2e; border-color: #1a1a2e; color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: #2d2d4e; }
+  #target-err { font-size: 12px; color: #dc2626; }
+  #owner-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .chip { font-size: 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 999px; padding: 3px 10px; color: #374151; }
+  .chip b { color: #6b7280; font-weight: 600; margin-right: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+
+  /* mode toolbars (gear-driven) */
+  .mode-bar {
+    display: none; margin: 10px 20px 0; padding: 8px 12px; background: #eef2ff;
+    border: 1px solid #c7d2fe; border-radius: 8px; flex-wrap: wrap; align-items: center; gap: 8px;
+  }
+  .mode-bar.show { display: flex; }
+  .mode-bar .spacer { flex: 1; }
+  .mode-bar .summary { font-size: 12px; color: #4b5563; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 999px;
+    border: 1.5px solid #d1d5db; background: #fff; font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap;
+    transition: background .15s, border-color .15s;
+  }
+  .pill:hover { background: #f3f4f6; }
+  .pill.active { background: #e0e7ff; border-color: #6366f1; color: #4338ca; font-weight: 600; }
+
+  /* ── Grids ── */
+  .section { margin: 16px 20px 0; }
+  .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .section-head h2 { font-size: 13px; font-weight: 600; color: #111827; flex: 1; }
+  .section-head .count { font-size: 12px; color: #6b7280; }
+  .icon-btn { border: 1px solid #d1d5db; background: #fff; border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; color: #374151; }
+  .icon-btn:hover { background: #f3f4f6; }
+  .grid-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: auto; max-height: 420px; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th {
+    position: sticky; top: 0; background: #f9fafb; text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .5px; color: #6b7280; font-weight: 600; padding: 7px 12px; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+  }
+  table.grid td { padding: 4px 12px; border-bottom: 1px solid #f3f4f6; white-space: nowrap; }
+  table.grid tr:last-child td { border-bottom: none; }
+  table.grid tr.anchor td { background: #fef9c3; }
+  table.grid tr.group td { background: #f9fafb; }
+  td.name-cell { display: flex; align-items: center; }
+  .indent { display: inline-block; flex-shrink: 0; }
+  .toggle {
+    width: 18px; height: 18px; flex-shrink: 0; border: none; background: none; cursor: pointer;
+    color: #6b7280; font-size: 10px; border-radius: 4px;
+  }
+  .toggle:hover { background: #e5e7eb; }
+  .toggle.leaf { visibility: hidden; cursor: default; }
+  .node-name { font-weight: 500; color: #111827; margin-left: 2px; }
+  tr.group .node-name { font-weight: 600; }
+  .node-id { color: #6b7280; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .anchor-mark { color: #6366f1; font-weight: 700; margin-left: 6px; }
+  .crown { margin-right: 4px; font-size: 13px; }
+  .badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; font-weight: 600; }
+  .badge.automatic { background: #fee2e2; color: #b91c1c; }
+  .badge.materiality { background: #ffedd5; color: #c2410c; }
+  .badge.judgment { background: #fef9c3; color: #a16207; }
+  .badge.undetermined { background: #e5e7eb; color: #4b5563; }
+  .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #374151; }
+  .empty { padding: 24px; color: #6b7280; font-size: 13px; }
+  #app { display: none; padding-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span id="header-title">Corporate Tree</span>
+  <span id="mode-badge"></span>
+  <span id="node-count"></span>
+  <div id="gear-wrap">
+    <button id="gear-btn" title="Settings" aria-haspopup="true" aria-expanded="false">&#9881;</button>
+    <div id="gear-menu" role="menu">
+      <div class="gear-title">Mode</div>
+      <button class="gear-opt active" data-mode="general" role="menuitemradio"><span class="dot"></span>General</button>
+      <button class="gear-opt" data-mode="updates" role="menuitemradio"><span class="dot"></span>Tree Updates</button>
+      <button class="gear-opt" data-mode="independence" role="menuitemradio"><span class="dot"></span>Independence</button>
+    </div>
+  </div>
+</div>
+
+<!-- General: target company input -->
+<div class="toolbar" id="target-bar">
+  <label for="target-input">Target company</label>
+  <input id="target-input" type="text" list="target-list" placeholder="Name or ID, e.g. NW-0002 or Orion" autocomplete="off" />
+  <datalist id="target-list"></datalist>
+  <button class="btn primary" id="load-btn">Load</button>
+  <span id="target-err"></span>
+</div>
+
+<div id="app">
+  <div class="toolbar" id="owner-bar"><div id="owner-chips"></div></div>
+
+  <!-- Mode-specific toolbars (shown via gear) -->
+  <div class="mode-bar" id="bar-updates">
+    <label>Tree updates</label>
+    <span id="updates-pills"></span>
+    <span class="spacer"></span>
+    <span class="summary" id="updates-summary"></span>
+  </div>
+  <div class="mode-bar" id="bar-independence">
+    <label>Framework</label>
+    <select id="framework">
+      <option>SEC / PCAOB</option>
+      <option>EU 537/2014</option>
+      <option>UK FRC</option>
+      <option>IESBA</option>
+      <option>AICPA</option>
+    </select>
+    <label>Restriction</label>
+    <span id="indep-pills"></span>
+    <span class="spacer"></span>
+    <span class="summary" id="indep-summary"></span>
+  </div>
+
+  <!-- General: filter / search -->
+  <div class="toolbar" id="filter-bar">
+    <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
+    <button class="btn" id="clear-btn">Clear</button>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Corporate tree</h2>
+      <span class="count" id="tree-count"></span>
+      <button class="icon-btn" data-grid="tree" data-act="expand">Expand all</button>
+      <button class="icon-btn" data-grid="tree" data-act="collapse">Collapse all</button>
+    </div>
+    <div class="grid-wrap" id="tree-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Close affiliates</h2>
+      <span class="count" id="aff-count"></span>
+      <button class="icon-btn" data-grid="aff" data-act="expand">Expand all</button>
+      <button class="icon-btn" data-grid="aff" data-act="collapse">Collapse all</button>
+    </div>
+    <div class="grid-wrap" id="aff-grid"></div>
+  </div>
+</div>
+
+<script>
+/* ═══ DATA PROVIDER ═══════════════════════════════════════════════════════
+   Swap this for a live source. Contract:
+     getData(target) -> { nodes: [...], affiliates: [...] }
+   node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
+   affiliate: { id, name, parent: id|null, group?: true }
+   Optional per-node fields used by modes:
+     indicators: ["added" | "matched" | "judgement"]          (Tree Updates)
+     restriction: "automatic"|"materiality"|"judgment"|"undetermined", code (Independence)
+   ═══════════════════════════════════════════════════════════════════════ */
+var SAMPLE = {
+  nodes: [
+    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"], restriction: "automatic", code: "A1" },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], indicators: ["matched"], restriction: "materiality", code: "M2" },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"], restriction: "judgment", code: "J1" },
+    { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"], indicators: ["added"], restriction: "undetermined", code: "U1" },
+    { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"], restriction: "automatic", code: "A1" },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"], restriction: "automatic", code: "A1" },
+    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"], indicators: ["matched"], restriction: "materiality", code: "M1" },
+    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"], restriction: "materiality", code: "M1" },
+    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"], indicators: ["judgement"], restriction: "judgment", code: "J2" },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"], restriction: "materiality", code: "M1" },
+    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"], restriction: "undetermined", code: "U1" },
+    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"], indicators: ["added"], restriction: "judgment", code: "J1" },
+    { id: "KG-0001", name: "Kestrel Group SA", parents: [] },
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"], restriction: "automatic", code: "A2" },
+    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"], indicators: ["judgement"], restriction: "judgment", code: "J3" },
+    { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"], indicators: ["added"], restriction: "undetermined", code: "U2" }
+  ],
+  affiliates: [
+    { id: "g-sib", name: "Siblings", parent: null, group: true },
+    { id: "g-cous", name: "Cousins", parent: null, group: true },
+    { id: "g-assoc", name: "Associates", parent: null, group: true },
+    { id: "NW-0006", name: "Northwind Canada Ltd.", parent: "g-sib", restriction: "automatic", code: "A1" },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parent: "g-sib", restriction: "materiality", code: "M2" },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parent: "NW-0003", restriction: "judgment", code: "J1" },
+    { id: "NW-0007", name: "Northwind Europe plc", parent: "g-cous", restriction: "automatic", code: "A1" },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parent: "g-cous", restriction: "materiality", code: "M1" },
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", parent: "g-assoc", restriction: "undetermined", code: "U3" }
+  ]
+};
+
+function getData(/* target */) {
+  return Promise.resolve(SAMPLE);
+}
+
+/* ═══ STATE ═══════════════════════════════════════════════════════════ */
+var MODES = {
+  general:      { label: "General" },
+  updates:      { label: "Tree Updates" },
+  independence: { label: "Independence" }
+};
+var UPDATE_KINDS = {
+  added:     { icon: "➕", label: "Added" },
+  matched:   { icon: "✅", label: "Matched" },
+  judgement: { icon: "❗", label: "Judgement" }
+};
+var RESTRICTIONS = {
+  automatic:    "Automatic",
+  materiality:  "Materiality",
+  judgment:     "Judgment",
+  undetermined: "Undetermined"
+};
+
+var state = {
+  mode: "general",
+  data: null,
+  target: null,
+  owners: [],
+  filter: "",
+  modeFilter: { updates: null, independence: null },
+  expanded: { tree: new Set(), aff: new Set() }
+};
+
+var $ = function (id) { return document.getElementById(id); };
+
+/* ═══ HELPERS ═════════════════════════════════════════════════════════ */
+function indexNodes(list, parentsOf) {
+  var byId = new Map(), kids = new Map();
+  list.forEach(function (n) { byId.set(n.id, n); });
+  list.forEach(function (n) {
+    parentsOf(n).forEach(function (p) {
+      if (!byId.has(p)) return;
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(n);
+    });
+  });
+  return { byId: byId, kids: kids };
+}
+
+function ancestorsOf(id, idx, parentsOf) {
+  var out = new Set(), stack = [id];
+  while (stack.length) {
+    var n = idx.byId.get(stack.pop());
+    if (!n) continue;
+    parentsOf(n).forEach(function (p) {
+      if (idx.byId.has(p) && !out.has(p)) { out.add(p); stack.push(p); }
+    });
+  }
+  return out;
+}
+
+function resolveTarget(query, nodes) {
+  var q = query.trim().toLowerCase();
+  if (!q) return null;
+  var exact = nodes.filter(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase() === q; });
+  if (exact.length) return exact[0];
+  var partial = nodes.filter(function (n) { return n.name.toLowerCase().indexOf(q) !== -1; });
+  return partial.length ? partial[0] : null;
+}
+
+/* ═══ LOAD TARGET ═════════════════════════════════════════════════════ */
+function loadTarget() {
+  var err = $("target-err");
+  err.textContent = "";
+  var query = $("target-input").value;
+  if (!query.trim()) { err.textContent = "Enter a target company."; return; }
+
+  getData(query).then(function (data) {
+    var target = resolveTarget(query, data.nodes);
+    if (!target) { err.textContent = "No company found for “" + query.trim() + "”."; return; }
+
+    var idx = indexNodes(data.nodes, function (n) { return n.parents; });
+    var anc = ancestorsOf(target.id, idx, function (n) { return n.parents; });
+    var chain = anc.size ? Array.from(anc) : [];
+    /* Ultimate owners: ancestors (or the target itself) with no parents */
+    var owners = (chain.length ? chain : [target.id])
+      .map(function (id) { return idx.byId.get(id); })
+      .filter(function (n) { return n.parents.length === 0; });
+
+    state.data = data;
+    state.target = target;
+    state.owners = owners;
+    state.expanded.tree = new Set();
+    state.expanded.aff = new Set();
+    state.filter = "";
+    $("filter-input").value = "";
+
+    /* Default expansion: path from each owner down to the target */
+    owners.forEach(function (o) { state.expanded.tree.add(o.id); });
+    anc.forEach(function (id) { state.expanded.tree.add(id); });
+    data.affiliates.forEach(function (a) { if (a.group) state.expanded.aff.add(a.id); });
+
+    $("header-title").textContent = target.name;
+    $("app").style.display = "block";
+    renderOwners();
+    renderAll();
+  });
+}
+
+function renderOwners() {
+  var wrap = $("owner-chips");
+  wrap.innerHTML = "";
+  state.owners.forEach(function (o) {
+    var c = document.createElement("span");
+    c.className = "chip";
+    var b = document.createElement("b");
+    b.textContent = state.owners.length > 1 ? "Ultimate owners" : "Ultimate owner";
+    if (o !== state.owners[0]) b.textContent = " ";
+    c.appendChild(b);
+    c.appendChild(document.createTextNode(o.name + " (" + o.id + ")"));
+    wrap.appendChild(c);
+  });
+}
+
+/* ═══ GRID RENDERER ═══════════════════════════════════════════════════
+   One renderer for both grids: expand/collapse toggle, indent, name, id,
+   plus extra columns contributed by the active mode.
+   ═══════════════════════════════════════════════════════════════════ */
+function extraColumns() {
+  if (state.mode === "updates") {
+    return [{
+      title: "Update",
+      cell: function (n, td) {
+        (n.indicators || []).forEach(function (k) {
+          var s = document.createElement("span");
+          s.textContent = UPDATE_KINDS[k].icon + " " + UPDATE_KINDS[k].label + " ";
+          td.appendChild(s);
+        });
+      }
+    }];
+  }
+  if (state.mode === "independence") {
+    return [
+      { title: "Restriction", cell: function (n, td) {
+          if (!n.restriction) return;
+          var b = document.createElement("span");
+          b.className = "badge " + n.restriction;
+          b.textContent = RESTRICTIONS[n.restriction];
+          td.appendChild(b);
+      } },
+      { title: "Code", cell: function (n, td) {
+          if (!n.code) return;
+          var s = document.createElement("span");
+          s.className = "code";
+          s.textContent = n.code;
+          td.appendChild(s);
+      } }
+    ];
+  }
+  return [];
+}
+
+function modeMatches(n) {
+  var f = state.modeFilter[state.mode];
+  if (!f) return true;
+  if (state.mode === "updates") return (n.indicators || []).indexOf(f) !== -1;
+  if (state.mode === "independence") return n.restriction === f;
+  return true;
+}
+
+/* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
+function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
+  var idx = indexNodes(nodes, parentsOf);
+  var txt = state.filter.trim().toLowerCase();
+  var modeFilter = state.modeFilter[state.mode];
+  var filtering = !!txt || !!modeFilter;
+
+  /* Visible set = matches + their ancestors; filtering force-expands */
+  var visible = null;
+  if (filtering) {
+    visible = new Set();
+    nodes.forEach(function (n) {
+      if (n.group) return;
+      var hit = (!txt || (n.name + " " + n.id).toLowerCase().indexOf(txt) !== -1) && modeMatches(n);
+      if (!hit) return;
+      visible.add(n.id);
+      ancestorsOf(n.id, idx, parentsOf).forEach(function (a) { visible.add(a); });
+    });
+  }
+
+  var cols = extraColumns();
+  var table = document.createElement("table");
+  table.className = "grid";
+  var thead = document.createElement("thead");
+  var hr = document.createElement("tr");
+  ["Name", "ID"].concat(cols.map(function (c) { return c.title; })).forEach(function (t) {
+    var th = document.createElement("th");
+    th.textContent = t;
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  var shown = 0;
+
+  function walk(node, depth, trail) {
+    if (visible && !visible.has(node.id)) return;
+    if (trail.indexOf(node.id) !== -1) return; /* cycle guard */
+    var kids = (idx.kids.get(node.id) || []).filter(function (k) { return !visible || visible.has(k.id); });
+    var open = filtering || state.expanded[gridKey].has(node.id);
+    shown++;
+
+    var tr = document.createElement("tr");
+    if (node.group) tr.className = "group";
+    if (state.target && node.id === state.target.id && !node.group) tr.className = "anchor";
+
+    var nameTd = document.createElement("td");
+    nameTd.className = "name-cell";
+    var ind = document.createElement("span");
+    ind.className = "indent";
+    ind.style.width = (depth * 20) + "px";
+    nameTd.appendChild(ind);
+
+    var tg = document.createElement("button");
+    tg.className = "toggle" + (kids.length ? "" : " leaf");
+    tg.textContent = open ? "▾" : "▸";
+    tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
+    if (kids.length) {
+      tg.addEventListener("click", function () {
+        var set = state.expanded[gridKey];
+        if (set.has(node.id)) set.delete(node.id); else set.add(node.id);
+        renderAll();
+      });
+    }
+    nameTd.appendChild(tg);
+
+    if (gridKey === "tree" && depth === 0) {
+      var crown = document.createElement("span");
+      crown.className = "crown";
+      crown.textContent = "👑";
+      nameTd.appendChild(crown);
+    }
+    var nm = document.createElement("span");
+    nm.className = "node-name";
+    nm.textContent = node.name;
+    nameTd.appendChild(nm);
+    if (state.target && node.id === state.target.id && !node.group) {
+      var a = document.createElement("span");
+      a.className = "anchor-mark";
+      a.textContent = "◆";
+      nameTd.appendChild(a);
+    }
+    tr.appendChild(nameTd);
+
+    var idTd = document.createElement("td");
+    var idSp = document.createElement("span");
+    idSp.className = "node-id";
+    idSp.textContent = node.group ? "" : node.id;
+    idTd.appendChild(idSp);
+    tr.appendChild(idTd);
+
+    cols.forEach(function (c) {
+      var td = document.createElement("td");
+      if (!node.group) c.cell(node, td);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+
+    if (open) kids.forEach(function (k) { walk(k, depth + 1, trail.concat(node.id)); });
+  }
+
+  roots.forEach(function (r) { walk(r, 0, []); });
+  table.appendChild(tbody);
+
+  var host = $(containerId);
+  host.innerHTML = "";
+  if (!shown) {
+    var e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No matching entities.";
+    host.appendChild(e);
+  } else {
+    host.appendChild(table);
+  }
+  var real = 0;
+  nodes.forEach(function (n) { if (!n.group) real++; });
+  $(countId).textContent = (filtering ? "filtered · " : "") + real + " entities";
+  return idx;
+}
+
+/* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
+function renderAll() {
+  if (!state.data) return;
+
+  /* Tree grid: only the tree(s) beneath the ultimate owner(s) */
+  var allIdx = indexNodes(state.data.nodes, function (n) { return n.parents; });
+  var inTree = new Set();
+  (function collect(list) {
+    list.forEach(function (n) {
+      if (inTree.has(n.id)) return;
+      inTree.add(n.id);
+      collect(allIdx.kids.get(n.id) || []);
+    });
+  })(state.owners);
+  var treeNodes = state.data.nodes.filter(function (n) { return inTree.has(n.id); });
+  renderGrid("tree", "tree-grid", "tree-count", treeNodes, state.owners, function (n) { return n.parents; });
+
+  /* Close affiliates grid */
+  var affNodes = state.data.affiliates;
+  var affRoots = affNodes.filter(function (n) { return !n.parent; });
+  renderGrid("aff", "aff-grid", "aff-count", affNodes, affRoots, function (n) { return n.parent ? [n.parent] : []; });
+
+  renderModeBars();
+  $("node-count").textContent = treeNodes.length + " in tree · " +
+    affNodes.filter(function (n) { return !n.group; }).length + " affiliates";
+}
+
+/* ═══ MODES (gear) ════════════════════════════════════════════════════ */
+function buildPills(hostId, entries, modeKey) {
+  var host = $(hostId);
+  host.innerHTML = "";
+  entries.forEach(function (e) {
+    var p = document.createElement("span");
+    p.className = "pill" + (state.modeFilter[modeKey] === e.key ? " active" : "");
+    p.textContent = e.label;
+    p.addEventListener("click", function () {
+      state.modeFilter[modeKey] = state.modeFilter[modeKey] === e.key ? null : e.key;
+      renderAll();
+    });
+    host.appendChild(p);
+  });
+}
+
+function countBy(fn) {
+  var c = {};
+  var all = state.data.nodes.concat(state.data.affiliates.filter(function (a) { return !a.group; }));
+  var seen = new Set();
+  all.forEach(function (n) {
+    if (seen.has(n.id)) return;
+    seen.add(n.id);
+    fn(n).forEach(function (k) { c[k] = (c[k] || 0) + 1; });
+  });
+  return c;
+}
+
+function renderModeBars() {
+  $("bar-updates").classList.toggle("show", state.mode === "updates");
+  $("bar-independence").classList.toggle("show", state.mode === "independence");
+
+  if (state.mode === "updates") {
+    var uc = countBy(function (n) { return n.indicators || []; });
+    buildPills("updates-pills", Object.keys(UPDATE_KINDS).map(function (k) {
+      return { key: k, label: UPDATE_KINDS[k].icon + " " + UPDATE_KINDS[k].label + " (" + (uc[k] || 0) + ")" };
+    }), "updates");
+    $("updates-summary").textContent = "Press a pill to show only those entities and their parents.";
+  }
+  if (state.mode === "independence") {
+    var rc = countBy(function (n) { return n.restriction ? [n.restriction] : []; });
+    buildPills("indep-pills", Object.keys(RESTRICTIONS).map(function (k) {
+      return { key: k, label: RESTRICTIONS[k] + " (" + (rc[k] || 0) + ")" };
+    }), "independence");
+    $("indep-summary").textContent = "Governing framework: " + $("framework").value;
+  }
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll(".gear-opt").forEach(function (b) {
+    b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+  });
+  var badge = $("mode-badge");
+  badge.textContent = MODES[mode].label;
+  badge.classList.toggle("show", mode !== "general");
+  closeGear();
+  renderAll();
+}
+
+function closeGear() {
+  $("gear-menu").classList.remove("open");
+  $("gear-btn").setAttribute("aria-expanded", "false");
+}
+
+/* ═══ WIRING ══════════════════════════════════════════════════════════ */
+$("gear-btn").addEventListener("click", function (e) {
+  e.stopPropagation();
+  var open = $("gear-menu").classList.toggle("open");
+  this.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", function (e) {
+  if (!$("gear-wrap").contains(e.target)) closeGear();
+});
+document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeGear(); });
+document.querySelectorAll(".gear-opt").forEach(function (b) {
+  b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+});
+
+$("load-btn").addEventListener("click", loadTarget);
+$("target-input").addEventListener("keydown", function (e) { if (e.key === "Enter") loadTarget(); });
+$("filter-input").addEventListener("input", function () { state.filter = this.value; renderAll(); });
+$("clear-btn").addEventListener("click", function () {
+  state.filter = "";
+  state.modeFilter = { updates: null, independence: null };
+  $("filter-input").value = "";
+  renderAll();
+});
+$("framework").addEventListener("change", renderModeBars);
+
+document.querySelectorAll(".icon-btn").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var key = b.getAttribute("data-grid");
+    var set = state.expanded[key];
+    set.clear();
+    if (b.getAttribute("data-act") === "expand") {
+      var list = key === "tree" ? state.data.nodes : state.data.affiliates;
+      list.forEach(function (n) { set.add(n.id); });
+    }
+    renderAll();
+  });
+});
+
+/* Target suggestions come from the data provider */
+getData().then(function (d) {
+  var dl = $("target-list");
+  d.nodes.forEach(function (n) {
+    var o = document.createElement("option");
+    o.value = n.id;
+    o.label = n.name;
+    dl.appendChild(o);
+  });
+});
+</script>
+</body>
+</html>
