@@ -89,8 +89,11 @@
   .gear-opt.active .dot { background: var(--accent); border-color: var(--accent); }
 
   /* ── Toolbars ── */
-  .toolbar { padding: 12px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .toolbar label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+  .toolbar {
+    margin: 10px 20px 0; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .toolbar .panel-title { font-size: 12px; font-weight: 600; color: var(--fg-2); margin-right: 4px; white-space: nowrap; }
   .toolbar input[type=text], .toolbar select {
     padding: 7px 12px; border: 1px solid var(--border-2); border-radius: 6px; font: inherit; font-size: 13px;
     background: var(--surface); color: var(--fg); outline: none; transition: border-color .15s;
@@ -106,9 +109,11 @@
   .btn.primary { background: var(--btn-bg); border-color: var(--btn-bg); color: var(--btn-fg); font-weight: 600; }
   .btn.primary:hover { background: var(--btn-hover); }
   #target-err { font-size: 12px; color: var(--err); }
-  #owner-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .chip { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; color: var(--fg-2); }
-  .chip b { color: var(--muted); font-weight: 600; margin-right: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }
+  #report-title { margin: 20px 20px 4px; }
+  #report-title h1 { display: flex; align-items: center; gap: 10px; font-size: 24px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
+  #report-title .pin { width: 22px; height: 22px; flex-shrink: 0; }
+  #report-title .node-id { font-size: 16px; font-weight: 400; margin-left: 0; }
+  #report-title .footnote { margin-top: 2px; font-size: 12px; color: var(--muted); }
 
   /* ── Grids ── */
   .section { margin: 16px 20px 0; }
@@ -133,8 +138,7 @@
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
   [hidden] { display: none !important; }
-  .mode-bar { margin: 10px 20px 0; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
-  .mode-bar .summary { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .toolbar .summary { font-size: 12px; color: var(--muted); margin-left: auto; }
   .pill {
     display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; border: 1.5px solid var(--border-2);
     background: var(--surface); color: var(--fg); font-size: 12px; cursor: pointer; user-select: none; white-space: nowrap;
@@ -142,7 +146,7 @@
   .pill:hover { background: var(--hover); }
   .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
   #rule-pills { display: flex; flex-wrap: wrap; gap: 6px; }
-  td.name-cell { display: flex; align-items: center; }
+  .name-inner { display: flex; align-items: center; }
   .indent { display: inline-block; flex-shrink: 0; }
   .toggle {
     width: 18px; height: 18px; flex-shrink: 0; border: none; background: none; cursor: pointer;
@@ -173,9 +177,15 @@
   </div>
 </div>
 
+<!-- Report title: target company (shown once loaded) -->
+<div id="report-title" hidden>
+  <h1 id="report-title-text"></h1>
+  <div class="footnote" id="report-footnote"></div>
+</div>
+
 <!-- General: target company input -->
 <div class="toolbar" id="target-bar">
-  <label for="target-input">Target company</label>
+  <label class="panel-title" for="target-input">Target company:</label>
   <input id="target-input" type="text" list="target-list" placeholder="Name or ID, e.g. NW-0002 or Orion" autocomplete="off" />
   <datalist id="target-list"></datalist>
   <select id="provider" hidden>
@@ -188,17 +198,16 @@
 </div>
 
 <div id="app">
-  <div class="toolbar" id="owner-bar"><div id="owner-chips"></div></div>
-
   <!-- Independence (gear) -->
-  <div class="toolbar mode-bar" id="bar-independence" hidden>
-    <label>Apply Audit Rule:</label>
+  <div class="toolbar" id="bar-independence" hidden>
+    <span class="panel-title">Apply Audit Rule:</span>
     <div id="rule-pills"></div>
     <span class="summary" id="rule-summary"></span>
   </div>
 
   <!-- General: filter / search -->
   <div class="toolbar" id="filter-bar">
+    <label class="panel-title" for="filter-input">Filter:</label>
     <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
     <button class="btn" id="clear-btn">Clear</button>
   </div>
@@ -579,26 +588,34 @@ function loadTarget() {
       cur = affById.get(cur.parent);
     }
 
-    $("header-title").textContent = target.name;
     $("app").style.display = "block";
-    renderOwners();
+    renderTitle();
     renderAll();
   }).catch(function (e) { err.textContent = e.message; });
 }
 
-function renderOwners() {
-  var wrap = $("owner-chips");
-  wrap.innerHTML = "";
-  state.owners.forEach(function (o) {
-    var c = document.createElement("span");
-    c.className = "chip";
-    var b = document.createElement("b");
-    b.textContent = state.owners.length > 1 ? "Ultimate owners" : "Ultimate owner";
-    if (o !== state.owners[0]) b.textContent = " ";
-    c.appendChild(b);
-    c.appendChild(document.createTextNode(o.name + " (" + o.id + ")"));
-    wrap.appendChild(c);
-  });
+/* Report title: pin, Name (ID); footnote names the tree(s) when the target is not an ultimate owner */
+function renderTitle() {
+  var t = state.target, h = $("report-title-text");
+  h.innerHTML = "";
+  h.appendChild(pinIcon());
+  var nm = document.createElement("span");
+  nm.textContent = t.name;
+  h.appendChild(nm);
+  var id = document.createElement("span");
+  id.className = "node-id";
+  id.textContent = "(" + t.id + ")";
+  h.appendChild(id);
+
+  var isOwner = state.owners.some(function (o) { return o.id === t.id; });
+  var foot = $("report-footnote");
+  if (isOwner) {
+    foot.textContent = "";
+  } else {
+    var names = state.owners.map(function (o) { return o.name + " (" + o.id + ")"; });
+    foot.textContent = "Part of the " + names.join(" and ") + (names.length > 1 ? " trees" : " tree");
+  }
+  $("report-title").hidden = false;
 }
 
 /* ═══ GRID RENDERER ═══════════════════════════════════════════════════
@@ -699,10 +716,13 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
 
     var nameTd = document.createElement("td");
     nameTd.className = "name-cell";
+    var inner = document.createElement("div");
+    inner.className = "name-inner";
+    nameTd.appendChild(inner);
     var ind = document.createElement("span");
     ind.className = "indent";
     ind.style.width = (depth * 20) + "px";
-    nameTd.appendChild(ind);
+    inner.appendChild(ind);
 
     var tg = document.createElement("button");
     tg.className = "toggle" + (kids.length ? "" : " leaf");
@@ -715,17 +735,17 @@ function renderGrid(gridKey, containerId, countId, nodes, roots, parentsOf) {
         renderAll();
       });
     }
-    nameTd.appendChild(tg);
+    inner.appendChild(tg);
 
     var nm = document.createElement("span");
     nm.className = "node-name";
     nm.textContent = node.name;
     nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
-    nameTd.appendChild(nm);
+    inner.appendChild(nm);
     var idSp = document.createElement("span");
     idSp.className = "node-id";
     idSp.textContent = "(" + node.id + ")";
-    nameTd.appendChild(idSp);
+    inner.appendChild(idSp);
     tr.appendChild(nameTd);
 
 
