@@ -352,14 +352,7 @@ function loadLive(partyId) {
         return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId };
       }
 
-      if (!targetId) throw new Error("Party " + (party.name || partyId) + " has no external ID for " + provider + ".");
-      return celeste.query("intapp_compliance__load_corporate_tree_data", { externalId: targetId, provider: provider })
-        .then(function (r2) {
-          var td = extractObj(r2, "corporateTrees");
-          ((td && td.corporateTrees) || []).forEach(function (t) { mergeHierarchy(t, map, treeNode, treeName, treeKids); });
-          if (!map.size) throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
-          return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId };
-        });
+      throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
     });
 }
 
@@ -374,6 +367,37 @@ function pickSample(query) {
     return set.nodes.some(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase().indexOf(q) !== -1; });
   })[0];
   return hit || SAMPLE;
+}
+
+/* Party ids: the component group of each ultimate owner tree id lists its Party members. Any tree id that
+   matches a member's partyId gets that idParty, wherever the entity sits. Failures and missing groups are ignored. */
+function fetchPartyIds(groupId) {
+  try {
+    return celeste.query("intapp_compliance__get_component_group", { groupId: groupId })
+      .then(function (raw) {
+        var out = new Map();
+        var g = extractObj(raw, "groupMembers");
+        ((g && g.groupMembers) || []).forEach(function (m) {
+          if (m && m.type === "Party" && m.partyId) out.set(m.partyId, m.partyId);
+        });
+        return out;
+      })
+      .catch(function () { return new Map(); });
+  } catch (e) {
+    return Promise.resolve(new Map());
+  }
+}
+
+function enrichPartyIds(data, owners, seq) {
+  Promise.all(owners.map(function (o) { return fetchPartyIds(o.id); })).then(function (maps) {
+    if (seq !== state.loadSeq || state.data !== data) return; /* a newer load replaced this one */
+    var ids = new Map();
+    maps.forEach(function (m) { m.forEach(function (v, k) { ids.set(k, v); }); });
+    if (!ids.size) return;
+    data.nodes.concat(data.affiliates).forEach(function (n) { if (ids.has(n.id)) n.idParty = ids.get(n.id); });
+    computeEntityMeta(data.nodes, data.affiliates, state.target.id);
+    renderAll();
+  });
 }
 
 function getData(target) {
@@ -438,6 +462,7 @@ function activeRule() {
 var state = {
   mode: "general",
   auditRule: null,
+  loadSeq: 0,
   data: null,
   target: null,
   owners: [],
@@ -617,6 +642,7 @@ function loadTarget() {
     $("app").style.display = "block";
     renderTitle();
     renderAll();
+    if (isLive()) enrichPartyIds(data, owners, ++state.loadSeq); /* bold/tooltips fill in once party ids arrive */
   }).catch(function (e) { err.textContent = e.message; });
 }
 
