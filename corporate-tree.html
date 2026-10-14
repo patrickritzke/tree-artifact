@@ -176,7 +176,6 @@
   .eng.audit svg { width: 14px; height: 14px; fill: var(--eng); stroke: var(--eng); stroke-width: 1; stroke-linejoin: round; }
   .eng.non { width: 17px; height: 17px; border: 1.5px solid var(--eng); border-radius: 50%; background: #fff; }
   .eng.non svg { width: 11px; height: 11px; fill: none; stroke: var(--eng); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-  .dd .eng { margin-left: 2px; }
   .eng-key { display: flex; gap: 12px; margin-left: 6px; font-size: 11px; color: var(--muted); }
   .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -205,7 +204,7 @@
   .dd-caret { font-size: 10px; color: var(--muted); }
   .dd .pin { flex-shrink: 0; }
   .dd-menu {
-    display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 380px; max-width: 90vw; z-index: 60;
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 430px; max-width: 90vw; z-index: 60;
     background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 4px;
   }
   .dd.open .dd-menu { display: block; }
@@ -218,6 +217,8 @@
   .dd-opt:hover:not(:disabled) { background: var(--hover); }
   .dd-opt.active { color: var(--accent-fg); font-weight: 600; }
   .dd-opt:disabled { color: var(--faint); cursor: default; }
+  .dd-opt > span { white-space: nowrap; }
+  .dd-opt .mark { flex: none; }
   .dd-opt .tag { margin-left: auto; font-size: 11px; color: var(--muted); }
   .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
   .dd-empty { padding: 8px 10px; font-size: 12px; color: var(--muted); }
@@ -815,6 +816,21 @@ function engageDots(id) {
   return out;
 }
 
+/* Pin slot then icon slot, the same cell the grids use, so names line up wherever it appears */
+function markCell(isTarget, id) {
+  var mk = document.createElement("div");
+  mk.className = "mark";
+  var ps = document.createElement("span");
+  ps.className = "mark-pin";
+  if (isTarget) ps.appendChild(pinIcon());
+  var ds = document.createElement("span");
+  ds.className = "mark-dots";
+  engageDots(id).forEach(function (d) { ds.appendChild(d); });
+  mk.appendChild(ps);
+  mk.appendChild(ds);
+  return mk;
+}
+
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
 
 var state = {
@@ -1309,17 +1325,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
     var pinTd = document.createElement("td");
     pinTd.className = "pin-col" + (showEng ? " wide" : "");
     if (showEng) {
-      var mk = document.createElement("div");
-      mk.className = "mark";
-      var ps = document.createElement("span");
-      ps.className = "mark-pin";
-      if (node.isTarget) ps.appendChild(pinIcon());
-      var ds = document.createElement("span");
-      ds.className = "mark-dots";
-      engageDots(node.id).forEach(function (d) { ds.appendChild(d); });
-      mk.appendChild(ps);
-      mk.appendChild(ds);
-      pinTd.appendChild(mk);
+      pinTd.appendChild(markCell(node.isTarget, node.id));
     } else if (node.isTarget) {
       pinTd.appendChild(pinIcon());
     }
@@ -1516,12 +1522,14 @@ function clientDropdown(row) {
 
   var tid = state.target.id;
   var sel = row.client && state.data.nodes.filter(function (n) { return n.id === row.client; })[0];
-  if (sel && sel.id === tid) btn.appendChild(pinIcon());
+  if (sel) {
+    if (showEngagement()) btn.appendChild(markCell(sel.id === tid, sel.id));
+    else if (sel.id === tid) btn.appendChild(pinIcon());
+  }
   var nm = document.createElement("span");
   nm.className = "dd-name" + (sel ? "" : " placeholder");
   nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit client\u2026";
   btn.appendChild(nm);
-  if (sel) engageDots(sel.id).forEach(function (d) { btn.appendChild(d); });
   var caret = document.createElement("span");
   caret.className = "dd-caret";
   caret.textContent = "\u25BE";
@@ -1563,7 +1571,8 @@ function clientDropdown(row) {
       o.type = "button";
       o.className = "dd-opt" + (row.client === n.id ? " active" : "");
       o.setAttribute("role", "option");
-      if (isT) o.appendChild(pinIcon());
+      if (showEngagement()) o.appendChild(markCell(isT, n.id));
+      else if (isT) o.appendChild(pinIcon());
       var name = document.createElement("span");
       name.textContent = n.name;
       o.appendChild(name);
@@ -1571,7 +1580,6 @@ function clientDropdown(row) {
       id.className = "node-id";
       id.textContent = "(" + n.id + ")";
       o.appendChild(id);
-      engageDots(n.id).forEach(function (d) { o.appendChild(d); });
       var used = usedElsewhere.has(n.id);
       if (isT || used) {
         var tag = document.createElement("span");
