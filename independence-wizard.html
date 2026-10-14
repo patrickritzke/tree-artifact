@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Non-Audit Engagement Independence</title>
+<style>
+  /* Layout: utilitarian tool page. Fixed dark header, toolbars, then two grids. */
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --head: #f9fafb; --hover: #f3f4f6;
+    --fg: #1a1a2e; --fg-strong: #111827; --fg-2: #374151; --muted: #6b7280; --faint: #9ca3af;
+    --border: #e5e7eb; --border-2: #d1d5db;
+    --accent: #6366f1; --accent-fg: #4338ca; --err: #dc2626;
+    --btn-bg: #1a1a2e; --btn-fg: #ffffff; --btn-hover: #2d2d4e;
+    --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --hdr-accent: #c7d2fe;
+    --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
+    --shadow: rgba(0,0,0,.18);
+    --pin: #2563eb;
+    --eng: #ea580c;
+    --tint: #eef0fb; --ok-bg: #dcfce7; --ok-fg: #15803d;
+    --bar-bg: #e8ebf4; --bar-head: #d6dcec; --bar-border: #bcc4dc;
+    --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+      --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+      --border: #2d303d; --border-2: #3a3e4e;
+      --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+      --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+      --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+      --pin: #60a5fa;
+      --eng: #fb923c;
+      --tint: #23263a; --ok-bg: #12301f; --ok-fg: #4ade80;
+      --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
+      --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+    --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+    --border: #2d303d; --border-2: #3a3e4e;
+    --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+    --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+    --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+    --pin: #60a5fa;
+    --eng: #fb923c;
+    --tint: #23263a; --ok-bg: #12301f; --ok-fg: #4ade80;
+    --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
+    --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px; background: var(--bg); color: var(--fg); min-height: 100%;
+  }
+  button { font: inherit; }
+
+  /* ── Header ── */
+  #header {
+    background: var(--hdr-bg); color: var(--hdr-fg); padding: 8px 20px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 100; box-shadow: 0 2px 6px var(--shadow);
+  }
+  #header-title { font-size: 14px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mode-badge {
+    font-size: 11px; color: var(--hdr-accent); border: 1px solid var(--hdr-border); border-radius: 999px;
+    padding: 2px 9px; display: none;
+  }
+  #mode-badge.show { display: inline-block; }
+  #node-count { font-size: 12px; color: var(--hdr-muted); white-space: nowrap; }
+
+  /* ── Gear ── */
+  #gear-wrap { position: relative; }
+  #gear-btn {
+    background: none; border: none; color: var(--hdr-muted); cursor: pointer; font-size: 17px;
+    width: 28px; height: 28px; border-radius: 6px; line-height: 1; opacity: .75;
+    transition: opacity .15s, background .15s, color .15s;
+  }
+  #gear-btn:hover, #gear-btn[aria-expanded="true"] { opacity: 1; background: var(--hdr-hover); color: var(--hdr-fg); }
+  #gear-menu {
+    display: none; position: absolute; right: 0; top: 34px; min-width: 170px;
+    background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 6px 20px var(--shadow); padding: 4px; z-index: 150;
+  }
+  #gear-menu.open { display: block; }
+  .gear-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--faint); font-weight: 600; padding: 6px 10px 4px; }
+  .gear-opt {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 7px 10px; border: none; background: none; border-radius: 5px; cursor: pointer; font-size: 13px; color: var(--fg-2);
+  }
+  .gear-opt:hover { background: var(--hover); }
+  .gear-opt .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border-2); flex-shrink: 0; }
+  .gear-opt.active { color: var(--accent-fg); font-weight: 600; }
+  .gear-opt.active .dot { background: var(--accent); border-color: var(--accent); }
+
+  /* ── Toolbars ── */
+  .toolbar {
+    margin: 10px 20px 0; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  #target-bar { background: none; border: none; padding: 12px 0 0; }
+  .toolbar .panel-title { font-size: 12px; font-weight: 600; color: var(--fg-2); margin-right: 4px; white-space: nowrap; }
+  .toolbar input[type=text], .toolbar select {
+    padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; font: inherit; font-size: 12px;
+    background: var(--surface); color: var(--fg); outline: none; transition: border-color .15s;
+  }
+  .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+  #target-input { width: 320px; max-width: 100%; }
+  #filter-input { flex: 1; max-width: 420px; }
+  .btn {
+    padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface);
+    font-size: 12px; cursor: pointer; color: var(--fg-2); transition: background .15s;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--btn-bg); border-color: var(--btn-bg); color: var(--btn-fg); font-weight: 600; }
+  .btn.primary:hover { background: var(--btn-hover); }
+  #target-err { font-size: 12px; color: var(--err); }
+  #report-title { margin: 10px 20px 4px; }
+  #report-title h1 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
+  #report-title .pin { width: 16px; height: 16px; flex-shrink: 0; }
+  #report-title .node-id { font-size: 13px; font-weight: 400; margin-left: 0; }
+  #report-title .footnote { margin-top: 0; font-size: 11px; color: var(--muted); }
+
+  /* ── Grids ── */
+  .section { margin: 10px 20px 0; }
+  .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .section-head h2 { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+  .section-head .count { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .grid-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 420px; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th {
+    position: sticky; top: 0; background: var(--head); text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted); font-weight: 600; padding: 4px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.grid td { padding: 1px 10px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
+  table.grid tr:last-child td { border-bottom: none; }
+  table.grid tr.restricted td { background: var(--restr-bg); }
+  table.grid tr.materiality td { background: var(--mat-bg); }
+  /* Name and any icon/status columns shrink to their content so they sit together; the filler absorbs the rest. */
+  table.grid th.name-col, table.grid td.name-cell, table.grid th.icon-col, table.grid td.icon-col { width: 1%; white-space: nowrap; }
+  table.grid th.fill, table.grid td.fill { width: auto; padding: 0; }
+  th.pin-col, td.pin-col { width: 28px; padding-left: 10px; padding-right: 0; text-align: center; }
+  .pin { display: block; width: 14px; height: 14px; color: var(--pin); }
+  .rule-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: none; cursor: pointer; }
+  .rule-badge:hover { background: var(--hover); }
+  .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
+  .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
+
+  /* Collapsible toolbar sections: shaded header strip + body */
+  .toolbar.tb { display: block; padding: 0; margin: 8px 20px 0; background: var(--bar-bg); border: 1px solid var(--bar-border); border-radius: 8px; }
+  .tb-head {
+    display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 10px; border: none; background: var(--bar-head);
+    color: var(--fg-strong); font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; border-radius: 7px 7px 0 0;
+  }
+  .tb-head.closed { border-radius: 7px; }
+  .tb-head:hover { filter: brightness(.97); }
+  .audit-row input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent); flex: none; }
+  .audit-row.off .dd, .audit-row.off .row-pills { opacity: .5; }
+  .tb-chev { width: 10px; font-size: 10px; color: var(--muted); }
+  .tb-head .summary { margin-left: auto; font-weight: 400; }
+  .tb-body { padding: 7px 10px 8px; }
+  #body-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+  /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
+  th.pin-col.wide, td.pin-col.wide { width: 70px; text-align: left; padding-left: 10px; }
+  .mark { display: flex; align-items: center; gap: 4px; }
+  .mark-pin { width: 14px; height: 14px; flex: none; }
+  .mark-dots { width: 36px; display: flex; align-items: center; gap: 3px; flex: none; }
+  /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
+  .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
+  .eng svg { display: block; }
+  .eng.audit svg { width: 14px; height: 14px; fill: var(--eng); stroke: var(--eng); stroke-width: 1; stroke-linejoin: round; }
+  .eng.non { width: 17px; height: 17px; border: 1.5px solid var(--eng); border-radius: 50%; background: #fff; }
+  .eng.non svg { width: 11px; height: 11px; fill: none; stroke: var(--eng); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .eng-key { display: flex; gap: 12px; margin-left: 6px; font-size: 11px; color: var(--muted); }
+  .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ── Audit rule rows: one audit client + rule per row ── */
+  #audit-rows { display: flex; flex-direction: column; gap: 5px; }
+  .audit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .audit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+  .icon-btn {
+    width: 22px; height: 22px; border: none; background: none; border-radius: 6px; cursor: pointer;
+    color: var(--faint); font-size: 16px; line-height: 1;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--fg-2); }
+
+  /* Audit client dropdown (custom so the target can carry the pin) */
+  .dd { position: relative; }
+  .dd-btn {
+    display: inline-flex; align-items: center; gap: 6px; width: 340px; max-width: 100%; padding: 3px 10px;
+    border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--fg);
+    font-size: 12px; cursor: pointer; text-align: left; transition: border-color .15s;
+  }
+  .dd-btn:hover, .dd.open .dd-btn { border-color: var(--accent); }
+  .dd-btn:disabled { cursor: default; color: var(--faint); border-color: var(--border-2); }
+  .dd-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-name.placeholder { color: var(--faint); }
+  .dd-caret { font-size: 10px; color: var(--muted); }
+  .dd .pin { flex-shrink: 0; }
+  .dd-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 430px; max-width: 90vw; z-index: 60;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 4px;
+  }
+  .dd.open .dd-menu { display: block; }
+  .toolbar .dd-search { width: 100%; margin-bottom: 4px; padding: 6px 10px; font-size: 12px; }
+  .dd-list { max-height: 240px; overflow: auto; }
+  .dd-opt {
+    display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 10px; border: none; background: none;
+    border-radius: 5px; cursor: pointer; font-size: 12px; color: var(--fg-2); text-align: left;
+  }
+  .dd-opt:hover:not(:disabled) { background: var(--hover); }
+  .dd-opt.active { color: var(--accent-fg); font-weight: 600; }
+  .dd-opt:disabled { color: var(--faint); cursor: default; }
+  .dd-opt > span { white-space: nowrap; }
+  .dd-opt .mark { flex: none; }
+  .dd-opt .tag { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .dd-empty { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+
+  /* "Why is this flagged" popover on the rule badge */
+  #why-pop {
+    position: fixed; z-index: 120; width: 360px; max-width: 92vw; background: var(--surface); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 10px 12px; font-size: 12px;
+  }
+  #why-pop h3 { font-size: 13px; font-weight: 600; color: var(--fg-strong); margin-bottom: 6px; }
+  .why-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hover); }
+  .why-item.lost { opacity: .6; }
+  .why-item .rule-badge { cursor: default; flex-shrink: 0; }
+  .why-item .rule-badge:hover { background: none; }
+  .why-note { margin-top: 6px; color: var(--muted); }
+  [hidden] { display: none !important; }
+  .toolbar .summary { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .pill {
+    display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; border: 1.5px solid var(--border-2);
+    background: var(--surface); color: var(--fg); font-size: 11.5px; cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .pill:hover { background: var(--hover); }
+  .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  #rule-pills, #filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .name-inner { display: flex; align-items: center; }
+  .indent { display: inline-block; flex-shrink: 0; }
+  .toggle {
+    width: 18px; height: 18px; flex-shrink: 0; border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: 10px; border-radius: 4px;
+  }
+  .toggle:hover { background: var(--border); }
+  .toggle.leaf { visibility: hidden; cursor: default; }
+  .node-name { font-weight: 400; color: var(--fg-strong); margin-left: 2px; }
+  .node-name.has-party { font-weight: 700; }
+  .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .empty { padding: 24px; color: var(--muted); font-size: 13px; }
+  #app { display: none; padding-bottom: 40px; }
+/* Rule pills: label only; the reasons are in the popup */
+  .rpill {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: none;
+    color: var(--accent-fg); border: 1px solid var(--accent);
+  }
+  button.rpill { cursor: pointer; }
+  button.rpill:hover { background: var(--tint); }
+  button.rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rpill.apply { background: var(--tint); }
+
+  /* ── Popup ── */
+  #pop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s; }
+  #pop-backdrop.open { opacity: 1; pointer-events: auto; }
+  .pop-panel { position: relative; background: var(--surface); color: var(--fg-2); border-radius: 12px; box-shadow: 0 8px 32px var(--shadow); width: 440px; max-width: 92vw; max-height: 80vh; overflow-y: auto; padding: 18px 20px; font-size: 13px; line-height: 1.45; }
+  .pop-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
+  .pop-panel h2 { font-size: 15px; font-weight: 700; color: var(--fg-strong); margin: 0 24px 2px 0; }
+  .pop-panel .sec { font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: var(--fg-strong); }
+  .pop-panel .lead { margin: 12px 0 4px; color: var(--fg-strong); }
+  .pop-panel ul { padding-left: 18px; }
+  .pop-panel li { margin-bottom: 4px; }
+  .pop-panel .id { color: var(--muted); white-space: nowrap; }
+  .pop-panel .tag { font-size: 10px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); margin-left: 6px; white-space: nowrap; }
+  .pop-panel .gov { margin-top: 8px; padding: 8px 10px; background: var(--tint); border-left: 3px solid var(--accent); border-radius: 4px; color: var(--fg-strong); }
+
+  /* ── Wizard shell ── */
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  #pages { flex: 1; }
+  .page { display: none; }
+  .page.active { display: block; }
+  #step-label { font-size: 12px; color: var(--hdr-muted); white-space: nowrap; }
+  body[data-step="0"] #header { display: none; }
+
+  .wiz-foot {
+    position: sticky; bottom: 0; z-index: 90; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -2px 6px var(--shadow);
+  }
+  #wiz-err { flex: 1; text-align: right; font-size: 12px; color: var(--err); }
+  .wiz-foot .btn { padding: 6px 16px; font-size: 13px; }
+  #wiz-back[hidden] + #wiz-err { text-align: right; }
+
+  /* ── Start page ── */
+  .start { min-height: calc(100vh - 62px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 20px 40px; text-align: center; }
+  .start .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; transform: scale(1.8); }
+  .start h1 { font-size: 22px; font-weight: 400; color: var(--fg-strong); margin-bottom: 20px; }
+  .start input {
+    width: min(560px, 100%); padding: 12px 22px; font: inherit; font-size: 16px; color: var(--fg); background: var(--surface);
+    border: 1px solid var(--border-2); border-radius: 999px; outline: none; box-shadow: 0 1px 6px var(--shadow); text-align: center;
+  }
+  .start input:focus { border-color: var(--accent); }
+  .start .hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
+
+  /* ── Party page ── */
+  .card-page { max-width: 720px; margin: 90px auto 0; padding: 0 20px 40px; }
+  .party-kicker { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+  #party-name { display: flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
+  #party-name .pin { width: 24px; height: 24px; flex-shrink: 0; }
+  #party-name .node-id { font-size: 16px; font-weight: 400; margin-left: 0; }
+  .party-sub { margin-top: 8px; font-size: 15px; color: var(--fg-2); }
+
+  /* ── Engagement page ── */
+  #page-eng .grid-wrap { max-height: none; }
+  .node-name.eng-party { font-weight: 700; }
+  .node-name.anc { color: var(--muted); }
+  th.rule-col, td.rule-col { min-width: 130px; }
+  #eng-foot { margin: 8px 20px 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+
+  /* ── Assessment page ── */
+  .card-page.wide { max-width: 820px; margin-top: 40px; }
+  #result-title { font-size: 22px; font-weight: 600; color: var(--fg-strong); line-height: 1.3; margin-bottom: 18px; }
+  .verdict { border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; padding: 14px 18px; background: var(--surface); margin-bottom: 20px; }
+  .verdict-head { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .verdict-text { font-size: 14px; color: var(--fg-2); line-height: 1.5; }
+  .verdict.restricted { background: var(--restr-bg); border-color: var(--restr-fg); }
+  .verdict.restricted .verdict-head { color: var(--restr-fg); }
+  .verdict.materiality { background: var(--mat-bg); border-color: var(--mat-fg); }
+  .verdict.materiality .verdict-head { color: var(--mat-fg); }
+  .verdict.none { background: var(--ok-bg); border-color: var(--ok-fg); }
+  .verdict.none .verdict-head { color: var(--ok-fg); }
+  .result-h { font-size: 14px; font-weight: 600; color: var(--fg-strong); margin-bottom: 8px; }
+  .result-p { font-size: 14px; color: var(--fg-2); line-height: 1.5; }
+  ul.reasons { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  ul.reasons li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--fg-2); }
+  ul.reasons .rule-badge { flex: none; cursor: default; margin-top: 2px; }
+  ul.reasons .rule-badge:hover { background: none; }
+  .result-notes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  #report-title { margin: 10px 20px 4px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span id="header-title">Non-Audit Engagement</span>
+  <span id="node-count" hidden></span>
+  <span id="step-label"></span>
+</div>
+
+<main id="pages">
+  <!-- 1. Start -->
+  <section class="page" id="page-start">
+    <div class="start">
+      <div class="logo" id="start-logo"></div>
+      <h1>I'd like to open a new non-audit engagement for</h1>
+      <input id="start-input" type="text" list="party-list" placeholder="Party ID" autocomplete="off" aria-label="Party ID" />
+      <datalist id="party-list"></datalist>
+      <div class="hint">Enter the ID of the party the engagement is for.</div>
+    </div>
+  </section>
+
+  <!-- 2. Party and its corporate tree -->
+  <section class="page" id="page-party">
+    <div class="card-page">
+      <div class="party-kicker">Party found</div>
+      <h1 id="party-name"></h1>
+      <div class="party-sub" id="party-tree"></div>
+    </div>
+  </section>
+
+  <!-- 3. Audit relationships and rules (the engagement tree) -->
+  <section class="page" id="page-eng">
+    <div class="section">
+      <div class="section-head">
+        <h2>Audit relationships and rules</h2>
+        <span class="eng-key">
+          <span><span data-eng="target"></span>Target company</span>
+          <span><span data-eng="audit"></span>Audit client</span>
+          <span><span data-eng="non"></span>Non-audit client</span>
+        </span>
+        <span class="count" id="eng-count"></span>
+      </div>
+      <div class="grid-wrap" id="eng-grid"></div>
+    </div>
+    <div id="eng-foot"></div>
+  </section>
+
+  <!-- 4. Independence tree: inheritance rules applied across the family -->
+  <section class="page" id="page-tree">
+    <div id="report-title" hidden>
+      <h1 id="report-title-text"></h1>
+      <div class="footnote" id="report-footnote"></div>
+    </div>
+  <!-- Independence (gear) -->
+  <div class="toolbar tb" id="bar-independence">
+    <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
+      <span class="tb-chev">▾</span><span>Apply Audit Rules</span><span class="summary" id="rule-summary"></span>
+    </button>
+    <div class="tb-body" id="body-audit">
+      <div id="audit-rows"></div>
+      <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
+    </div>
+  </div>
+
+  <!-- General: filter / search -->
+  <div class="toolbar tb" id="filter-bar">
+    <button class="tb-head" id="head-filter" data-sec="filter" type="button" aria-expanded="true">
+      <span class="tb-chev">▾</span><span>Filter Display</span>
+    </button>
+    <div class="tb-body" id="body-filter">
+      <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
+      <div id="filter-pills"></div>
+      <button class="btn" id="clear-btn">Clear</button>
+    </div>
+  </div>
+
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Corporate tree</h2>
+      <span class="eng-key" hidden>
+        <span><span data-eng="target"></span>Target company</span>
+        <span><span data-eng="audit"></span>Audit client</span>
+        <span><span data-eng="non"></span>Non-audit client</span>
+      </span>
+      <span class="count" id="tree-count"></span>
+    </div>
+    <div class="grid-wrap" id="tree-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Close affiliates</h2>
+      <span class="eng-key" hidden>
+        <span><span data-eng="target"></span>Target company</span>
+        <span><span data-eng="audit"></span>Audit client</span>
+        <span><span data-eng="non"></span>Non-audit client</span>
+      </span>
+      <span class="count" id="aff-count"></span>
+    </div>
+    <div class="grid-wrap" id="aff-grid"></div>
+  </div>
+  </section>
+
+  <!-- 5. Assessment -->
+  <section class="page" id="page-result">
+    <div class="card-page wide">
+      <h1 id="result-title"></h1>
+      <div id="result-body"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="wiz-foot">
+  <button class="btn" id="wiz-back" type="button" hidden>Back</button>
+  <span id="wiz-err" role="alert"></span>
+  <button class="btn primary" id="wiz-next" type="button"></button>
+</footer>
+
+<div id="pop-backdrop"><div class="pop-panel" id="pop" role="dialog" aria-modal="true"></div></div>
+
+<script>
+/* ═══ DATA ════════════════════════════════════════════════════════════════
+   One data layer for every step. Tool calls, as in the acct-audit-rule-engagement-tree skill and the tree page:
+     1. get_party(partyId, ["CorporateFamily"])    -> the party, its corporate tree(s) and close affiliates
+     2. get_component_group(ownerBvdId)            -> Client / Matter / Party members; matter.clientId is the party id
+                                                      (same id space as the tree), and matter names carry "[Audit - X]"
+     3. get_party(partyId, ["Notes"]) per audit/engaged party, in parallel -> Orbis JSON note (entity rule)
+   Live data comes from the Intapp host, which injects window.celeste. Anywhere else the built-in sample answers
+   with the same response shapes, so the same code path runs.
+   ═══════════════════════════════════════════════════════════════════════ */
+function isLive() { return typeof window.celeste !== "undefined"; }
+
+function callTool(name, args) {
+  return isLive() ? celeste.query("intapp_compliance__" + name, args) : Promise.resolve(MOCK(name, args));
+}
+
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (typeof raw === "object" && !Array.isArray(raw) && (!key || key in raw)) return raw;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var b = raw[i];
+      var v = (b && b.text != null) ? b.text : (b && b.content != null) ? b.content : (b && b.value != null) ? b.value : (b && b.data != null) ? b.data : b;
+      if (typeof v === "string") {
+        try { var p = JSON.parse(v); if (!key || key in p) return p; } catch (e) {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        var envs = ["result", "data", "value", "payload"];
+        for (var j = 0; j < envs.length; j++) {
+          if (v[envs[j]] && typeof v[envs[j]] === "object" && (!key || key in v[envs[j]])) return v[envs[j]];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { var p2 = JSON.parse(raw); if (!key || key in p2) return p2; } catch (e2) {}
+  }
+  return null;
+}
+
+/* Read a provider hierarchy two ways at once.
+   flat map: one node per id, `parents` unions every place it appears (used for relationships and metadata).
+   return:   the nested placements as drawn, one object per place (used for display). A node is only skipped
+             when it is already in its own ancestry. */
+function readHierarchy(root, map, idOf, nameOf, kidsOf) {
+  return (function walk(node, parentId, stack) {
+    var id = node && idOf(node);
+    if (!id || stack.indexOf(id) !== -1) return null;
+    var rec = map.get(id);
+    if (!rec) { rec = { id: id, name: nameOf(node) || id, parents: [] }; map.set(id, rec); }
+    if (parentId && rec.parents.indexOf(parentId) === -1) rec.parents.push(parentId);
+    var next = stack.concat(id), kids = [];
+    (kidsOf(node) || []).forEach(function (k) {
+      var c = walk(k, id, next);
+      if (c) kids.push(c);
+    });
+    return { id: id, name: rec.name, children: kids };
+  })(root, null, []);
+}
+
+function noteJson(html) {
+  var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
+  var text = (doc.body.textContent || "").trim();
+  var tries = [text, "{" + text + "}"];
+  for (var i = 0; i < tries.length; i++) {
+    try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
+  }
+  return null;
+}
+
+/* The newest note that parses and holds a record keyed by the party's own BvD id */
+function orbisFromNotes(party, bvdId) {
+  var notes = (party.notes || []).slice().sort(function (a, b) { return String(b.modifiedOn).localeCompare(String(a.modifiedOn)); });
+  for (var i = 0; i < notes.length; i++) {
+    var obj = noteJson(notes[i].message), rec = obj && obj[bvdId];
+    if (rec && typeof rec === "object") {
+      return { countryIso: rec.countryIso, listed: rec.listed, exchange: rec.exchange,
+               nace: rec.nace, naics2017: rec.naics2017, ussic: rec.ussic };
+    }
+  }
+  return null;
+}
+
+
+/* The party's corporate family: every tree node, its close affiliates, and the nested placements to draw.
+   The target is the party itself, identified by its Bureau van Dijk id. */
+function loadFamily(partyId) {
+  return callTool("get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] }).then(function (raw) {
+    var party = extractObj(raw, "partyId");
+    if (!party) throw new Error("Could not find party " + partyId + ".");
+    var targetId = party.bureauVanDijkId || party.externalId || party.partyId;
+
+    var treeNode = function (n) { return n.externalId || n.key || null; };
+    var treeName = function (n) { return n.name || n.displayName || n.nameWithoutHonorifics; };
+    var treeKids = function (n) { return n.subCompanies || n.children || []; };
+
+    var map = new Map(), treeRoots = [];
+    var all = party.corporateTrees || [];
+    var trees = all.filter(function (t) { return t.providerType === "BureauVanDijk"; });
+    (trees.length ? trees : all).forEach(function (t) {
+      var r = t.rootCompany && readHierarchy(t.rootCompany, map, treeNode, treeName, treeKids);
+      if (r) treeRoots.push(r);
+    });
+
+    /* Close affiliates arrive as their own nested hierarchy (id / name / closeAffiliates) */
+    var aff = new Map(), affRoots = [];
+    var ca = party.closeAffiliates && party.closeAffiliates.closeAffiliates;
+    (ca || []).forEach(function (r) {
+      var pr = readHierarchy(r, aff, function (n) { return n.id; }, function (n) { return n.name; }, function (n) { return n.closeAffiliates; });
+      if (pr) affRoots.push(pr);
+    });
+
+    if (!map.size) throw new Error("No corporate tree found for " + (party.name || partyId) + ".");
+    return { nodes: Array.from(map.values()), affiliates: Array.from(aff.values()), targetId: targetId,
+             trees: treeRoots, affTrees: affRoots };
+  });
+}
+
+/* ═══ SAMPLE (answers the tool calls when there is no host) ═══════════════ */
+var SAMPLE_OWNER = "FR100000001";
+var SAMPLE_PARTIES = { "30001": "FR100000001", "30003": "AT100000003", "30004": "DE100000004", "30005": "US100000005",
+                       "30007": "JP100000007", "30008": "HK100000008", "30009": "TW100000009" };
+var SAMPLE_PARTY_LABELS = { "30004": "Brightwater Services GmbH", "30007": "Brightwater Japan K.K.", "30009": "Brightwater Taiwan Co., Ltd.",
+                            "30003": "Brightwater Austria GmbH", "30005": "Brightwater Capital Inc.", "30001": "Brightwater Group SA" };
+var SAMPLE_TREE = {
+  externalId: "FR100000001", name: "Brightwater Group SA", subCompanies: [
+    { externalId: "FR100000002", name: "Brightwater Assurance SA", subCompanies: [
+      { externalId: "AT100000003", name: "Brightwater Austria GmbH", subCompanies: [] },
+      { externalId: "DE100000004", name: "Brightwater Services GmbH", subCompanies: [] } ] },
+    { externalId: "US100000005", name: "Brightwater Capital Inc.", subCompanies: [
+      { externalId: "US100000006", name: "Brightwater Securities LLC", subCompanies: [
+        { externalId: "JP100000007", name: "Brightwater Japan K.K.", subCompanies: [] } ] } ] },
+    { externalId: "HK100000008", name: "Brightwater Asia Ltd", subCompanies: [] },
+    { externalId: "TW100000009", name: "Brightwater Taiwan Co., Ltd.", subCompanies: [] },
+    { externalId: "BR100000011", name: "Brightwater Brasil Ltda", subCompanies: [] } ] };
+var SAMPLE_AFF = [{ id: "HA100000001", name: "Harbor Advisory Group", closeAffiliates: [
+  { id: "AT100000003", name: "Brightwater Austria GmbH", closeAffiliates: [] },
+  { id: "US100000005", name: "Brightwater Capital Inc.", closeAffiliates: [{ id: "HA100000002", name: "Harbor Trust Co.", closeAffiliates: [] }] },
+  { id: "TW100000009", name: "Brightwater Taiwan Co., Ltd.", closeAffiliates: [] } ] }];
+var SAMPLE_MATTERS = [
+  ["FR100000001", "FR100000001_aud1", "Brightwater Group SA - Consolidated Audit FY2025 [Audit - EU-537]"],
+  ["FR100000002", "FR100000002_aud1", "Brightwater Assurance SA - Statutory Audit FY2025 [Audit - EU-537]"],
+  ["AT100000003", "AT100000003_aud1", "Brightwater Austria GmbH - Statutory Audit FY2025 [Audit - IESBA]"],
+  ["AT100000003", "AT100000003_aud2", "Brightwater Austria GmbH - Group Reporting Audit FY2025 [Audit - EU-537]"],
+  ["AT100000003", "AT100000003_con1", "Brightwater Austria GmbH - Non-Audit Tax Advisory"],
+  ["DE100000004", "DE100000004_con1", "Brightwater Services GmbH - Transfer Pricing Review"],
+  ["US100000005", "US100000005_aud1", "Brightwater Capital Inc. - Annual Audit FY2025 [Audit - AICPA]"],
+  ["JP100000007", "JP100000007_aud1", "Brightwater Japan K.K. - Audit FY2025"],
+  ["HK100000008", "HK100000008_aud1", "Brightwater Asia Ltd - Statutory Audit FY2025 [Audit - UK-FRC]"],
+  ["TW100000009", "TW100000009_con1", "Brightwater Taiwan Co., Ltd. - Advisory Retainer"],
+  ["BR100000011", "BR100000011_aud1", "Brightwater Brasil Ltda - Audit FY2025 [Audit - AICPA]"],
+  ["XX100000010", "XX100000010_aud1", "Brightwater Escrow Ltd - Audit FY2025 [Audit - IESBA]"]  /* not in the tree: ignored */
+];
+var SAMPLE_ORBIS = {
+  FR100000001: { countryIso: "FR", listed: "Listed", exchange: "XPAR", nace: "6420" },
+  FR100000002: { countryIso: "FR", listed: "Unlisted", nace: "6512" },
+  AT100000003: { countryIso: "AT", listed: "Unlisted", nace: "6420" },
+  DE100000004: { countryIso: "DE", listed: "Unlisted", nace: "7022" },
+  US100000005: { countryIso: "US", listed: "Unlisted", nace: "6419", naics2017: "522110", ussic: "602" },
+  JP100000007: { countryIso: "JP", listed: "Listed", exchange: "XJPX", nace: "6420" },
+  TW100000009: { countryIso: "TW", listed: "Unlisted", nace: "6419" },
+  BR100000011: { countryIso: "BR", listed: "Unlisted", nace: "6420" }
+  /* HK100000008 has no note, so its entity rule is unknown */
+};
+function flattenRaw(root) {
+  var out = [];
+  (function walk(node) { out.push({ id: node.externalId, name: node.name }); (node.subCompanies || []).forEach(walk); })(root);
+  return out;
+}
+function sampleNote(id, rec, modifiedOn) {
+  var fields = Object.keys(rec).map(function (k) { return '"' + k + '": ' + JSON.stringify(rec[k]); }).join(", ");
+  return { modifiedOn: modifiedOn, message: '<div><div><span>"' + id + '": {</span><span>' + fields + '</span><span>}</span></div></div>' };
+}
+function MOCK(name, a) {
+  if (name === "get_component_group") {
+    if (a.componentGroupName !== SAMPLE_OWNER) return { groupId: a.componentGroupName, groupMembers: [] };
+    var members = [], seen = {};
+    SAMPLE_MATTERS.forEach(function (m) {
+      if (!seen[m[0]]) {
+        seen[m[0]] = 1;
+        var nm = (flattenRaw(SAMPLE_TREE).filter(function (n) { return n.id === m[0]; })[0] || {}).name || m[0];
+        members.push({ type: "Client", clientId: m[0], name: nm });
+        members.push({ type: "Party", partyId: m[0], name: nm });
+      }
+      members.push({ type: "Matter", clientId: m[0], matterId: m[1], name: m[2] });
+    });
+    return { groupId: SAMPLE_OWNER, name: SAMPLE_OWNER, active: true, groupMembers: members };
+  }
+  if (name === "get_party") {
+    var props = a.propertiesToLoad || [];
+    if (props.indexOf("CorporateFamily") !== -1) {
+      var bvd = SAMPLE_PARTIES[a.partyId] || a.partyId;
+      var hit = flattenRaw(SAMPLE_TREE).filter(function (n) { return n.id === bvd; })[0];
+      if (!hit) return null;
+      return { partyId: a.partyId, name: hit.name, bureauVanDijkId: bvd, externalDataProvider: "BureauVanDijk",
+               corporateTrees: [{ name: SAMPLE_TREE.name, rootCompanyId: SAMPLE_OWNER, providerType: "BureauVanDijk", rootCompany: SAMPLE_TREE }],
+               closeAffiliates: { closeAffiliates: SAMPLE_AFF }, notes: [] };
+    }
+    var notes = [];
+    if (props.indexOf("Notes") !== -1 && SAMPLE_ORBIS[a.partyId]) {
+      notes.push({ modifiedOn: "2026-10-13", message: "<div>Call notes: follow up next week.</div>" }); /* free-form, newest, must be skipped */
+      notes.push(sampleNote(a.partyId, SAMPLE_ORBIS[a.partyId], "2026-10-12"));
+    }
+    return { partyId: a.partyId, bureauVanDijkId: a.partyId, notes: notes };
+  }
+  return null;
+}
+
+/* ═══ STATE ═══════════════════════════════════════════════════════════ */
+/* Audit rules. Driven only by each entity's relToTarget metadata (the target has none, so it is not marked).
+   Each rule says what its relationship groups are: "restricted", "materiality", or null (out of scope).
+     parent  : Ultimate / Immediate / Indirect Parent
+     subImm  : Immediate Subsidiary
+     subInd  : Indirect Subsidiary
+     common  : Sibling, Cousin (common control)
+     sigInfl : any CA - label (close affiliates = significant influence)
+   Every relToTarget label is scored on its own and the strictest result wins
+   (restricted > materiality > out of scope), so an entity that is both a tree relative and a close
+   affiliate takes whichever is stricter. Source: jurisdiction screening guide;
+   the guide's "not confirmed" items are noted per rule. */
+var RULES = [
+  { key: "SEC", label: "SEC", parent: "restricted", subImm: "restricted", subInd: "materiality", common: "materiality", sigInfl: "materiality",
+    cite: "17 CFR 210.2-01(f)(4). Parents and subsidiaries restricted; siblings, cousins and significant influence (close affiliates) need a materiality test. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
+  { key: "AICPA", label: "AICPA", parent: "restricted", subImm: "restricted", subInd: null, common: "materiality", sigInfl: "materiality",
+    cite: "ET 0.400.02. Subsidiaries restricted; siblings, cousins and significant influence (close affiliates) materiality check. Parent treatment not confirmed (shown as restricted). Display setting: immediate subsidiaries restricted; indirect subsidiaries out of scope." },
+  { key: "IESBA-PIE", label: "IESBA (PIE)", parent: "materiality", subImm: "restricted", subInd: "materiality", common: "materiality", sigInfl: "materiality",
+    cite: "IESBA related entities, PIE. Subsidiaries restricted; parents, siblings and cousins materiality check. Significant influence not confirmed (shown as materiality check). Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
+  { key: "IESBA", label: "IESBA", parent: null, subImm: "restricted", subInd: null, common: null, sigInfl: "materiality",
+    cite: "IESBA related entities, non-PIE. Subsidiaries restricted; parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check). Display setting: immediate subsidiaries restricted; indirect subsidiaries out of scope." },
+  { key: "EU", label: "EU", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
+    cite: "Regulation (EU) 537/2014, Art. 5. Parent and controlled undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Geography not applied. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
+  { key: "UK", label: "UK", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
+    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." }
+];
+var REL_GROUP = {
+  "Ultimate Parent": "parent", "Immediate Parent": "parent", "Indirect Parent": "parent",
+  "Immediate Subsidiary": "subImm", "Indirect Subsidiary": "subInd",
+  "Sibling": "common", "Cousin": "common"
+};
+var LEVEL_RANK = { restricted: 2, materiality: 1 };
+var LEVEL_LABELS = { restricted: "Restricted", materiality: "Materiality check" };
+
+/* Group for one relationship label */
+function relGroup(r) { return r.indexOf(AFF_PREFIX) === 0 ? "sigInfl" : REL_GROUP[r]; }
+
+/* Relationship labels of every entity relative to one audit client: id -> [labels]. Cached per client. */
+function relsFor(clientId) {
+  if (!state.relCache.has(clientId)) {
+    state.relCache.set(clientId, relLabels(state.data.nodes, state.data.affiliates, clientId));
+  }
+  return state.relCache.get(clientId);
+}
+
+/* The active audit rows as { client, rule, rels }: a row counts once it has both an audit client and a rule. */
+function auditPairs() {
+  if (state.mode !== "independence" || !state.data) return [];
+  var byId = new Map();
+  state.data.nodes.forEach(function (n) { byId.set(n.id, n); });
+  var pairs = [];
+  state.auditRows.forEach(function (row) {
+    var rule = RULES.filter(function (r) { return r.key === row.rule; })[0];
+    var client = row.on && row.client && byId.get(row.client);
+    if (rule && client) pairs.push({ client: client, rule: rule, rels: relsFor(client.id) });
+  });
+  return pairs;
+}
+
+/* Result for one entity across every client/rule pair. Each pair is scored on the entity's relationship to
+   that pair's client; the strictest result wins (restricted > materiality > out of scope).
+   items: one { client, rule, level, rels } per pair that applies, so the badge can show where it came from. */
+function evalNode(id, pairs) {
+  var items = [], level = null;
+  pairs.forEach(function (p) {
+    var best = null, why = [];
+    (p.rels.get(id) || []).forEach(function (r) {
+      var l = p.rule[relGroup(r)];
+      if (!l) return;
+      if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
+      else if (l === best) why.push(r);
+    });
+    if (!best) return;
+    items.push({ client: p.client, rule: p.rule, level: best, rels: why });
+    if (!level || LEVEL_RANK[best] > LEVEL_RANK[level]) level = best;
+  });
+  items.sort(function (a, b) { return LEVEL_RANK[b.level] - LEVEL_RANK[a.level]; });
+  return { level: level, items: items };
+}
+
+/* ═══ ENGAGEMENTS ═════════════════════════════════════════════════════
+   Port of acct-audit-rule-engagement-tree: audit and non-audit clients from matter names, the existing rule from the
+   "[Audit - X]" suffix, the entity rule from Moody's fields, and the applied rule (the strictest of the two).
+   ═══════════════════════════════════════════════════════════════════ */
+var FRAMEWORK_RANK = { "SEC/PCAOB": 6, "EU-537": 5, "UK-FRC": 4, "IESBA-PIE": 3, "IESBA": 2, "AICPA": 1 };
+var FRAMEWORK_RULE = { "SEC/PCAOB": "SEC", "EU-537": "EU", "UK-FRC": "UK", "IESBA-PIE": "IESBA-PIE", "IESBA": "IESBA", "AICPA": "AICPA" };
+var US_MIC = ["XNAS", "XNYS", "ARCX", "XASE", "BATS", "IEXG"];
+/* EU/EEA/UK exchanges: the skill names the group but not the list, so this is a working list. Extend as needed. */
+var EU_MIC = ["XLON", "XPAR", "XAMS", "XBRU", "XETR", "XFRA", "XMIL", "XMAD", "XSTO", "XCSE", "XHEL", "XOSL", "XDUB",
+              "XLIS", "XWBO", "XATH", "XWAR", "XPRA", "XBUD", "XLUX", "XICE", "XCYS", "XMAL", "XLJU", "XZAG", "XBUL", "XBRA", "XRIS", "XTAL", "XLIT"];
+var EU_COUNTRIES = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO".split(" ");
+
+/* Audit flag comes from the matter name only: the whole word "audit", after removing every "non-audit" variant */
+function isAuditMatter(name) {
+  return /\baudit\b/.test(String(name || "").toLowerCase().replace(/non[\s-]?audit/g, ""));
+}
+
+/* Framework named by a "[Audit - X]" suffix at the very end of the name, else null. Never inferred from other wording. */
+var BASIS_RE = /\s*\[\s*audit\s*-\s*(sec\/pcaob|sec|eu-537|uk-frc|iesba-pie|iesba|aicpa)\s*\]\s*$/i;
+function basisOf(name) {
+  var m = BASIS_RE.exec(String(name || ""));
+  if (!m) return null;
+  var v = m[1].toUpperCase();
+  return v === "SEC" ? "SEC/PCAOB" : v;
+}
+function displayName(name) { return String(name || "").replace(BASIS_RE, "").trim(); }
+
+function strictest(list) {
+  return list.reduce(function (best, f) { return f && (!best || FRAMEWORK_RANK[f] > FRAMEWORK_RANK[best]) ? f : best; }, null);
+}
+
+function countryName(cc) {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch (e) { return cc; }
+}
+
+/* Entity rule from Moody's fields only. Three tests (listing, industry, country); the strictest framework that applies
+   is the entity rule, and every lower-ranked different framework is "also". Returns null when nothing applies. */
+function entityRule(o) {
+  if (!o) return null;
+  var codes = function (v) { return [].concat(v == null ? [] : v).map(String); };
+  var hits = [];
+  var ex = String(o.exchange || "").toUpperCase();
+  if (o.listed === "Listed") {
+    if (!ex) hits.push({ jur: "IESBA-PIE", why: "Listed company" });
+    else if (US_MIC.indexOf(ex) > -1) hits.push({ jur: "SEC/PCAOB", why: "Listed on a US exchange" });
+    else if (EU_MIC.indexOf(ex) > -1) hits.push({ jur: "EU-537", why: "Listed on an EU, EEA or UK exchange" });
+    else hits.push({ jur: "IESBA-PIE", why: "Listed on an exchange outside the US, EU/EEA and UK" });
+  }
+  var parts = [];
+  codes(o.nace).forEach(function (c) { if (c === "6419" || c === "6492" || c.indexOf("65") === 0) parts.push("NACE " + c); });
+  codes(o.naics2017).forEach(function (c) { if (c.indexOf("5221") === 0 || c.indexOf("5241") === 0) parts.push("NAICS " + c); });
+  codes(o.ussic).forEach(function (c) { if (c.indexOf("60") === 0 || c.indexOf("63") === 0) parts.push("US SIC " + c); });
+  if (parts.length) hits.push({ jur: "IESBA-PIE", why: "Industry codes mark it as a credit institution or insurer (" + parts.join(", ") + ")" });
+  var cc = String(o.countryIso || "").toUpperCase();
+  if (cc) {
+    var nm = countryName(cc);
+    if (cc === "US") hits.push({ jur: "AICPA", why: "Country is the US" });
+    else if (cc === "GB") hits.push({ jur: "UK-FRC", why: "Country is the UK" });
+    else if (EU_COUNTRIES.indexOf(cc) > -1) hits.push({ jur: "EU-537", why: "Country is " + nm + " (EU)" });
+    else hits.push({ jur: "IESBA", why: "Country is " + nm });
+  }
+  var entity = strictest(hits.map(function (h) { return h.jur; }));
+  if (!entity) return null;
+  var because = hits.filter(function (h) { return h.jur === entity; }).map(function (h) { return h.why; });
+  var also = [], seen = {};
+  hits.filter(function (h) { return h.jur !== entity; })
+      .sort(function (a, b) { return FRAMEWORK_RANK[b.jur] - FRAMEWORK_RANK[a.jur]; })
+      .forEach(function (h) {
+        if (seen[h.jur]) { seen[h.jur].because += "; " + h.why.charAt(0).toLowerCase() + h.why.slice(1); return; }
+        seen[h.jur] = { jur: h.jur, because: h.why };
+        also.push(seen[h.jur]);
+      });
+  return { entity: entity, why: { because: because, also: also } };
+}
+
+function joinList(a) { return a.length < 3 ? a.join(" and ") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+
+/* Why the apply rule is what it is, by case */
+function applyWhy(existing, entity) {
+  if (existing && entity) {
+    if (existing === entity) return "Audit engagements and the entity rule are both " + existing + ".";
+    if (FRAMEWORK_RANK[existing] > FRAMEWORK_RANK[entity]) return "Audit engagements are under " + existing + ", which is stricter than the entity rule, " + entity + ".";
+    return "The entity rule, " + entity + ", is stricter than the audit engagement rule, " + existing + ".";
+  }
+  if (existing) return "Audit engagements are under " + existing + ", so " + existing + " applies.";
+  if (entity) return "The entity rule is " + entity + ", so " + entity + " applies.";
+  return null;
+}
+
+/* Everything shown for one engaged party */
+function buildParty(matters, orbis) {
+  var aud = [], non = [];
+  matters.forEach(function (m) {
+    if (isAuditMatter(m.name)) aud.push({ name: displayName(m.name), id: m.id, basis: basisOf(m.name) });
+    else non.push({ name: displayName(m.name), id: m.id, basis: null });
+  });
+  var audit = aud.length > 0;
+  var bases = [];
+  aud.forEach(function (g) { if (g.basis && bases.indexOf(g.basis) === -1) bases.push(g.basis); });
+  var existing = audit ? strictest(bases) : null;
+  var ent = entityRule(orbis);
+  var entity = ent ? ent.entity : null;
+  var apply = audit ? strictest([existing, entity]) : null;
+  var governs = null;
+  if (audit && bases.length > 1) {
+    bases.sort(function (a, b) { return FRAMEWORK_RANK[b] - FRAMEWORK_RANK[a]; });
+    governs = "Audit engagements are under " + joinList(bases) + ". " + existing + " is the strictest, so it applies to this client.";
+  }
+  return {
+    audit: audit, nonAudit: non.length > 0, existing: existing, entity: entity, apply: apply,
+    applyWhy: apply ? applyWhy(existing, entity) : null,
+    engagements: { audit: aud, nonAudit: non }, governs: governs, why: ent ? ent.why : null
+  };
+}
+
+/* One row per audit client in the tree, in tree order, each carrying its applied rule and switched on.
+   With no engagement data, one empty row. */
+function autoAuditRows(data) {
+  var seen = new Set(), rows = [];
+  data.nodes.forEach(function (n) {
+    var e = state.engage.get(n.id);
+    if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); rows.push({ client: n.id, rule: e.apply, on: true }); }
+  });
+  return rows.length ? rows : [{ client: null, rule: null, on: true }];
+}
+
+/* Icons after the pin: orange shield = audit client, orange handshake on a white badge = non-audit client
+   (both when it holds both). Paths are 24x24 line-icon outlines. */
+var ENG_PATHS = {
+  audit: ["M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"],
+  non: ["m11 17 2 2a1 1 0 1 0 3-3",
+        "m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4",
+        "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8"]
+};
+var ENG_LABEL = { audit: "Audit client", non: "Non-audit client" };
+
+function engIcon(kind) {
+  var ns = "http://www.w3.org/2000/svg";
+  var wrap = document.createElement("span");
+  wrap.className = "eng " + kind;
+  wrap.setAttribute("role", "img");
+  wrap.setAttribute("aria-label", ENG_LABEL[kind]);
+  wrap.title = ENG_LABEL[kind];
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  ENG_PATHS[kind].forEach(function (d) {
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+  });
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+function engageDots(id) {
+  var e = state.engage && state.engage.get(id), out = [];
+  if (e && e.audit) out.push(engIcon("audit"));
+  if (e && e.nonAudit) out.push(engIcon("non"));
+  return out;
+}
+
+/* Pin slot then icon slot, the same cell the grids use, so names line up wherever it appears */
+function markCell(isTarget, id) {
+  var mk = document.createElement("div");
+  mk.className = "mark";
+  var ps = document.createElement("span");
+  ps.className = "mark-pin";
+  if (isTarget) ps.appendChild(pinIcon());
+  var ds = document.createElement("span");
+  ds.className = "mark-dots";
+  engageDots(id).forEach(function (d) { ds.appendChild(d); });
+  mk.appendChild(ps);
+  mk.appendChild(ds);
+  return mk;
+}
+
+function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
+
+var state = {
+  mode: "independence", /* the wizard always works in the independence view */
+  auditRows: [{ client: null, rule: null, on: true }], /* one audit client + rule per row; on = the row is applied */
+  relCache: new Map(),
+  engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
+  engInfo: null, /* id -> everything the engagement page shows for a party */
+  engNotes: [],
+  engCollapsed: new Set(),
+  rulesRun: false, /* the audit rows have been filled from the engagements */
+  assessment: null,
+  collapsed: { audit: false, filter: false }, /* toolbar sections folded away */
+  rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
+  loadSeq: 0,
+  trees: [],
+  affTrees: [],
+  filterPill: null,
+  data: null,
+  target: null,
+  owners: [],
+  filter: "",
+  expanded: { tree: new Set(), aff: new Set() }
+};
+
+var $ = function (id) { return document.getElementById(id); };
+
+/* ═══ HELPERS ═════════════════════════════════════════════════════════ */
+function indexNodes(list, parentsOf) {
+  var byId = new Map(), kids = new Map();
+  list.forEach(function (n) { byId.set(n.id, n); });
+  list.forEach(function (n) {
+    parentsOf(n).forEach(function (p) {
+      if (!byId.has(p)) return;
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(n);
+    });
+  });
+  return { byId: byId, kids: kids };
+}
+
+function ancestorsOf(id, idx, parentsOf) {
+  var out = new Set(), stack = [id];
+  while (stack.length) {
+    var n = idx.byId.get(stack.pop());
+    if (!n) continue;
+    parentsOf(n).forEach(function (p) {
+      if (idx.byId.has(p) && !out.has(p)) { out.add(p); stack.push(p); }
+    });
+  }
+  return out;
+}
+
+function resolveTarget(query, nodes) {
+  var q = query.trim().toLowerCase();
+  if (!q) return null;
+  var exact = nodes.filter(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase() === q; });
+  if (exact.length) return exact[0];
+  var partial = nodes.filter(function (n) { return n.name.toLowerCase().indexOf(q) !== -1; });
+  return partial.length ? partial[0] : null;
+}
+
+/* ═══ ENTITY METADATA ═════════════════════════════════════════════════
+   Stored on each tree node; nothing in the UI reads it yet.
+     isTarget       boolean, true for the target company
+     relToTarget    array of labels (Ultimate Parent, Immediate Parent, Indirect Parent,
+                    Immediate Subsidiary, Indirect Subsidiary, Sibling, Cousin) in that order.
+                    An entity holds every label any of its placements supports.
+     idParty        Intapp party id, or null when the entity has no party record
+   Classification follows entity-relationship-classification.md.
+   ═══════════════════════════════════════════════════════════════════ */
+var REL_ORDER = ["Ultimate Parent", "Immediate Parent", "Indirect Parent",
+                 "Immediate Subsidiary", "Indirect Subsidiary", "Sibling", "Cousin"];
+
+/* Every upward path from id, as arrays [id, parent, ..., top]. A path stops at a repeat (cycle guard). */
+function upwardPaths(id, byId) {
+  var out = [];
+  (function walk(path) {
+    var n = byId.get(path[path.length - 1]);
+    var ps = n ? n.parents.filter(function (p) { return byId.has(p) && path.indexOf(p) === -1; }) : [];
+    if (!ps.length) { out.push(path); return; }
+    ps.forEach(function (p) { walk(path.concat(p)); });
+  })([id]);
+  return out;
+}
+
+/* Classify every node in one hierarchy relative to the target: id -> Set of REL_ORDER labels.
+   If the target is not in this hierarchy nothing in it is related to it. */
+function classify(nodes, targetId) {
+  var byId = new Map(), result = new Map();
+  nodes.forEach(function (n) { byId.set(n.id, n); });
+  if (!byId.has(targetId)) return result;
+  var tPaths = upwardPaths(targetId, byId);
+
+  nodes.forEach(function (n) {
+    if (n.id === targetId) return;
+    var rels = result.get(n.id) || new Set();
+    result.set(n.id, rels);
+    var isRoot = !n.parents.some(function (p) { return byId.has(p); });
+
+    /* Above the target: n appears on a path up from the target */
+    tPaths.forEach(function (path) {
+      var d = path.indexOf(n.id);
+      if (d < 1) return;
+      if (isRoot) rels.add("Ultimate Parent");
+      if (d === 1) rels.add("Immediate Parent");
+      else if (!isRoot) rels.add("Indirect Parent");
+    });
+
+    upwardPaths(n.id, byId).forEach(function (ep) {
+      /* Below the target: the target appears on a path up from n */
+      var d = ep.indexOf(targetId);
+      if (d >= 1) rels.add(d === 1 ? "Immediate Subsidiary" : "Indirect Subsidiary");
+
+      /* Sibling / Cousin: for each pair of placements, the lowest common ancestor on those two paths */
+      tPaths.forEach(function (tp) {
+        for (var dt = 0; dt < tp.length; dt++) {
+          var de = ep.indexOf(tp[dt]);
+          if (de === -1) continue;
+          if (dt > 0 && de > 0) rels.add(dt === 1 && de === 1 ? "Sibling" : "Cousin");
+          break; /* first shared node is the lowest; one is an ancestor of the other if either index is 0 */
+        }
+      });
+    });
+  });
+  return result;
+}
+
+var AFF_PREFIX = "CA - ";
+
+/* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
+   gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
+/* Labels for every entity id relative to one anchor entity (the target, or any audit client). */
+function relLabels(nodes, affiliates, anchorId) {
+  var treeRels = classify(nodes, anchorId);
+  var affRels = classify(affiliates, anchorId);
+  var out = new Map();
+  nodes.concat(affiliates).forEach(function (n) {
+    if (out.has(n.id)) return;
+    var t = treeRels.get(n.id), a = affRels.get(n.id);
+    out.set(n.id, REL_ORDER.filter(function (r) { return t && t.has(r); })
+      .concat(REL_ORDER.filter(function (r) { return a && a.has(r); }).map(function (r) { return AFF_PREFIX + r; })));
+  });
+  return out;
+}
+
+function computeEntityMeta(nodes, affiliates, targetId) {
+  state.relCache = new Map();
+  var targetRels = relLabels(nodes, affiliates, targetId);
+  var everyone = nodes.concat(affiliates);
+
+  var parties = new Map();
+  everyone.forEach(function (n) {
+    if (n.idParty && !parties.has(n.id)) parties.set(n.id, n.idParty);
+  });
+
+  var meta = new Map();
+  everyone.forEach(function (n) {
+    if (meta.has(n.id)) return;
+    meta.set(n.id, { isTarget: n.id === targetId, relToTarget: targetRels.get(n.id), idParty: parties.get(n.id) || null });
+  });
+
+  everyone.forEach(function (n) {
+    var m = meta.get(n.id);
+    n.isTarget = m.isTarget;
+    n.relToTarget = m.relToTarget;
+    n.idParty = m.idParty;
+  });
+}
+
+/* ═══ PLACEMENTS ══════════════════════════════════════════════════════
+   The grids draw placements: one row per place an entity appears, children exactly as the provider listed them.
+   Each placement gets a key (its path of positions) and hasTarget (the target is this node or below it).
+   ═══════════════════════════════════════════════════════════════════ */
+function normTree(t) {
+  return Array.isArray(t) ? { id: t[0], name: t[1], children: (t[2] || []).map(normTree) } : t;
+}
+
+/* Derive placements from a flat parents list (every parent gets a copy of the subtree). */
+function placementsFromFlat(list, parentsOf) {
+  var idx = indexNodes(list, parentsOf);
+  var roots = list.filter(function (n) { return !parentsOf(n).some(function (p) { return idx.byId.has(p); }); });
+  function build(n, stack) {
+    var kids = [];
+    (idx.kids.get(n.id) || []).forEach(function (k) {
+      if (stack.indexOf(k.id) === -1) kids.push(build(k, stack.concat(n.id)));
+    });
+    return { id: n.id, name: n.name, children: kids };
+  }
+  return roots.map(function (r) { return build(r, []); });
+}
+
+function ensurePlacements(data) {
+  data.trees = data.trees ? data.trees.map(normTree) : placementsFromFlat(data.nodes, function (n) { return n.parents; });
+  data.affTrees = data.affTrees ? data.affTrees.map(normTree)
+    : placementsFromFlat(data.affiliates, function (n) { return n.parents; });
+}
+
+function annotate(roots, targetId) {
+  (function walk(list, parentKey) {
+    list.forEach(function (p, i) {
+      p.key = parentKey === null ? String(i) : parentKey + "/" + i;
+      walk(p.children, p.key);
+      p.hasTarget = p.id === targetId || p.children.some(function (c) { return c.hasTarget; });
+    });
+  })(roots, null);
+}
+
+/* Report title: pin, Name (ID); footnote names the tree(s) when the target is not an ultimate owner */
+function renderTitle() {
+  var t = state.target, h = $("report-title-text");
+  h.innerHTML = "";
+  h.appendChild(pinIcon());
+  var nm = document.createElement("span");
+  nm.textContent = t.name;
+  h.appendChild(nm);
+  var id = document.createElement("span");
+  id.className = "node-id";
+  id.textContent = "(" + t.id + ")";
+  h.appendChild(id);
+
+  var isOwner = state.owners.some(function (o) { return o.id === t.id; });
+  var foot = $("report-footnote");
+  if (isOwner) {
+    foot.textContent = "";
+  } else {
+    var names = state.owners.map(function (o) { return o.name + " (" + o.id + ")"; });
+    foot.textContent = "Part of the " + names.join(" and ") + (names.length > 1 ? " trees" : " tree");
+  }
+  $("report-title").hidden = false;
+}
+
+/* ═══ GRID RENDERER ═══════════════════════════════════════════════════
+   One renderer for both grids: expand/collapse toggle, indent, name, id,
+   plus extra columns contributed by the active mode.
+   ═══════════════════════════════════════════════════════════════════ */
+/* Blue map pin marking the target company wherever it appears */
+function pinIcon() {
+  var ns = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "pin");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Target company");
+  var title = document.createElementNS(ns, "title");
+  title.textContent = "Target company";
+  svg.appendChild(title);
+  var path = document.createElementNS(ns, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z");
+  svg.appendChild(path);
+  return svg;
+}
+
+/* Mode-specific columns: Independence adds the audit rule result (strictest across all client/rule pairs). */
+function extraColumns(pairs) {
+  if (!pairs.length) return [];
+  return [{
+    title: pairs.length === 1 ? pairs[0].rule.label : "Audit rule",
+    cell: function (n, td) {
+      var res = evalNode(n.id, pairs);
+      if (res.level) td.appendChild(ruleBadge(n, res));
+    }
+  }];
+}
+
+/* Clickable badge: opens the popover listing every client/rule pair that flagged this entity */
+function ruleBadge(node, res) {
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "rule-badge " + res.level;
+  b.textContent = LEVEL_LABELS[res.level] + (res.items.length > 1 ? " · " + res.items.length : "");
+  b.title = "Show where this came from";
+  b.setAttribute("aria-haspopup", "dialog");
+  b.addEventListener("click", function () {
+    if (state.whyFor === node.id) closeWhy(); else showWhy(b, node, res);
+  });
+  return b;
+}
+
+function relText(r) {
+  return r.indexOf(AFF_PREFIX) === 0 ? "Close affiliate · " + r.slice(AFF_PREFIX.length) : r;
+}
+
+function showWhy(anchor, node, res) {
+  closeWhy();
+  var pop = document.createElement("div");
+  pop.id = "why-pop";
+  pop.setAttribute("role", "dialog");
+
+  var h = document.createElement("h3");
+  h.textContent = node.name + " (" + node.id + ")";
+  pop.appendChild(h);
+
+  res.items.forEach(function (it) {
+    var row = document.createElement("div");
+    row.className = "why-item" + (it.level === res.level ? "" : " lost");
+    var badge = document.createElement("span");
+    badge.className = "rule-badge " + it.level;
+    badge.textContent = LEVEL_LABELS[it.level];
+    row.appendChild(badge);
+    var txt = document.createElement("div");
+    var line1 = document.createElement("div");
+    line1.textContent = it.rule.label + ": " + it.rels.map(relText).join(", ") + " of " + it.client.name;
+    var line2 = document.createElement("div");
+    line2.className = "node-id";
+    line2.style.marginLeft = "0";
+    line2.textContent = "Audit client " + it.client.id + (it.level === res.level ? "" : " · overridden by a stricter result");
+    txt.appendChild(line1);
+    txt.appendChild(line2);
+    row.appendChild(txt);
+    pop.appendChild(row);
+  });
+
+  if (res.items.length > 1) {
+    var note = document.createElement("div");
+    note.className = "why-note";
+    note.textContent = "Strictest result applies: Restricted over Materiality check.";
+    pop.appendChild(note);
+  }
+
+  document.body.appendChild(pop);
+  var r = anchor.getBoundingClientRect();
+  var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+  var top = r.bottom + 6;
+  if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  state.whyFor = node.id;
+}
+
+function closeWhy() {
+  var pop = $("why-pop");
+  if (pop) pop.remove();
+  state.whyFor = null;
+}
+
+/* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
+/* Quick filters. Exclusive with each other and with the text search. Every filter keeps the chain above each
+   match; the parents/subs filter also keeps everything below the target. */
+var FILTER_PILLS = [
+  { key: "party",      label: "Intapp Parties Only" },
+  { key: "parents",    label: "Target + Parents Only" },
+  { key: "parentsSubs", label: "Target + Parents/Subs Only" }
+];
+
+function renderGrid(gridKey, containerId, countId, roots, byId) {
+  var metaOf = function (pl) { return byId.get(pl.id) || pl; };
+  var txt = state.filter.trim().toLowerCase();
+  var filtering = !!txt || !!state.filterPill;
+  var tid = state.target && state.target.id;
+
+  /* Visible placements = matches + everything above them (upward is always kept); filtering force-expands */
+  var vis = null;
+  if (filtering) {
+    vis = new Set();
+    (function mark(pl, underTarget) {
+      var isT = pl.id === tid;
+      var kidVisible = false;
+      pl.children.forEach(function (c) { if (mark(c, underTarget || isT)) kidVisible = true; });
+      var m = metaOf(pl), self;
+      if (state.filterPill === "party") self = !!m.idParty;
+      else if (state.filterPill === "parents") self = isT;
+      else if (state.filterPill === "parentsSubs") self = isT || underTarget;
+      else self = (pl.name + " " + pl.id).toLowerCase().indexOf(txt) !== -1;
+      var v = self || kidVisible;
+      if (v) vis.add(pl.key);
+      return v;
+    })({ children: roots, id: null, name: "", key: "" }, false);
+  }
+
+  var pairs = auditPairs();
+  var cols = extraColumns(pairs);
+  var table = document.createElement("table");
+  table.className = "grid";
+  var thead = document.createElement("thead");
+  var hr = document.createElement("tr");
+  var pinTh = document.createElement("th");
+  var showEng = showEngagement();
+  pinTh.className = "pin-col" + (showEng ? " wide" : "");
+  pinTh.setAttribute("aria-label", "Target company");
+  hr.appendChild(pinTh);
+
+  /* Expand/collapse everything in this grid */
+  var expandable = [], uniq = new Set();
+  (function scan(list) {
+    list.forEach(function (pl) {
+      uniq.add(pl.id);
+      if (pl.children.length) expandable.push(pl.key);
+      scan(pl.children);
+    });
+  })(roots);
+  var allOpen = expandable.length > 0 && expandable.every(function (k) { return state.expanded[gridKey].has(k); });
+  var nameTh = document.createElement("th");
+  nameTh.className = "name-col";
+  if (expandable.length) {
+    var all = document.createElement("button");
+    all.className = "toggle";
+    all.textContent = allOpen ? "\u25BE" : "\u25B8";
+    all.title = allOpen ? "Collapse all" : "Expand all";
+    all.setAttribute("aria-label", all.title);
+    all.addEventListener("click", function () {
+      var set = state.expanded[gridKey];
+      if (allOpen) set.clear();
+      else expandable.forEach(function (k) { set.add(k); });
+      renderAll();
+    });
+    nameTh.appendChild(all);
+  }
+  hr.appendChild(nameTh);
+
+  cols.forEach(function (c) {
+    var th = document.createElement("th");
+    th.className = "icon-col";
+    th.textContent = c.title;
+    hr.appendChild(th);
+  });
+  var fillTh = document.createElement("th");
+  fillTh.className = "fill";
+  hr.appendChild(fillTh);
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  var shown = 0;
+
+  function walk(pl, depth) {
+    if (vis && !vis.has(pl.key)) return;
+    var node = metaOf(pl);
+    var kids = pl.children.filter(function (c) { return !vis || vis.has(c.key); });
+    var open = filtering || state.expanded[gridKey].has(pl.key);
+    shown++;
+
+    var tr = document.createElement("tr");
+    if (pairs.length) {
+      var lvl = evalNode(node.id, pairs).level;
+      if (lvl) tr.className = lvl;
+    }
+
+    var pinTd = document.createElement("td");
+    pinTd.className = "pin-col" + (showEng ? " wide" : "");
+    if (showEng) {
+      pinTd.appendChild(markCell(node.isTarget, node.id));
+    } else if (node.isTarget) {
+      pinTd.appendChild(pinIcon());
+    }
+    tr.appendChild(pinTd);
+
+    var nameTd = document.createElement("td");
+    nameTd.className = "name-cell";
+    var inner = document.createElement("div");
+    inner.className = "name-inner";
+    nameTd.appendChild(inner);
+    var ind = document.createElement("span");
+    ind.className = "indent";
+    ind.style.width = (depth * 20) + "px";
+    inner.appendChild(ind);
+
+    var tg = document.createElement("button");
+    tg.className = "toggle" + (kids.length ? "" : " leaf");
+    tg.textContent = open ? "▾" : "▸";
+    tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
+    if (kids.length) {
+      tg.addEventListener("click", function () {
+        var set = state.expanded[gridKey];
+        if (set.has(pl.key)) set.delete(pl.key); else set.add(pl.key);
+        renderAll();
+      });
+    }
+    inner.appendChild(tg);
+
+    var nm = document.createElement("span");
+    nm.className = "node-name";
+    nm.textContent = pl.name;
+    if (node.idParty) nm.classList.add("has-party"); /* bold = entity has an Intapp party record */
+    nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
+    inner.appendChild(nm);
+    var idSp = document.createElement("span");
+    idSp.className = "node-id";
+    idSp.textContent = "(" + pl.id + ")";
+    inner.appendChild(idSp);
+    tr.appendChild(nameTd);
+
+
+    cols.forEach(function (c) {
+      var td = document.createElement("td");
+      td.className = "icon-col";
+      c.cell(node, td);
+      tr.appendChild(td);
+    });
+    var fillTd = document.createElement("td");
+    fillTd.className = "fill";
+    tr.appendChild(fillTd);
+    tbody.appendChild(tr);
+
+    if (open) kids.forEach(function (k) { walk(k, depth + 1); });
+  }
+
+  roots.forEach(function (r) { walk(r, 0); });
+  table.appendChild(tbody);
+
+  var host = $(containerId);
+  host.innerHTML = "";
+  if (!shown) {
+    var e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No matching entities.";
+    host.appendChild(e);
+  } else {
+    host.appendChild(table);
+  }
+  $(countId).textContent = (filtering ? "filtered · " : "") + uniq.size + " entities";
+  return uniq.size;
+}
+
+/* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
+function renderAll() {
+  closeWhy();
+  if (!state.data) return;
+  document.querySelectorAll(".eng-key").forEach(function (k) { k.hidden = !showEngagement(); });
+
+  /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
+  var treeByid = new Map(), affById = new Map();
+  state.data.nodes.forEach(function (n) { treeByid.set(n.id, n); });
+  state.data.affiliates.forEach(function (n) { affById.set(n.id, n); });
+  var treeCount = renderGrid("tree", "tree-grid", "tree-count", state.trees, treeByid);
+  var affCount = renderGrid("aff", "aff-grid", "aff-count", state.affTrees, affById);
+
+  $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
+  renderRuleBar();
+  renderFilterPills();
+}
+
+function renderFilterPills() {
+  var host = $("filter-pills");
+  host.innerHTML = "";
+  FILTER_PILLS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill" + (state.filterPill === f.key ? " active" : "");
+    b.textContent = f.label;
+    b.setAttribute("aria-pressed", state.filterPill === f.key ? "true" : "false");
+    b.addEventListener("click", function () {
+      /* exclusive: choosing a pill clears the search text; choosing the active pill turns it off */
+      state.filterPill = state.filterPill === f.key ? null : f.key;
+      state.filter = "";
+      $("filter-input").value = "";
+      renderAll();
+    });
+    host.appendChild(b);
+  });
+}
+
+function renderRuleBar() {
+  var bar = $("bar-independence");
+  bar.hidden = state.mode !== "independence";
+  if (bar.hidden) return;
+  var host = $("audit-rows");
+  host.innerHTML = "";
+  state.auditRows.forEach(function (row, i) {
+    var line = document.createElement("div");
+    line.className = "audit-row" + (row.on ? "" : " off");
+
+    var on = document.createElement("input");
+    on.type = "checkbox";
+    on.checked = row.on;
+    on.title = "Apply this audit client's rule";
+    on.setAttribute("aria-label", "Apply this audit client's rule");
+    on.addEventListener("change", function () {
+      row.on = on.checked;
+      state.rowsTouched = true;
+      renderAll();
+    });
+    line.appendChild(on);
+
+    line.appendChild(clientDropdown(row));
+
+    var pills = document.createElement("div");
+    pills.className = "row-pills";
+    RULES.forEach(function (r) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "pill" + (row.rule === r.key ? " active" : "");
+      b.textContent = r.label;
+      b.title = r.cite;
+      b.setAttribute("aria-pressed", row.rule === r.key ? "true" : "false");
+      b.addEventListener("click", function () {
+        row.rule = row.rule === r.key ? null : r.key;
+        state.rowsTouched = true;
+        renderAll();
+      });
+      pills.appendChild(b);
+    });
+    line.appendChild(pills);
+
+    if (state.auditRows.length > 1) {
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "icon-btn";
+      rm.textContent = "\u00D7";
+      rm.title = "Remove this audit client";
+      rm.setAttribute("aria-label", "Remove this audit client");
+      rm.addEventListener("click", function () {
+        state.auditRows.splice(i, 1);
+        state.rowsTouched = true;
+        renderAll();
+      });
+      line.appendChild(rm);
+    }
+    host.appendChild(line);
+  });
+  $("add-audit").disabled = !state.data;
+
+  var pairs = auditPairs(), sum = $("rule-summary");
+  if (!state.data) { sum.textContent = "Load a target company first."; return; }
+  if (!pairs.length) {
+    var allOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
+    sum.textContent = allOff ? "All audit clients are switched off." : "Select an audit client and a rule to mark restricted and materiality-check entities.";
+    return;
+  }
+  var seen = new Set(), c = { restricted: 0, materiality: 0 };
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
+    if (seen.has(n.id)) return;
+    seen.add(n.id);
+    var l = evalNode(n.id, pairs).level;
+    if (l) c[l]++;
+  });
+  sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check";
+}
+
+/* Audit client dropdown for one row. The target is pinned at the top; clients already used in another row are disabled. */
+function clientDropdown(row) {
+  var wrap = document.createElement("div");
+  wrap.className = "dd";
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "dd-btn";
+  btn.setAttribute("aria-haspopup", "listbox");
+  btn.setAttribute("aria-expanded", "false");
+  wrap.appendChild(btn);
+
+  if (!state.data) {
+    btn.disabled = true;
+    var none = document.createElement("span");
+    none.className = "dd-name placeholder";
+    none.textContent = "Load a target company first";
+    btn.appendChild(none);
+    return wrap;
+  }
+
+  var tid = state.target.id;
+  var sel = row.client && state.data.nodes.filter(function (n) { return n.id === row.client; })[0];
+  if (sel) {
+    if (showEngagement()) btn.appendChild(markCell(sel.id === tid, sel.id));
+    else if (sel.id === tid) btn.appendChild(pinIcon());
+  }
+  var nm = document.createElement("span");
+  nm.className = "dd-name" + (sel ? "" : " placeholder");
+  nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit client\u2026";
+  btn.appendChild(nm);
+  var caret = document.createElement("span");
+  caret.className = "dd-caret";
+  caret.textContent = "\u25BE";
+  btn.appendChild(caret);
+
+  var menu = document.createElement("div");
+  menu.className = "dd-menu";
+  var search = document.createElement("input");
+  search.type = "text";
+  search.className = "dd-search";
+  search.placeholder = "Search entities\u2026";
+  search.autocomplete = "off";
+  var list = document.createElement("div");
+  list.className = "dd-list";
+  list.setAttribute("role", "listbox");
+  menu.appendChild(search);
+  menu.appendChild(list);
+  wrap.appendChild(menu);
+
+  var usedElsewhere = new Set();
+  state.auditRows.forEach(function (r) { if (r !== row && r.client) usedElsewhere.add(r.client); });
+  var target = state.data.nodes.filter(function (n) { return n.id === tid; })[0] || state.target;
+  var all = [target].concat(state.data.nodes.filter(function (n) { return n.id !== tid; }));
+
+  function fill(q) {
+    q = q.trim().toLowerCase();
+    list.innerHTML = "";
+    var items = all.filter(function (n) { return !q || (n.name + " " + n.id).toLowerCase().indexOf(q) !== -1; });
+    if (!items.length) {
+      var e = document.createElement("div");
+      e.className = "dd-empty";
+      e.textContent = "No matching entities.";
+      list.appendChild(e);
+      return;
+    }
+    items.forEach(function (n) {
+      var isT = n.id === tid;
+      var o = document.createElement("button");
+      o.type = "button";
+      o.className = "dd-opt" + (row.client === n.id ? " active" : "");
+      o.setAttribute("role", "option");
+      if (showEngagement()) o.appendChild(markCell(isT, n.id));
+      else if (isT) o.appendChild(pinIcon());
+      var name = document.createElement("span");
+      name.textContent = n.name;
+      o.appendChild(name);
+      var id = document.createElement("span");
+      id.className = "node-id";
+      id.textContent = "(" + n.id + ")";
+      o.appendChild(id);
+      var used = usedElsewhere.has(n.id);
+      if (isT || used) {
+        var tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = isT ? (used ? "Target · in use" : "Target") : "In use";
+        o.appendChild(tag);
+      }
+      o.disabled = used;
+      o.addEventListener("click", function () {
+        row.client = n.id;
+        state.rowsTouched = true;
+        renderAll();
+      });
+      list.appendChild(o);
+      if (isT && items.length > 1) {
+        var sep = document.createElement("div");
+        sep.className = "dd-sep";
+        list.appendChild(sep);
+      }
+    });
+  }
+  fill("");
+  search.addEventListener("input", function () { fill(search.value); });
+
+  btn.addEventListener("click", function () {
+    var open = !wrap.classList.contains("open");
+    closeDropdowns();
+    if (open) {
+      wrap.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+      search.focus();
+    }
+  });
+  return wrap;
+}
+
+function closeDropdowns() {
+  document.querySelectorAll(".dd.open").forEach(function (d) {
+    d.classList.remove("open");
+    d.querySelector(".dd-btn").setAttribute("aria-expanded", "false");
+  });
+}
+
+/* ═══ HELPERS FOR THE ENGAGEMENT PAGE ═════════════════════════════════ */
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function ruleCell(td, info, kind) {
+  if (!info) return;
+  var pill;
+  if (kind === "r") {
+    if (!info.audit || !info.existing) return;
+    pill = el("button", "rpill", info.existing);
+    pill.title = "Show engagements";
+  } else if (kind === "p") {
+    if (!info.entity) return;
+    pill = el("button", "rpill", info.entity);
+    pill.title = "Why this entity rule";
+  } else {
+    if (!info.audit || !info.apply) return;
+    pill = el("button", "rpill apply", info.apply);
+    pill.title = "Why this rule applies";
+  }
+  pill.type = "button";
+  pill.setAttribute("aria-haspopup", "dialog");
+  pill.addEventListener("click", function () { openPop(pill, info, kind); });
+  td.appendChild(pill);
+}
+
+/* ═══ POPUPS ══════════════════════════════════════════════════════════════ */
+var opener = null;
+function li(text, node) { var x = el("li"); if (text != null) x.textContent = text; if (node) x.appendChild(node); return x; }
+function lead(parent, bold, rest) {
+  var d = el("div", "lead");
+  d.appendChild(el("b", null, bold));
+  d.appendChild(document.createTextNode(" " + rest));
+  parent.appendChild(d);
+}
+function engList(parent, title, list) {
+  if (!list.length) return;
+  parent.appendChild(el("div", "sec", title));
+  var ul = el("ul");
+  list.forEach(function (g) {
+    var x = el("li");
+    x.appendChild(document.createTextNode(g.name + " "));
+    x.appendChild(el("span", "id", "(" + g.id + ")"));
+    if (g.basis) x.appendChild(el("span", "tag", g.basis));
+    ul.appendChild(x);
+  });
+  parent.appendChild(ul);
+}
+
+function openPop(btn, info, kind) {
+  opener = btn;
+  var pop = $("pop");
+  pop.innerHTML = "";
+  var x = el("button", "pop-close", "×");
+  x.type = "button";
+  x.setAttribute("aria-label", "Close");
+  x.addEventListener("click", closePop);
+  pop.appendChild(x);
+  var name = btn.closest("tr").querySelector(".node-name").textContent;
+  pop.appendChild(el("h2", null, name));
+
+  if (kind === "p") {
+    var w = info.why || {};
+    if (w.because && w.because.length) {
+      lead(pop, info.entity, "is the entity rule because");
+      var ul = el("ul");
+      w.because.forEach(function (t) { ul.appendChild(li(t)); });
+      pop.appendChild(ul);
+    }
+    if (w.also && w.also.length) {
+      pop.appendChild(el("div", "sec", "Other, less strict rules that also apply"));
+      var ul2 = el("ul");
+      w.also.forEach(function (a) {
+        var x2 = el("li");
+        x2.appendChild(el("b", null, a.jur));
+        x2.appendChild(document.createTextNode(" — " + a.because));
+        ul2.appendChild(x2);
+      });
+      pop.appendChild(ul2);
+    }
+  } else if (kind === "a") {
+    lead(pop, info.apply, "applies because");
+    pop.appendChild(el("div", null, info.applyWhy || ""));
+  } else {
+    engList(pop, "Audit engagements", info.engagements.audit);
+    engList(pop, "Non-audit engagements", info.engagements.nonAudit);
+    if (info.audit && info.existing) {
+      lead(pop, info.existing, "is the existing audit rule");
+      if (info.governs) pop.appendChild(el("div", "gov", info.governs));
+    }
+  }
+  $("pop-backdrop").classList.add("open");
+  x.focus();
+}
+function closePop() {
+  $("pop-backdrop").classList.remove("open");
+  if (opener) opener.focus();
+  opener = null;
+}
+
+/* ═══ STEP 1: FIND THE PARTY AND ITS TREE ═════════════════════════════════ */
+function setFamily(data) {
+  var target = data.nodes.filter(function (n) { return n.id === data.targetId; })[0];
+  if (!target) throw new Error("This party is not in a corporate tree.");
+
+  ensurePlacements(data);
+  annotate(data.trees, target.id);
+  annotate(data.affTrees, target.id);
+  /* Ultimate owners: the roots of the trees that contain the target */
+  var shown = data.trees.filter(function (r) { return r.hasTarget; });
+  if (!shown.length) shown = data.trees;
+
+  computeEntityMeta(data.nodes, data.affiliates, target.id);
+  state.data = data;
+  state.target = target;
+  state.owners = shown.map(function (r) { return { id: r.id, name: r.name }; });
+  state.trees = shown;
+  state.affTrees = data.affTrees;
+
+  /* A new party starts every later step over */
+  state.engage = null;
+  state.engInfo = null;
+  state.engNotes = [];
+  state.engCollapsed = new Set();
+  state.rulesRun = false;
+  state.rowsTouched = false;
+  state.assessment = null;
+  state.auditRows = [{ client: null, rule: null, on: true }];
+  state.expanded = { tree: new Set(), aff: new Set() };
+  state.filter = "";
+  state.filterPill = null;
+  $("filter-input").value = "";
+
+  /* Default expansion: every placement on a path down to the target, in both grids */
+  [["tree", state.trees], ["aff", state.affTrees]].forEach(function (g) {
+    (function open(list) {
+      list.forEach(function (pl) {
+        if (pl.hasTarget && pl.id !== target.id) state.expanded[g[0]].add(pl.key);
+        open(pl.children);
+      });
+    })(g[1]);
+  });
+}
+
+/* "Part of the Name (ID) Corporate Tree" */
+function treeLine() {
+  var t = state.target;
+  var names = state.owners.map(function (o) { return o.name + " (" + o.id + ")"; });
+  var many = names.length > 1;
+  var isOwner = state.owners.some(function (o) { return o.id === t.id; });
+  return (isOwner ? "Ultimate owner of the " : "Part of the ") + names.join(" and ") + " Corporate Tree" + (many ? "s" : "");
+}
+
+/* ═══ STEP 2: AUDIT RELATIONSHIPS AND RULES ═══════════════════════════════
+   The tree is master: matters for anyone who is not in it are ignored. Notes are read only for engaged parties. */
+function findEngagements() {
+  var data = state.data, inTree = new Set(data.nodes.map(function (n) { return n.id; }));
+  return Promise.all(state.owners.map(function (o) {
+    return callTool("get_component_group", { componentGroupName: o.id })
+      .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
+      .catch(function () { return []; });
+  })).then(function (lists) {
+    var members = [].concat.apply([], lists);
+    if (!members.length) throw new Error("The engagement group for this corporate tree did not resolve.");
+
+    var byParty = new Map(), partyIds = new Set();
+    members.forEach(function (m) {
+      if (!m) return;
+      if (m.type === "Party" && m.partyId && inTree.has(m.partyId)) partyIds.add(m.partyId);
+      if (m.type === "Matter" && m.clientId && m.name && inTree.has(m.clientId)) {
+        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
+        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
+      }
+    });
+    /* Parties known to Intapp are shown in bold and drive the "Intapp Parties Only" filter */
+    data.nodes.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
+    computeEntityMeta(data.nodes, data.affiliates, state.target.id);
+
+    return Promise.all(Array.from(byParty.keys()).map(function (id) {
+      return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+        .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
+        .catch(function () { return [id, null]; });
+    })).then(function (pairs) {
+      var orbis = new Map(), info = new Map(), names = new Map();
+      pairs.forEach(function (pr) { orbis.set(pr[0], pr[1]); });
+      data.nodes.forEach(function (n) { names.set(n.id, n.name); });
+      byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
+
+      var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
+      var noNote = [], noCountry = [];
+      info.forEach(function (v, id) {
+        if (v.entity) return;
+        if (!orbis.get(id)) noNote.push(names.get(id) || id); else noCountry.push(names.get(id) || id);
+      });
+      if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
+      if (noCountry.length) notes.push("No country recorded, so its entity rule is unknown: " + noCountry.join(", ") + ".");
+
+      state.engInfo = info;
+      state.engNotes = notes;
+      state.engage = new Map();
+      info.forEach(function (v, id) {
+        state.engage.set(id, { audit: v.audit, nonAudit: v.nonAudit, apply: v.apply ? FRAMEWORK_RULE[v.apply] : null });
+      });
+      state.rulesRun = false;
+      state.rowsTouched = false;
+      state.engCollapsed = new Set();
+    });
+  });
+}
+
+/* Pre-order list of the drawn placements, with depth */
+function flattenPlacements(roots) {
+  var out = [];
+  (function walk(list, depth) {
+    list.forEach(function (p) { out.push({ id: p.id, name: p.name, depth: depth }); walk(p.children, depth + 1); });
+  })(roots, 0);
+  return out;
+}
+
+/* Keep a node when it is engaged or has an engaged descendant; kept nodes retain their depth and order */
+function filterTree(flat, engaged) {
+  var keep = flat.map(function () { return false; });
+  for (var i = flat.length - 1; i >= 0; i--) {
+    if (engaged.has(flat[i].id)) keep[i] = true;
+    if (keep[i]) {
+      for (var j = i - 1; j >= 0; j--) { if (flat[j].depth < flat[i].depth) { keep[j] = true; break; } }
+    }
+  }
+  return flat.filter(function (n, i) { return keep[i]; });
+}
+
+function renderEngPage() {
+  var info = state.engInfo;
+  var nodes = filterTree(flattenPlacements(state.trees), new Set(Array.from(info.keys())));
+  var hasKids = nodes.map(function (n, i) { return i + 1 < nodes.length && nodes[i + 1].depth > n.depth; });
+  var host = $("eng-grid");
+  host.innerHTML = "";
+  $("eng-count").textContent = info.size ? nodes.length + " parties shown" : "";
+  document.querySelectorAll("#page-eng .eng-key").forEach(function (k) { k.hidden = !info.size; });
+
+  if (!info.size) {
+    host.appendChild(el("div", "empty", "No engagements were found for this corporate tree, so there are no audit relationships to apply."));
+  } else {
+    var table = el("table", "grid"), hr = el("tr");
+    hr.appendChild(el("th", "pin-col wide"));
+    var nameTh = el("th", "name-col");
+    var parents = nodes.map(function (n, i) { return i; }).filter(function (i) { return hasKids[i]; });
+    if (parents.length) {
+      var allOpen = parents.every(function (i) { return !state.engCollapsed.has(i); });
+      var all = el("button", "toggle", allOpen ? "▾" : "▸");
+      all.type = "button";
+      all.title = allOpen ? "Collapse all" : "Expand all";
+      all.setAttribute("aria-label", all.title);
+      all.addEventListener("click", function () {
+        if (allOpen) parents.forEach(function (i) { state.engCollapsed.add(i); }); else state.engCollapsed.clear();
+        renderEngPage();
+      });
+      nameTh.appendChild(all);
+    }
+    hr.appendChild(nameTh);
+    ["Existing Audit Rule", "Entity Rule", "Apply Audit Rule"].forEach(function (t) { hr.appendChild(el("th", "icon-col rule-col", t)); });
+    hr.appendChild(el("th", "fill"));
+    var thead = el("thead");
+    thead.appendChild(hr);
+    table.appendChild(thead);
+
+    var tbody = el("tbody"), hideBelow = null;
+    nodes.forEach(function (n, i) {
+      if (hideBelow !== null) { if (n.depth > hideBelow) return; hideBelow = null; }
+      var pi = info.get(n.id), tr = el("tr");
+
+      var mk = el("td", "pin-col wide");
+      mk.appendChild(markCell(n.id === state.target.id, n.id));
+      tr.appendChild(mk);
+
+      var nameTd = el("td", "name-cell"), inner = el("div", "name-inner");
+      var ind = el("span", "indent");
+      ind.style.width = (n.depth * 20) + "px";
+      inner.appendChild(ind);
+      var open = !state.engCollapsed.has(i);
+      var tg = el("button", "toggle" + (hasKids[i] ? "" : " leaf"), open ? "▾" : "▸");
+      tg.type = "button";
+      tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
+      if (hasKids[i]) tg.addEventListener("click", function () {
+        if (state.engCollapsed.has(i)) state.engCollapsed.delete(i); else state.engCollapsed.add(i);
+        renderEngPage();
+      });
+      inner.appendChild(tg);
+      inner.appendChild(el("span", "node-name" + (pi ? " eng-party" : " anc"), n.name));
+      inner.appendChild(el("span", "node-id", "(" + n.id + ")"));
+      nameTd.appendChild(inner);
+      tr.appendChild(nameTd);
+
+      ["r", "p", "a"].forEach(function (k) { var td = el("td", "icon-col rule-col"); ruleCell(td, pi, k); tr.appendChild(td); });
+      tr.appendChild(el("td", "fill"));
+      tbody.appendChild(tr);
+      if (hasKids[i] && !open) hideBelow = n.depth;
+    });
+    table.appendChild(tbody);
+    host.appendChild(table);
+  }
+
+  var foot = $("eng-foot");
+  foot.innerHTML = "";
+  state.engNotes.forEach(function (t) { foot.appendChild(el("div", null, t)); });
+}
+
+/* ═══ STEP 3: INHERITANCE RULES (the independence tree) ═══════════════════ */
+function runRules() {
+  /* One row per audit client carrying its applied rule. Edits made on the tree page survive going back and forth. */
+  if (!state.rulesRun) {
+    state.auditRows = autoAuditRows(state.data);
+    state.rowsTouched = false;
+    state.rulesRun = true;
+  }
+}
+
+/* ═══ STEP 4: THE ASSESSMENT ══════════════════════════════════════════════ */
+var REL_PHRASE = {
+  "Ultimate Parent": "the ultimate parent of", "Immediate Parent": "the immediate parent of", "Indirect Parent": "an indirect parent of",
+  "Immediate Subsidiary": "an immediate subsidiary of", "Indirect Subsidiary": "an indirect subsidiary of",
+  "Sibling": "a sister company of", "Cousin": "a cousin company of"
+};
+function relPhrase(r) {
+  if (r.indexOf(AFF_PREFIX) === 0) return "a close affiliate (" + r.slice(AFF_PREFIX.length).toLowerCase() + ") of";
+  return REL_PHRASE[r] || "related to";
+}
+
+/* The target's own result across every switched-on audit client and rule, in plain language */
+function buildAssessment() {
+  var t = state.target, pairs = auditPairs(), res = evalNode(t.id, pairs);
+  var clients = pairs.length, s = clients === 1 ? "" : "s";
+  var out = { level: res.level || "none", headline: "", summary: "", reasons: [], notes: [] };
+
+  res.items.forEach(function (it) {
+    out.reasons.push({
+      level: it.level,
+      text: t.name + " is " + relPhrase(it.rels[0]) + " " + it.client.name + " (" + it.client.id + "), an audit client under " + it.rule.label +
+            ". " + it.rule.label + " treats this as " + (it.level === "restricted" ? "a restricted relationship." : "a relationship that needs a materiality check.")
+    });
+  });
+
+  var switchedOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
+  if (!clients && switchedOff) {
+    out.headline = "No audit rules applied";
+    out.summary = "Every audit client is switched off, so no audit rules were applied to this engagement.";
+  } else if (!clients) {
+    out.headline = "No audit rules to apply";
+    out.summary = "No audit client with an applicable rule was found in this corporate family, so none of the audit rules restrict this engagement.";
+  } else if (res.level === "restricted") {
+    out.headline = "Restricted";
+    out.summary = "Under the rules applied, this non-audit engagement is restricted. " + t.name + " has a restricted relationship to " +
+      res.items.filter(function (i) { return i.level === "restricted"; }).length + " of the " + clients + " audit client" + s + " considered.";
+  } else if (res.level === "materiality") {
+    out.headline = "Materiality check needed";
+    out.summary = "Under the rules applied, no restriction arises, but this non-audit engagement needs a materiality check before it can be accepted.";
+  } else {
+    out.headline = "No restriction identified";
+    out.summary = "Under the rules applied, " + t.name + " has no restricted or materiality-check relationship to the " + clients + " audit client" + s + " considered.";
+  }
+
+  var self = state.engInfo && state.engInfo.get(t.id);
+  if (self && self.audit) {
+    out.notes.push(t.name + " is itself an audit client" + (self.apply ? " (rule applied: " + (RULES.filter(function (r) { return r.key === FRAMEWORK_RULE[self.apply]; })[0] || {}).label + ")" : "") +
+      ". The rules here cover its relatives; its own position is not assessed.");
+  }
+  var off = state.auditRows.filter(function (r) { return r.client && r.rule && !r.on; });
+  if (off.length) out.notes.push("Switched off and not applied: " + off.map(function (r) { return nameOfNode(r.client); }).join(", ") + ".");
+  var none = state.auditRows.filter(function (r) { return r.client && !r.rule; });
+  if (none.length) out.notes.push("No rule could be determined for " + none.map(function (r) { return nameOfNode(r.client); }).join(", ") + ", so it was not applied.");
+  out.notes.push("This assessment applies the audit rules to corporate relationships only. It does not consider the specific services requested.");
+  return out;
+}
+
+function nameOfNode(id) {
+  var n = state.data.nodes.filter(function (x) { return x.id === id; })[0];
+  return n ? n.name + " (" + n.id + ")" : id;
+}
+
+function renderResult() {
+  var A = state.assessment = buildAssessment(), t = state.target;
+  $("result-title").textContent = "Non-Audit Engagement Request for " + t.name + " (" + t.id + ")";
+  var host = $("result-body");
+  host.innerHTML = "";
+
+  var banner = el("div", "verdict " + A.level);
+  banner.appendChild(el("div", "verdict-head", A.headline));
+  banner.appendChild(el("div", "verdict-text", A.summary));
+  host.appendChild(banner);
+
+  host.appendChild(el("h2", "result-h", "Independence assessment"));
+  if (A.reasons.length) {
+    var ul = el("ul", "reasons");
+    A.reasons.forEach(function (r) {
+      var li = el("li");
+      li.appendChild(el("span", "rule-badge " + r.level, LEVEL_LABELS[r.level]));
+      li.appendChild(el("span", null, r.text));
+      ul.appendChild(li);
+    });
+    host.appendChild(ul);
+  } else {
+    host.appendChild(el("p", "result-p", A.summary));
+  }
+  var nl = el("div", "result-notes");
+  A.notes.forEach(function (n) { nl.appendChild(el("div", null, n)); });
+  host.appendChild(nl);
+}
+
+/* ═══ WIZARD ══════════════════════════════════════════════════════════════ */
+var step = 0;
+var STEPS = [
+  { id: "page-start",  next: "Find Party", go: function () {
+      var id = $("start-input").value.trim().toUpperCase();
+      if (!id) throw new Error("Enter a party ID.");
+      return loadFamily(id).then(setFamily);
+    } },
+  { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
+      $("party-name").textContent = "";
+      $("party-name").appendChild(pinIcon());
+      $("party-name").appendChild(document.createTextNode(state.target.name));
+      $("party-name").appendChild(el("span", "node-id", "(" + state.target.id + ")"));
+      $("party-tree").textContent = treeLine();
+    }, go: function () { return findEngagements(); } },
+  { id: "page-eng",    next: "Run inheritance rules", enter: renderEngPage, go: runRules },
+  { id: "page-tree",   next: "Determine independence", enter: function () { renderTitle(); renderAll(); }, go: function () {} },
+  { id: "page-result", next: "Start over", enter: renderResult, go: function () { return 0; } }
+];
+
+function show(n) {
+  step = n;
+  document.querySelectorAll(".page").forEach(function (p) { p.classList.toggle("active", p.id === STEPS[n].id); });
+  document.body.setAttribute("data-step", String(n));
+  $("step-label").textContent = "Step " + (n + 1) + " of " + STEPS.length;
+  $("node-count").hidden = n !== 3;
+  $("wiz-back").hidden = n === 0;
+  $("wiz-next").textContent = STEPS[n].next;
+  $("wiz-err").textContent = "";
+  closeWhy();
+  closeDropdowns();
+  if (STEPS[n].enter) STEPS[n].enter();
+  window.scrollTo(0, 0);
+}
+
+function advance() {
+  var btn = $("wiz-next"), from = step;
+  $("wiz-err").textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Working…";
+  new Promise(function (resolve) { resolve(STEPS[from].go()); })
+    .then(function (to) { show(typeof to === "number" ? to : from + 1); })
+    .catch(function (e) { $("wiz-err").textContent = e.message; btn.textContent = STEPS[step].next; })
+    .then(function () { btn.disabled = false; });
+}
+
+/* ═══ WIRING ══════════════════════════════════════════════════════════════ */
+$("wiz-next").addEventListener("click", advance);
+$("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
+$("start-input").addEventListener("keydown", function (e) { if (e.key === "Enter") advance(); });
+$("pop-backdrop").addEventListener("click", function (e) { if (e.target === $("pop-backdrop")) closePop(); });
+
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".dd")) closeDropdowns();
+  if (!e.target.closest("#why-pop, .rule-badge")) closeWhy();
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") { closeDropdowns(); closeWhy(); closePop(); }
+});
+window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
+window.addEventListener("resize", closeWhy);
+function applyCollapse() {
+  ["audit", "filter"].forEach(function (k) {
+    var c = state.collapsed[k], h = $("head-" + k);
+    $("body-" + k).hidden = c;
+    h.classList.toggle("closed", c);
+    h.setAttribute("aria-expanded", c ? "false" : "true");
+    h.querySelector(".tb-chev").textContent = c ? "▸" : "▾";
+  });
+}
+document.querySelectorAll("[data-eng]").forEach(function (e) {
+  var kind = e.getAttribute("data-eng");
+  var icon = kind === "target" ? pinIcon() : engIcon(kind);
+  if (kind === "target") { icon.removeAttribute("role"); icon.removeAttribute("aria-label"); icon.setAttribute("aria-hidden", "true"); icon.querySelector("title").remove(); } /* the text beside it names it */
+  e.replaceWith(icon);
+});
+document.querySelectorAll(".tb-head").forEach(function (h) {
+  h.addEventListener("click", function () {
+    var k = h.getAttribute("data-sec");
+    state.collapsed[k] = !state.collapsed[k];
+    applyCollapse();
+  });
+});
+$("add-audit").addEventListener("click", function () {
+  state.auditRows.push({ client: null, rule: null, on: true });
+  state.rowsTouched = true;
+  renderAll();
+});
+$("filter-input").addEventListener("input", function () {
+  state.filter = this.value;
+  state.filterPill = null; /* typing replaces any active pill */
+  renderAll();
+});
+$("clear-btn").addEventListener("click", function () {
+  state.filter = "";
+  state.filterPill = null;
+  $("filter-input").value = "";
+  renderAll();
+});
+
+/* The start page's logo and, in sample mode, the party ids it suggests */
+$("start-logo").appendChild(engIcon("audit"));
+$("start-logo").appendChild(engIcon("non"));
+if (isLive()) {
+  $("start-input").placeholder = "Party ID, e.g. 9906";
+  $("start-input").removeAttribute("list");
+} else {
+  Object.keys(SAMPLE_PARTY_LABELS).sort().forEach(function (id) {
+    var o = document.createElement("option");
+    o.value = id;
+    o.label = SAMPLE_PARTY_LABELS[id];
+    $("party-list").appendChild(o);
+  });
+}
+
+/* A party id can be passed in, so the wizard starts at the party page without typing:
+     - the page URL:       ?partyId=9906   (or #partyId=9906; "party" also works)
+     - the host context:   celeste.getContext(), read now and again when the host's init message arrives
+   Context keys are checked defensively (partyId, party_id, party.partyId, party.id, params.partyId, input.partyId).
+   The first id found wins: it fills the box and runs Find Party. */
+function partyFromUrl() {
+  try {
+    var q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    return q.get("partyId") || q.get("party") || h.get("partyId") || h.get("party");
+  } catch (e) { return null; }
+}
+function partyFromContext(ctx) {
+  if (!ctx || typeof ctx !== "object") return null;
+  var v = ctx.partyId || ctx.party_id || (ctx.party && (ctx.party.partyId || ctx.party.id)) ||
+          (ctx.params && ctx.params.partyId) || (ctx.input && ctx.input.partyId);
+  return v != null && String(v).trim() ? String(v).trim() : null;
+}
+var autoLoaded = false;
+function autoLoad(id) {
+  if (autoLoaded || !id) return;
+  autoLoaded = true;
+  $("start-input").value = id;
+  advance();
+}
+show(0);
+autoLoad(partyFromUrl());
+if (typeof window.celeste !== "undefined") {
+  try { autoLoad(partyFromContext(window.celeste.getContext())); } catch (e) { /* no context yet */ }
+}
+window.addEventListener("message", function (ev) {
+  var m = ev.data;
+  if (ev.source === window.parent && m && m.type === "celeste.rpc.init") autoLoad(partyFromContext(m.context));
+});
+</script>
+</body>
+</html>
