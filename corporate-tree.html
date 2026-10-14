@@ -125,8 +125,8 @@
   /* ── Grids ── */
   .section { margin: 10px 20px 0; }
   .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .section-head h2 { font-size: 13px; font-weight: 600; color: var(--fg-strong); flex: 1; }
-  .section-head .count { font-size: 12px; color: var(--muted); }
+  .section-head h2 { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+  .section-head .count { font-size: 12px; color: var(--muted); margin-left: auto; }
   .grid-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 420px; }
   table.grid { width: 100%; border-collapse: collapse; }
   table.grid th {
@@ -177,7 +177,7 @@
   .eng.non { width: 17px; height: 17px; border: 1.5px solid var(--eng); border-radius: 50%; background: #fff; }
   .eng.non svg { width: 11px; height: 11px; fill: none; stroke: var(--eng); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .dd .eng { margin-left: 2px; }
-  .eng-key { display: flex; gap: 14px; margin: 8px 20px 0; font-size: 11px; color: var(--muted); }
+  .eng-key { display: flex; gap: 12px; margin-left: 6px; font-size: 11px; color: var(--muted); }
   .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
 
   /* ── Audit rule rows: one audit client + rule per row ── */
@@ -194,7 +194,7 @@
   /* Audit client dropdown (custom so the target can carry the pin) */
   .dd { position: relative; }
   .dd-btn {
-    display: inline-flex; align-items: center; gap: 6px; width: 300px; max-width: 100%; padding: 3px 10px;
+    display: inline-flex; align-items: center; gap: 6px; width: 340px; max-width: 100%; padding: 3px 10px;
     border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--fg);
     font-size: 12px; cursor: pointer; text-align: left; transition: border-color .15s;
   }
@@ -321,15 +321,14 @@
     </div>
   </div>
 
-  <!-- Legend sits under the toolbars -->
-  <div class="eng-key" id="eng-key" hidden>
-    <span><span data-eng="audit"></span>Audit client</span>
-    <span><span data-eng="non"></span>Non-audit client</span>
-  </div>
 
   <div class="section">
     <div class="section-head">
       <h2>Corporate tree</h2>
+      <span class="eng-key" hidden>
+        <span><span data-eng="audit"></span>Audit client</span>
+        <span><span data-eng="non"></span>Non-audit client</span>
+      </span>
       <span class="count" id="tree-count"></span>
     </div>
     <div class="grid-wrap" id="tree-grid"></div>
@@ -338,6 +337,10 @@
   <div class="section">
     <div class="section-head">
       <h2>Close affiliates</h2>
+      <span class="eng-key" hidden>
+        <span><span data-eng="audit"></span>Audit client</span>
+        <span><span data-eng="non"></span>Non-audit client</span>
+      </span>
       <span class="count" id="aff-count"></span>
     </div>
     <div class="grid-wrap" id="aff-grid"></div>
@@ -1393,7 +1396,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
 function renderAll() {
   closeWhy();
   if (!state.data) return;
-  $("eng-key").hidden = !showEngagement();
+  document.querySelectorAll(".eng-key").forEach(function (k) { k.hidden = !showEngagement(); });
 
   /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
   var treeByid = new Map(), affById = new Map();
