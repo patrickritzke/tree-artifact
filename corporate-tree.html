@@ -141,6 +141,18 @@
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
 
+  /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
+  th.pin-col.wide, td.pin-col.wide { width: 58px; text-align: left; padding-left: 10px; }
+  .mark { display: flex; align-items: center; gap: 4px; }
+  .mark-pin { width: 14px; height: 14px; flex: none; }
+  .mark-dots { width: 24px; display: flex; align-items: center; gap: 3px; flex: none; }
+  .eng { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .eng.audit { background: var(--accent); }
+  .eng.non { border: 2px solid var(--muted); }
+  .dd .eng { margin-left: 2px; }
+  .eng-key { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
+
   /* ── Audit rule rows: one audit client + rule per row ── */
   #bar-independence { flex-direction: column; align-items: stretch; gap: 8px; }
   #audit-rows { display: flex; flex-direction: column; gap: 8px; }
@@ -255,6 +267,10 @@
 <div id="report-title" hidden>
   <h1 id="report-title-text"></h1>
   <div class="footnote" id="report-footnote"></div>
+  <div class="eng-key" id="eng-key" hidden>
+    <span><i class="eng audit"></i>Audit client</span>
+    <span><i class="eng non"></i>Non-audit client</span>
+  </div>
 </div>
 
 <div id="app">
@@ -298,6 +314,10 @@
      getData(target) -> { nodes: [...], affiliates: [...], targetId?: id }
    node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
    Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
+   Optional per-node fields for engagements (Independence mode auto-populates audit clients from these):
+     matters: [{ id, name }]   the party's matters. A name with the whole word "audit" (not "non-audit") is an audit
+                               matter; its framework is the "[Audit - EU-537]"-style suffix at the end of the name.
+     orbis:   { countryIso, listed, exchange, nace, naics2017, ussic }   Moody's fields used for the entity rule.
    Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
    Same id => same values everywhere, tree or close affiliates.
    trees / affTrees (optional): nested placements { id, name, children: [...] } exactly as the provider drew them,
@@ -309,18 +329,18 @@
 var SAMPLE = {
   nodes: [
     { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
-    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"] },
-    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417" },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"], matters: [{ id: "NW-0002_aud1", name: "Northwind Americas LLC - Statutory Audit FY2025 [Audit - AICPA]" }, { id: "NW-0002_con1", name: "Northwind Americas LLC - Tax Advisory FY2025" }], orbis: { countryIso: "US", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417", matters: [{ id: "NW-0003_aud1", name: "Northwind Capital Partners LP - Audit FY2025 [Audit - AICPA]" }], orbis: { countryIso: "US", listed: "Unlisted", nace: "6419" } },
     { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
     { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"] },
     { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"] },
-    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"] },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"], matters: [{ id: "NW-0007_aud1", name: "Northwind Europe plc - Statutory Audit FY2025 [Audit - EU-537]" }], orbis: { countryIso: "GB", listed: "Listed", exchange: "XLON", nace: "6420" } },
     { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"], idParty: "P-31882" },
-    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"] },
-    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"] },
+    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"], matters: [{ id: "NW-0009_con1", name: "Northwind Deutschland GmbH - Transfer Pricing Review" }], orbis: { countryIso: "DE", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"], matters: [{ id: "NW-0010_aud1", name: "Northwind France SAS - Audit FY2025" }], orbis: { countryIso: "FR", listed: "Unlisted", nace: "6419" } },
     { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"] },
-    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"] },
-    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"] },
+    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"], matters: [{ id: "NW-0012_con1", name: "Northwind Japan K.K. - Advisory Retainer" }], orbis: { countryIso: "JP", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"], matters: [{ id: "NW-0013_aud1", name: "Northwind Australia Pty Ltd - Audit FY2025 [Audit - IESBA]" }], orbis: { countryIso: "AU", listed: "Unlisted", nace: "6420" } },
     { id: "KG-0001", name: "Kestrel Group SA", parents: [], idParty: "P-10552" },
     { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"] },
     { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"], idParty: "P-44071" },
@@ -575,10 +595,102 @@ function evalNode(id, pairs) {
   return { level: level, items: items };
 }
 
+/* ═══ ENGAGEMENTS ═════════════════════════════════════════════════════
+   Port of acct-audit-rule-engagement-tree. Identifies audit and non-audit clients from matter names and works
+   out the rule to apply to each audit client: the strictest of the framework its audit matters are under
+   (the "[Audit - X]" suffix) and the framework Moody's data puts the entity under. Nothing passes between parties.
+   ═══════════════════════════════════════════════════════════════════ */
+var FRAMEWORK_RANK = { "SEC/PCAOB": 6, "EU-537": 5, "UK-FRC": 4, "IESBA-PIE": 3, "IESBA": 2, "AICPA": 1 };
+var FRAMEWORK_RULE = { "SEC/PCAOB": "SEC", "EU-537": "EU", "UK-FRC": "UK", "IESBA-PIE": "IESBA-PIE", "IESBA": "IESBA", "AICPA": "AICPA" };
+var US_MIC = ["XNAS", "XNYS", "ARCX", "XASE", "BATS", "IEXG"];
+/* EU/EEA/UK exchanges: the skill names the group but not the list, so this is a working list. Extend as needed. */
+var EU_MIC = ["XLON", "XPAR", "XAMS", "XBRU", "XETR", "XFRA", "XMIL", "XMAD", "XSTO", "XCSE", "XHEL", "XOSL", "XDUB",
+              "XLIS", "XWBO", "XATH", "XWAR", "XPRA", "XBUD", "XLUX", "XICE", "XCYS", "XMAL", "XLJU", "XZAG", "XBUL", "XBRA", "XRIS", "XTAL", "XLIT"];
+var EU_COUNTRIES = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO".split(" ");
+
+/* Audit flag comes from the matter name only: the whole word "audit", after removing every "non-audit" variant */
+function isAuditMatter(name) {
+  return /\baudit\b/.test(String(name || "").toLowerCase().replace(/non[\s-]?audit/g, ""));
+}
+
+/* Framework named by a "[Audit - X]" suffix at the very end of the name, else null. Never inferred from other wording. */
+function basisOf(name) {
+  var m = /\[\s*audit\s*-\s*(sec\/pcaob|sec|eu-537|uk-frc|iesba-pie|iesba|aicpa)\s*\]\s*$/i.exec(String(name || ""));
+  if (!m) return null;
+  var v = m[1].toUpperCase();
+  return v === "SEC" ? "SEC/PCAOB" : v;
+}
+
+function strictest(list) {
+  return list.reduce(function (best, f) {
+    return f && (!best || FRAMEWORK_RANK[f] > FRAMEWORK_RANK[best]) ? f : best;
+  }, null);
+}
+
+/* Entity rule from Moody's fields: issuer, PIE by sector and country tests; the strictest that fires. null = unknown. */
+function entityFramework(o) {
+  if (!o) return null;
+  var codes = function (v) { return [].concat(v == null ? [] : v).map(String); };
+  var found = [], ex = String(o.exchange || "").toUpperCase();
+  if (o.listed === "Listed") {
+    found.push(!ex ? "IESBA-PIE" : US_MIC.indexOf(ex) > -1 ? "SEC/PCAOB" : EU_MIC.indexOf(ex) > -1 ? "EU-537" : "IESBA-PIE");
+  }
+  var sector = codes(o.nace).some(function (c) { return c === "6419" || c === "6492" || c.indexOf("65") === 0; })
+    || codes(o.naics2017).some(function (c) { return c.indexOf("5221") === 0 || c.indexOf("5241") === 0; })
+    || codes(o.ussic).some(function (c) { return c.indexOf("60") === 0 || c.indexOf("63") === 0; });
+  if (sector) found.push("IESBA-PIE");
+  var cc = String(o.countryIso || "").toUpperCase();
+  if (cc) found.push(cc === "US" ? "AICPA" : cc === "GB" ? "UK-FRC" : EU_COUNTRIES.indexOf(cc) > -1 ? "EU-537" : "IESBA");
+  return strictest(found);
+}
+
+/* id -> { audit, nonAudit, apply (a RULES key, audit clients only) } for every party that has a matter */
+function buildEngagements(data) {
+  var out = new Map();
+  data.nodes.concat(data.affiliates).forEach(function (n) {
+    if (out.has(n.id) || !n.matters || !n.matters.length) return;
+    var audit = n.matters.filter(function (m) { return isAuditMatter(m.name); });
+    var existing = strictest(audit.map(function (m) { return basisOf(m.name); }));
+    var apply = audit.length ? strictest([existing, entityFramework(n.orbis)]) : null;
+    out.set(n.id, { audit: audit.length > 0, nonAudit: audit.length < n.matters.length, apply: apply ? FRAMEWORK_RULE[apply] : null });
+  });
+  return out;
+}
+
+/* One row per audit client (target first) carrying its applied rule. With no engagement data, the target alone. */
+function autoAuditRows(data, target) {
+  var seen = new Set(), ids = [];
+  [target].concat(data.nodes).forEach(function (n) {
+    var e = state.engage.get(n.id);
+    if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); ids.push(n.id); }
+  });
+  if (!ids.length) return [{ client: target.id, rule: state.auditRows[0] ? state.auditRows[0].rule : null }];
+  return ids.map(function (id) { return { client: id, rule: state.engage.get(id).apply }; });
+}
+
+/* Small dots after the pin: filled = audit client, ring = non-audit client (both when it holds both) */
+function engageDots(id) {
+  var e = state.engage && state.engage.get(id), out = [];
+  function dot(kind, label) {
+    var s = document.createElement("span");
+    s.className = "eng " + kind;
+    s.setAttribute("role", "img");
+    s.setAttribute("aria-label", label);
+    s.title = label;
+    return s;
+  }
+  if (e && e.audit) out.push(dot("audit", "Audit client"));
+  if (e && e.nonAudit) out.push(dot("non", "Non-audit client"));
+  return out;
+}
+
+function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
+
 var state = {
   mode: "general",
   auditRows: [{ client: null, rule: null }], /* one audit client + rule per row */
   relCache: new Map(),
+  engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
   loadSeq: 0,
   trees: [],
   affTrees: [],
@@ -795,8 +907,9 @@ function loadTarget() {
     computeEntityMeta(data.nodes, data.affiliates, target.id);
     state.data = data;
     state.target = target;
-    /* Audit clients come from this tree, so start over with the target (pinned) as the first client */
-    state.auditRows = [{ client: target.id, rule: state.auditRows[0] ? state.auditRows[0].rule : null }];
+    /* Audit clients come from the matters: one row each, with the rule that applies to it */
+    state.engage = buildEngagements(data);
+    state.auditRows = autoAuditRows(data, target);
     state.owners = owners;
     state.trees = shown;
     state.affTrees = data.affTrees;
@@ -993,7 +1106,8 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
   var pinTh = document.createElement("th");
-  pinTh.className = "pin-col";
+  var showEng = showEngagement();
+  pinTh.className = "pin-col" + (showEng ? " wide" : "");
   pinTh.setAttribute("aria-label", "Target company");
   hr.appendChild(pinTh);
 
@@ -1054,8 +1168,22 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
     }
 
     var pinTd = document.createElement("td");
-    pinTd.className = "pin-col";
-    if (node.isTarget) pinTd.appendChild(pinIcon());
+    pinTd.className = "pin-col" + (showEng ? " wide" : "");
+    if (showEng) {
+      var mk = document.createElement("div");
+      mk.className = "mark";
+      var ps = document.createElement("span");
+      ps.className = "mark-pin";
+      if (node.isTarget) ps.appendChild(pinIcon());
+      var ds = document.createElement("span");
+      ds.className = "mark-dots";
+      engageDots(node.id).forEach(function (d) { ds.appendChild(d); });
+      mk.appendChild(ps);
+      mk.appendChild(ds);
+      pinTd.appendChild(mk);
+    } else if (node.isTarget) {
+      pinTd.appendChild(pinIcon());
+    }
     tr.appendChild(pinTd);
 
     var nameTd = document.createElement("td");
@@ -1129,6 +1257,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
 function renderAll() {
   closeWhy();
   if (!state.data) return;
+  $("eng-key").hidden = !showEngagement();
 
   /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
   var treeByid = new Map(), affById = new Map();
@@ -1252,6 +1381,7 @@ function clientDropdown(row) {
   nm.className = "dd-name" + (sel ? "" : " placeholder");
   nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit client\u2026";
   btn.appendChild(nm);
+  if (sel) engageDots(sel.id).forEach(function (d) { btn.appendChild(d); });
   var caret = document.createElement("span");
   caret.className = "dd-caret";
   caret.textContent = "\u25BE";
@@ -1301,6 +1431,7 @@ function clientDropdown(row) {
       id.className = "node-id";
       id.textContent = "(" + n.id + ")";
       o.appendChild(id);
+      engageDots(n.id).forEach(function (d) { o.appendChild(d); });
       var used = usedElsewhere.has(n.id);
       if (isT || used) {
         var tag = document.createElement("span");
