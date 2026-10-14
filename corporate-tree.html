@@ -648,7 +648,7 @@ var RULES = [
   { key: "EU", label: "EU", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
     cite: "Regulation (EU) 537/2014, Art. 5. Parent and controlled undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Geography not applied. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
   { key: "UK", label: "UK", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
-    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope." }
+    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." }
 ];
 var REL_GROUP = {
   "Ultimate Parent": "parent", "Immediate Parent": "parent", "Indirect Parent": "parent",
@@ -1220,7 +1220,7 @@ function closeWhy() {
 /* Quick filters. Exclusive with each other and with the text search. Every filter keeps the chain above each
    match; the parents/subs filter also keeps everything below the target. */
 var FILTER_PILLS = [
-  { key: "party",      label: "Intapp Parties Only Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
+  { key: "party",      label: "Intapp Parties Only" },
   { key: "parents",    label: "Target + Parents Only" },
   { key: "parentsSubs", label: "Target + Parents/Subs Only" }
 ];
