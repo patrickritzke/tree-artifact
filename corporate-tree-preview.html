@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Corporate Tree</title>
+<style>
+  /* Layout: utilitarian tool page. Fixed dark header, toolbars, then two grids. */
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --head: #f9fafb; --hover: #f3f4f6;
+    --fg: #1a1a2e; --fg-strong: #111827; --fg-2: #374151; --muted: #6b7280; --faint: #9ca3af;
+    --border: #e5e7eb; --border-2: #d1d5db;
+    --accent: #6366f1; --accent-fg: #4338ca; --err: #dc2626;
+    --btn-bg: #1a1a2e; --btn-fg: #ffffff; --btn-hover: #2d2d4e;
+    --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --hdr-accent: #c7d2fe;
+    --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
+    --shadow: rgba(0,0,0,.18);
+    --pin: #2563eb;
+    --bar-bg: #e8ebf4; --bar-head: #d6dcec; --bar-border: #bcc4dc;
+    --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+      --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+      --border: #2d303d; --border-2: #3a3e4e;
+      --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+      --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+      --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+      --pin: #60a5fa;
+      --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
+      --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+    --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+    --border: #2d303d; --border-2: #3a3e4e;
+    --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+    --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+    --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+    --pin: #60a5fa;
+    --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
+    --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px; background: var(--bg); color: var(--fg); min-height: 100%;
+  }
+  button { font: inherit; }
+
+  /* ── Header ── */
+  #header {
+    background: var(--hdr-bg); color: var(--hdr-fg); padding: 8px 20px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 100; box-shadow: 0 2px 6px var(--shadow);
+  }
+  #header-title { font-size: 14px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #mode-badge {
+    font-size: 11px; color: var(--hdr-accent); border: 1px solid var(--hdr-border); border-radius: 999px;
+    padding: 2px 9px; display: none;
+  }
+  #mode-badge.show { display: inline-block; }
+  #node-count { font-size: 12px; color: var(--hdr-muted); white-space: nowrap; }
+
+  /* ── Gear ── */
+  #gear-wrap { position: relative; }
+  #gear-btn {
+    background: none; border: none; color: var(--hdr-muted); cursor: pointer; font-size: 17px;
+    width: 28px; height: 28px; border-radius: 6px; line-height: 1; opacity: .75;
+    transition: opacity .15s, background .15s, color .15s;
+  }
+  #gear-btn:hover, #gear-btn[aria-expanded="true"] { opacity: 1; background: var(--hdr-hover); color: var(--hdr-fg); }
+  #gear-menu {
+    display: none; position: absolute; right: 0; top: 34px; min-width: 170px;
+    background: var(--surface); color: var(--fg); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 6px 20px var(--shadow); padding: 4px; z-index: 150;
+  }
+  #gear-menu.open { display: block; }
+  .gear-title { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--faint); font-weight: 600; padding: 6px 10px 4px; }
+  .gear-opt {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    padding: 7px 10px; border: none; background: none; border-radius: 5px; cursor: pointer; font-size: 13px; color: var(--fg-2);
+  }
+  .gear-opt:hover { background: var(--hover); }
+  .gear-opt .dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--border-2); flex-shrink: 0; }
+  .gear-opt.active { color: var(--accent-fg); font-weight: 600; }
+  .gear-opt.active .dot { background: var(--accent); border-color: var(--accent); }
+
+  /* ── Toolbars ── */
+  .toolbar {
+    margin: 10px 20px 0; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  }
+  #target-bar { background: none; border: none; padding: 12px 0 0; }
+  .toolbar .panel-title { font-size: 12px; font-weight: 600; color: var(--fg-2); margin-right: 4px; white-space: nowrap; }
+  .toolbar input[type=text], .toolbar select {
+    padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; font: inherit; font-size: 12px;
+    background: var(--surface); color: var(--fg); outline: none; transition: border-color .15s;
+  }
+  .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+  #target-input { width: 320px; max-width: 100%; }
+  #filter-input { flex: 1; max-width: 420px; }
+  .btn {
+    padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface);
+    font-size: 12px; cursor: pointer; color: var(--fg-2); transition: background .15s;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--btn-bg); border-color: var(--btn-bg); color: var(--btn-fg); font-weight: 600; }
+  .btn.primary:hover { background: var(--btn-hover); }
+  #target-err { font-size: 12px; color: var(--err); }
+  #report-title { margin: 10px 20px 4px; }
+  #report-title h1 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
+  #report-title .pin { width: 16px; height: 16px; flex-shrink: 0; }
+  #report-title .node-id { font-size: 13px; font-weight: 400; margin-left: 0; }
+  #report-title .footnote { margin-top: 0; font-size: 11px; color: var(--muted); }
+
+  /* ── Grids ── */
+  .section { margin: 10px 20px 0; }
+  .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .section-head h2 { font-size: 13px; font-weight: 600; color: var(--fg-strong); flex: 1; }
+  .section-head .count { font-size: 12px; color: var(--muted); }
+  .grid-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 420px; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th {
+    position: sticky; top: 0; background: var(--head); text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted); font-weight: 600; padding: 4px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.grid td { padding: 1px 10px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
+  table.grid tr:last-child td { border-bottom: none; }
+  table.grid tr.restricted td { background: var(--restr-bg); }
+  table.grid tr.materiality td { background: var(--mat-bg); }
+  /* Name and any icon/status columns shrink to their content so they sit together; the filler absorbs the rest. */
+  table.grid th.name-col, table.grid td.name-cell, table.grid th.icon-col, table.grid td.icon-col { width: 1%; white-space: nowrap; }
+  table.grid th.fill, table.grid td.fill { width: auto; padding: 0; }
+  th.pin-col, td.pin-col { width: 28px; padding-left: 10px; padding-right: 0; text-align: center; }
+  .pin { display: block; width: 14px; height: 14px; color: var(--pin); }
+  .rule-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: none; cursor: pointer; }
+  .rule-badge:hover { background: var(--hover); }
+  .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
+  .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
+
+  /* Collapsible toolbar sections: shaded header strip + body */
+  .toolbar.tb { display: block; padding: 0; margin: 8px 20px 0; background: var(--bar-bg); border: 1px solid var(--bar-border); border-radius: 8px; }
+  .tb-head {
+    display: flex; align-items: center; gap: 6px; width: 100%; padding: 4px 10px; border: none; background: var(--bar-head);
+    color: var(--fg-strong); font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; border-radius: 7px 7px 0 0;
+  }
+  .tb-head.closed { border-radius: 7px; }
+  .tb-head:hover { filter: brightness(.97); }
+  .tb-chev { width: 10px; font-size: 10px; color: var(--muted); }
+  .tb-head .summary { margin-left: auto; font-weight: 400; }
+  .tb-body { padding: 7px 10px 8px; }
+  #body-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+  /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
+  th.pin-col.wide, td.pin-col.wide { width: 58px; text-align: left; padding-left: 10px; }
+  .mark { display: flex; align-items: center; gap: 4px; }
+  .mark-pin { width: 14px; height: 14px; flex: none; }
+  .mark-dots { width: 24px; display: flex; align-items: center; gap: 3px; flex: none; }
+  .eng { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .eng.audit { background: var(--accent); }
+  .eng.non { border: 2px solid var(--muted); }
+  .dd .eng { margin-left: 2px; }
+  .eng-key { display: flex; gap: 14px; margin: 8px 20px 0; font-size: 11px; color: var(--muted); }
+  .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ── Audit rule rows: one audit client + rule per row ── */
+  #audit-rows { display: flex; flex-direction: column; gap: 5px; }
+  .audit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .audit-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+  .icon-btn {
+    width: 22px; height: 22px; border: none; background: none; border-radius: 6px; cursor: pointer;
+    color: var(--faint); font-size: 16px; line-height: 1;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--fg-2); }
+
+  /* Audit client dropdown (custom so the target can carry the pin) */
+  .dd { position: relative; }
+  .dd-btn {
+    display: inline-flex; align-items: center; gap: 6px; width: 300px; max-width: 100%; padding: 3px 10px;
+    border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface); color: var(--fg);
+    font-size: 12px; cursor: pointer; text-align: left; transition: border-color .15s;
+  }
+  .dd-btn:hover, .dd.open .dd-btn { border-color: var(--accent); }
+  .dd-btn:disabled { cursor: default; color: var(--faint); border-color: var(--border-2); }
+  .dd-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dd-name.placeholder { color: var(--faint); }
+  .dd-caret { font-size: 10px; color: var(--muted); }
+  .dd .pin { flex-shrink: 0; }
+  .dd-menu {
+    display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 380px; max-width: 90vw; z-index: 60;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 4px;
+  }
+  .dd.open .dd-menu { display: block; }
+  .toolbar .dd-search { width: 100%; margin-bottom: 4px; padding: 6px 10px; font-size: 12px; }
+  .dd-list { max-height: 240px; overflow: auto; }
+  .dd-opt {
+    display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 10px; border: none; background: none;
+    border-radius: 5px; cursor: pointer; font-size: 12px; color: var(--fg-2); text-align: left;
+  }
+  .dd-opt:hover:not(:disabled) { background: var(--hover); }
+  .dd-opt.active { color: var(--accent-fg); font-weight: 600; }
+  .dd-opt:disabled { color: var(--faint); cursor: default; }
+  .dd-opt .tag { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .dd-empty { padding: 8px 10px; font-size: 12px; color: var(--muted); }
+
+  /* "Why is this flagged" popover on the rule badge */
+  #why-pop {
+    position: fixed; z-index: 120; width: 360px; max-width: 92vw; background: var(--surface); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 10px 12px; font-size: 12px;
+  }
+  #why-pop h3 { font-size: 13px; font-weight: 600; color: var(--fg-strong); margin-bottom: 6px; }
+  .why-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hover); }
+  .why-item.lost { opacity: .6; }
+  .why-item .rule-badge { cursor: default; flex-shrink: 0; }
+  .why-item .rule-badge:hover { background: none; }
+  .why-note { margin-top: 6px; color: var(--muted); }
+  [hidden] { display: none !important; }
+  .toolbar .summary { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .pill {
+    display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; border: 1.5px solid var(--border-2);
+    background: var(--surface); color: var(--fg); font-size: 11.5px; cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .pill:hover { background: var(--hover); }
+  .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  #rule-pills, #filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .name-inner { display: flex; align-items: center; }
+  .indent { display: inline-block; flex-shrink: 0; }
+  .toggle {
+    width: 18px; height: 18px; flex-shrink: 0; border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: 10px; border-radius: 4px;
+  }
+  .toggle:hover { background: var(--border); }
+  .toggle.leaf { visibility: hidden; cursor: default; }
+  .node-name { font-weight: 400; color: var(--fg-strong); margin-left: 2px; }
+  .node-name.has-party { font-weight: 700; }
+  .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .empty { padding: 24px; color: var(--muted); font-size: 13px; }
+  #app { display: none; padding-bottom: 40px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span id="header-title">Corporate Tree</span>
+  <span id="mode-badge"></span>
+  <span id="node-count"></span>
+  <div id="gear-wrap">
+    <button id="gear-btn" title="Settings" aria-haspopup="true" aria-expanded="false">&#9881;</button>
+    <div id="gear-menu" role="menu">
+      <div class="gear-title">Mode</div>
+      <button class="gear-opt active" data-mode="general" role="menuitemradio"><span class="dot"></span>General</button>
+      <button class="gear-opt" data-mode="updates" role="menuitemradio"><span class="dot"></span>Tree Updates</button>
+      <button class="gear-opt" data-mode="independence" role="menuitemradio"><span class="dot"></span>Independence</button>
+    </div>
+  </div>
+</div>
+
+<!-- General: target company input -->
+<div class="toolbar" id="target-bar">
+  <label class="panel-title" for="target-input">Target company:</label>
+  <input id="target-input" type="text" list="target-list" placeholder="Name or ID, e.g. NW-0002 or Orion" autocomplete="off" />
+  <datalist id="target-list"></datalist>
+  <select id="provider" hidden>
+    <option value="BureauVanDijk">Bureau van Dijk</option>
+    <option value="DunAndBradstreet">Dun &amp; Bradstreet</option>
+    <option value="Intapp">Intapp</option>
+  </select>
+  <button class="btn primary" id="load-btn">Load</button>
+  <span id="target-err"></span>
+</div>
+
+<!-- Report title: target company (shown once loaded) -->
+<div id="report-title" hidden>
+  <h1 id="report-title-text"></h1>
+  <div class="footnote" id="report-footnote"></div>
+</div>
+
+<div id="app">
+  <!-- Independence (gear) -->
+  <div class="toolbar tb" id="bar-independence" hidden>
+    <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
+      <span class="tb-chev">▾</span><span>Audit Clients</span><span class="summary" id="rule-summary"></span>
+    </button>
+    <div class="tb-body" id="body-audit">
+      <div id="audit-rows"></div>
+      <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
+    </div>
+  </div>
+
+  <!-- General: filter / search -->
+  <div class="toolbar tb" id="filter-bar">
+    <button class="tb-head" id="head-filter" data-sec="filter" type="button" aria-expanded="true">
+      <span class="tb-chev">▾</span><span>Filter Display</span>
+    </button>
+    <div class="tb-body" id="body-filter">
+      <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
+      <div id="filter-pills"></div>
+      <button class="btn" id="clear-btn">Clear</button>
+    </div>
+  </div>
+
+  <!-- Legend sits under the toolbars -->
+  <div class="eng-key" id="eng-key" hidden>
+    <span><i class="eng audit"></i>Audit client</span>
+    <span><i class="eng non"></i>Non-audit client</span>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Corporate tree</h2>
+      <span class="count" id="tree-count"></span>
+    </div>
+    <div class="grid-wrap" id="tree-grid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Close affiliates</h2>
+      <span class="count" id="aff-count"></span>
+    </div>
+    <div class="grid-wrap" id="aff-grid"></div>
+  </div>
+</div>
+
+<script>
+/* ═══ DATA PROVIDER ═══════════════════════════════════════════════════════
+   Swap this for a live source. Contract:
+     getData(target) -> { nodes: [...], affiliates: [...], targetId?: id }
+   node:      { id, name, parents: [id, ...] }     (no parents = ultimate owner)
+   Optional per-node field:  idParty (id of an Intapp party; present only for entities with a business relationship)
+   Optional per-node fields for engagements (Independence mode auto-populates audit clients from these):
+     matters: [{ id, name }]   the party's matters. A name with the whole word "audit" (not "non-audit") is an audit
+                               matter; its framework is the "[Audit - EU-537]"-style suffix at the end of the name.
+     orbis:   { countryIso, listed, exchange, nace, naics2017, ussic }   Moody's fields used for the entity rule.
+   Computed per node on load (see computeEntityMeta): isTarget, relToTarget, idParty.
+   Same id => same values everywhere, tree or close affiliates.
+   trees / affTrees (optional): nested placements { id, name, children: [...] } exactly as the provider drew them,
+              one entry per place an entity appears; also accepted as [id, name, [children]] arrays. When absent they
+              are derived from the flat parents. The grids show these; the flat lists drive metadata.
+   affiliate: { id, name, parents: [id, ...], idParty? }  (its own hierarchy; include the target in it
+              so entities there get "CA - ..." relationships)
+   ═══════════════════════════════════════════════════════════════════════ */
+var SAMPLE = {
+  nodes: [
+    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"], matters: [{ id: "NW-0002_aud1", name: "Northwind Americas LLC - Statutory Audit FY2025 [Audit - AICPA]" }, { id: "NW-0002_con1", name: "Northwind Americas LLC - Tax Advisory FY2025" }], orbis: { countryIso: "US", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417", matters: [{ id: "NW-0003_aud1", name: "Northwind Capital Partners LP - Audit FY2025 [Audit - AICPA]" }], orbis: { countryIso: "US", listed: "Unlisted", nace: "6419" } },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
+    { id: "NW-0005", name: "Northwind Real Estate Fund II", parents: ["NW-0003"] },
+    { id: "NW-0006", name: "Northwind Canada Ltd.", parents: ["NW-0002"] },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"], matters: [{ id: "NW-0007_aud1", name: "Northwind Europe plc - Statutory Audit FY2025 [Audit - EU-537]" }], orbis: { countryIso: "GB", listed: "Listed", exchange: "XLON", nace: "6420" } },
+    { id: "NW-0008", name: "Northwind UK Services Ltd", parents: ["NW-0007"], idParty: "P-31882" },
+    { id: "NW-0009", name: "Northwind Deutschland GmbH", parents: ["NW-0007"], matters: [{ id: "NW-0009_con1", name: "Northwind Deutschland GmbH - Transfer Pricing Review" }], orbis: { countryIso: "DE", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0010", name: "Northwind France SAS", parents: ["NW-0007"], matters: [{ id: "NW-0010_aud1", name: "Northwind France SAS - Audit FY2025" }], orbis: { countryIso: "FR", listed: "Unlisted", nace: "6419" } },
+    { id: "NW-0011", name: "Northwind Asia Pacific Pte. Ltd.", parents: ["NW-0001"] },
+    { id: "NW-0012", name: "Northwind Japan K.K.", parents: ["NW-0011"], matters: [{ id: "NW-0012_con1", name: "Northwind Japan K.K. - Advisory Retainer" }], orbis: { countryIso: "JP", listed: "Unlisted", nace: "6420" } },
+    { id: "NW-0013", name: "Northwind Australia Pty Ltd", parents: ["NW-0011"], matters: [{ id: "NW-0013_aud1", name: "Northwind Australia Pty Ltd - Audit FY2025 [Audit - IESBA]" }], orbis: { countryIso: "AU", listed: "Unlisted", nace: "6420" } },
+    { id: "KG-0001", name: "Kestrel Group SA", parents: [], idParty: "P-10552" },
+    { id: "KG-0002", name: "Kestrel Industrial Holdings", parents: ["KG-0001"] },
+    { id: "JV-0001", name: "Orion Industrial JV", parents: ["NW-0011", "KG-0002"], idParty: "P-44071" },
+    { id: "JV-0002", name: "Orion Logistics Ltd", parents: ["JV-0001"] }
+  ],
+  affiliates: [
+    { id: "NW-0001", name: "Northwind Global Holdings Inc.", parents: [] },
+    { id: "NW-0002", name: "Northwind Americas LLC", parents: ["NW-0001"] },
+    { id: "NW-0003", name: "Northwind Capital Partners LP", parents: ["NW-0002"], idParty: "P-20417" },
+    { id: "NW-0004", name: "Northwind Real Estate Fund I", parents: ["NW-0003"] },
+    { id: "NW-0007", name: "Northwind Europe plc", parents: ["NW-0001"] },
+    { id: "AF-0001", name: "Harbor Advisory Group", parents: [], idParty: "P-50219" },
+    { id: "AF-0002", name: "Harbor Trust Co.", parents: ["AF-0001"] }
+  ]
+};
+
+/* Live data comes from the Intapp host, which injects window.celeste.
+   Anywhere else (a browser tab, the published artifact) the sample is used. */
+function isLive() { return typeof window.celeste !== "undefined"; }
+
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (typeof raw === "object" && !Array.isArray(raw) && (!key || key in raw)) return raw;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var b = raw[i];
+      var v = (b && b.text != null) ? b.text : (b && b.content != null) ? b.content : (b && b.value != null) ? b.value : (b && b.data != null) ? b.data : b;
+      if (typeof v === "string") {
+        try { var p = JSON.parse(v); if (!key || key in p) return p; } catch (e) {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        var envs = ["result", "data", "value", "payload"];
+        for (var j = 0; j < envs.length; j++) {
+          if (v[envs[j]] && typeof v[envs[j]] === "object" && (!key || key in v[envs[j]])) return v[envs[j]];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { var p2 = JSON.parse(raw); if (!key || key in p2) return p2; } catch (e2) {}
+  }
+  return null;
+}
+
+/* Read a provider hierarchy two ways at once.
+   flat map: one node per id, `parents` unions every place it appears (used for relationships and metadata).
+   return:   the nested placements as drawn, one object per place (used for display). A node is only skipped
+             when it is already in its own ancestry. */
+function readHierarchy(root, map, idOf, nameOf, kidsOf) {
+  return (function walk(node, parentId, stack) {
+    var id = node && idOf(node);
+    if (!id || stack.indexOf(id) !== -1) return null;
+    var rec = map.get(id);
+    if (!rec) { rec = { id: id, name: nameOf(node) || id, parents: [] }; map.set(id, rec); }
+    if (parentId && rec.parents.indexOf(parentId) === -1) rec.parents.push(parentId);
+    var next = stack.concat(id), kids = [];
+    (kidsOf(node) || []).forEach(function (k) {
+      var c = walk(k, id, next);
+      if (c) kids.push(c);
+    });
+    return { id: id, name: rec.name, children: kids };
+  })(root, null, []);
+}
+
+function loadLive(partyId) {
+  var provider = $("provider").value;
+  return celeste.query("intapp_compliance__get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] })
+    .then(function (raw) {
+      var party = extractObj(raw, "partyId");
+      if (!party) throw new Error("Could not load party " + partyId + ".");
+
+      /* The target is the party itself, identified by its provider id (not the tree root). */
+      var targetId = (provider === "BureauVanDijk" ? party.bureauVanDijkId
+                    : provider === "DunAndBradstreet" ? party.dunsNumber : party.externalId)
+        || party.externalId || party.bureauVanDijkId || party.dunsNumber || party.partyId;
+
+      var treeNode = function (n) { return n.externalId || n.key || null; };
+      var treeName = function (n) { return n.name || n.displayName || n.nameWithoutHonorifics; };
+      var treeKids = function (n) { return n.subCompanies || n.children || []; };
+
+      var map = new Map(), treeRoots = [];
+      var all = party.corporateTrees || [];
+      var trees = all.filter(function (t) { return t.providerType === provider; });
+      (trees.length ? trees : all).forEach(function (t) {
+        var r = t.rootCompany && readHierarchy(t.rootCompany, map, treeNode, treeName, treeKids);
+        if (r) treeRoots.push(r);
+      });
+
+      /* Close affiliates arrive as their own nested hierarchy (id / name / closeAffiliates) */
+      var aff = new Map(), affRoots = [];
+      var ca = party.closeAffiliates && party.closeAffiliates.closeAffiliates;
+      (ca || []).forEach(function (r) {
+        var pr = readHierarchy(r, aff, function (n) { return n.id; }, function (n) { return n.name; }, function (n) { return n.closeAffiliates; });
+        if (pr) affRoots.push(pr);
+      });
+      var affiliates = Array.from(aff.values());
+
+      if (map.size) {
+        return { nodes: Array.from(map.values()), affiliates: affiliates, targetId: targetId, trees: treeRoots, affTrees: affRoots };
+      }
+
+      throw new Error("Corporate tree was empty for " + (party.name || partyId) + ".");
+    });
+}
+
+/* Sample datasets: the built-in one, plus any a host page supplies as window.EXTRA_SAMPLES
+   (each { nodes, affiliates, targetId }). The one containing the typed target is used. */
+function sampleSets() { return [SAMPLE].concat(window.EXTRA_SAMPLES || []); }
+
+function pickSample(query) {
+  var q = (query || "").trim().toLowerCase();
+  if (!q) return SAMPLE;
+  var hit = sampleSets().filter(function (set) {
+    return set.nodes.some(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase().indexOf(q) !== -1; });
+  })[0];
+  return hit || SAMPLE;
+}
+
+/* Party ids: the component group named after each ultimate owner tree id lists its Party members, but members
+   carry no external ids. So each Party member is looked up with get_party to read its external id for the
+   active provider; the map is external id -> partyId. Any tree id that matches gets that idParty, wherever
+   the entity sits. Failures and missing groups are ignored. */
+function fetchPartyIds(groupName) {
+  var provider = $("provider").value;
+  try {
+    return celeste.query("intapp_compliance__get_component_group", { componentGroupName: groupName })
+      .then(function (raw) {
+        var g = extractObj(raw, "groupMembers");
+        var members = ((g && g.groupMembers) || [])
+          .filter(function (m) { return m && m.type === "Party" && m.partyId; });
+
+        return Promise.all(members.map(function (m) {
+          return celeste.query("intapp_compliance__get_party", { partyId: m.partyId, propertiesToLoad: ["ExternalContent"] })
+            .then(function (praw) {
+              var p = extractObj(praw, "partyId") || {};
+              var extId = provider === "BureauVanDijk" ? p.bureauVanDijkId
+                        : provider === "DunAndBradstreet" ? p.dunsNumber
+                        : p.externalId;
+              return extId ? [extId, m.partyId] : null;
+            })
+            .catch(function () { return null; });
+        })).then(function (pairs) {
+          var out = new Map();
+          pairs.forEach(function (pr) { if (pr) out.set(pr[0], pr[1]); });
+          return out;
+        });
+      })
+      .catch(function () { return new Map(); });
+  } catch (e) {
+    return Promise.resolve(new Map());
+  }
+}
+
+function enrichPartyIds(data, owners, seq) {
+  Promise.all(owners.map(function (o) { return fetchPartyIds(o.id); })).then(function (maps) {
+    if (seq !== state.loadSeq || state.data !== data) return; /* a newer load replaced this one */
+    var ids = new Map();
+    maps.forEach(function (m) { m.forEach(function (v, k) { ids.set(k, v); }); });
+    if (!ids.size) return;
+    data.nodes.concat(data.affiliates).forEach(function (n) { if (ids.has(n.id)) n.idParty = ids.get(n.id); });
+    computeEntityMeta(data.nodes, data.affiliates, state.target.id);
+    renderAll();
+  });
+}
+
+/* Engagements (live). The ultimate owner's component group lists Client / Matter / Party members; a matter's
+   clientId is the party's provider id (same id space as the tree), so matter -> party needs no get_client call.
+   Matter names carry the "[Audit - X]" suffix, so get_matter is not needed either. The entity rule comes from the
+   Orbis JSON note on each audit client (get_party with propertiesToLoad ["Notes"]); failures leave that entity unknown. */
+function noteJson(html) {
+  var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
+  var text = (doc.body.textContent || "").trim();
+  var tries = [text, "{" + text + "}"];
+  for (var i = 0; i < tries.length; i++) {
+    try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
+  }
+  return null;
+}
+
+/* The newest note that parses and holds a record keyed by the party's own BvD id */
+function orbisFromNotes(party, bvdId) {
+  var notes = (party.notes || []).slice().sort(function (a, b) { return String(b.modifiedOn).localeCompare(String(a.modifiedOn)); });
+  for (var i = 0; i < notes.length; i++) {
+    var obj = noteJson(notes[i].message), rec = obj && obj[bvdId];
+    if (rec && typeof rec === "object") {
+      return { countryIso: rec.countryIso, listed: rec.listed, exchange: rec.exchange,
+               nace: rec.nace, naics2017: rec.naics2017, ussic: rec.ussic };
+    }
+  }
+  return null;
+}
+
+function enrichEngagements(data, owners, seq) {
+  Promise.all(owners.map(function (o) {
+    return celeste.query("intapp_compliance__get_component_group", { componentGroupName: o.id })
+      .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
+      .catch(function () { return []; });
+  })).then(function (lists) {
+    var byParty = new Map();
+    lists.forEach(function (members) {
+      members.forEach(function (m) {
+        if (!m || m.type !== "Matter" || !m.clientId || !m.name) return;
+        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
+        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
+      });
+    });
+    if (!byParty.size) return;
+
+    /* The tree is master: matters for anyone not in it (including close-affiliate-only entities) are ignored */
+    var everyone = data.nodes.concat(data.affiliates), auditIds = [];
+    data.nodes.forEach(function (n) {
+      var ms = byParty.get(n.id);
+      if (!ms) return;
+      n.matters = ms;
+      if (ms.some(function (x) { return isAuditMatter(x.name); }) && auditIds.indexOf(n.id) === -1) auditIds.push(n.id);
+    });
+
+    /* Notes only for audit clients: that is all the applied rule needs */
+    return Promise.all(auditIds.map(function (id) {
+      return celeste.query("intapp_compliance__get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+        .then(function (raw) {
+          var p = extractObj(raw, "partyId");
+          return p ? [id, orbisFromNotes(p, p.bureauVanDijkId || id)] : null;
+        })
+        .catch(function () { return null; });
+    })).then(function (pairs) {
+      if (seq !== state.loadSeq || state.data !== data) return; /* a newer load replaced this one */
+      var orbis = new Map();
+      pairs.forEach(function (pr) { if (pr && pr[1]) orbis.set(pr[0], pr[1]); });
+      everyone.forEach(function (n) { if (orbis.has(n.id)) n.orbis = orbis.get(n.id); });
+      state.engage = buildEngagements(data);
+      if (!state.rowsTouched) state.auditRows = autoAuditRows(data, state.target);
+      renderAll();
+    });
+  }).catch(function () { /* engagements are an enhancement: leave the tree as it is */ });
+}
+
+function getData(target) {
+  return isLive() ? loadLive((target || "").trim()) : Promise.resolve(pickSample(target));
+}
+
+/* ═══ STATE ═══════════════════════════════════════════════════════════ */
+var MODES = {
+  general:      { label: "General" },
+  updates:      { label: "Tree Updates" },
+  independence: { label: "Independence" }
+};
+/* Audit rules. Driven only by each entity's relToTarget metadata (the target has none, so it is not marked).
+   Each rule says what its relationship groups are: "restricted", "materiality", or null (out of scope).
+     parent  : Ultimate / Immediate / Indirect Parent
+     sub     : Immediate / Indirect Subsidiary
+     common  : Sibling, Cousin (common control)
+     sigInfl : any CA - label (close affiliates = significant influence)
+   Every relToTarget label is scored on its own and the strictest result wins
+   (restricted > materiality > out of scope), so an entity that is both a tree relative and a close
+   affiliate takes whichever is stricter. Source: jurisdiction screening guide;
+   the guide's "not confirmed" items are noted per rule. */
+var RULES = [
+  { key: "SEC", label: "SEC", parent: "restricted", sub: "restricted", common: "materiality", sigInfl: "materiality",
+    cite: "17 CFR 210.2-01(f)(4). Parents and subsidiaries restricted; siblings, cousins and significant influence (close affiliates) need a materiality test." },
+  { key: "AICPA", label: "AICPA", parent: "restricted", sub: "restricted", common: "materiality", sigInfl: "materiality",
+    cite: "ET 0.400.02. Subsidiaries restricted; siblings, cousins and significant influence (close affiliates) materiality check. Parent treatment not confirmed (shown as restricted)." },
+  { key: "IESBA-PIE", label: "IESBA (PIE)", parent: "materiality", sub: "restricted", common: "materiality", sigInfl: "materiality",
+    cite: "IESBA related entities, PIE. Subsidiaries restricted; parents, siblings and cousins materiality check. Significant influence not confirmed (shown as materiality check)." },
+  { key: "IESBA", label: "IESBA", parent: null, sub: "restricted", common: null, sigInfl: "materiality",
+    cite: "IESBA related entities, non-PIE. Subsidiaries restricted; parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check)." },
+  { key: "EU", label: "EU", parent: "restricted", sub: "restricted", common: null, sigInfl: null,
+    cite: "Regulation (EU) 537/2014, Art. 5. Parent and controlled undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Geography not applied." },
+  { key: "UK", label: "UK", parent: "restricted", sub: "restricted", common: null, sigInfl: null,
+    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope." }
+];
+var REL_GROUP = {
+  "Ultimate Parent": "parent", "Immediate Parent": "parent", "Indirect Parent": "parent",
+  "Immediate Subsidiary": "sub", "Indirect Subsidiary": "sub",
+  "Sibling": "common", "Cousin": "common"
+};
+var LEVEL_RANK = { restricted: 2, materiality: 1 };
+var LEVEL_LABELS = { restricted: "Restricted", materiality: "Materiality check" };
+
+/* Group for one relationship label */
+function relGroup(r) { return r.indexOf(AFF_PREFIX) === 0 ? "sigInfl" : REL_GROUP[r]; }
+
+/* Relationship labels of every entity relative to one audit client: id -> [labels]. Cached per client. */
+function relsFor(clientId) {
+  if (!state.relCache.has(clientId)) {
+    state.relCache.set(clientId, relLabels(state.data.nodes, state.data.affiliates, clientId));
+  }
+  return state.relCache.get(clientId);
+}
+
+/* The active audit rows as { client, rule, rels }: a row counts once it has both an audit client and a rule. */
+function auditPairs() {
+  if (state.mode !== "independence" || !state.data) return [];
+  var byId = new Map();
+  state.data.nodes.forEach(function (n) { byId.set(n.id, n); });
+  var pairs = [];
+  state.auditRows.forEach(function (row) {
+    var rule = RULES.filter(function (r) { return r.key === row.rule; })[0];
+    var client = row.client && byId.get(row.client);
+    if (rule && client) pairs.push({ client: client, rule: rule, rels: relsFor(client.id) });
+  });
+  return pairs;
+}
+
+/* Result for one entity across every client/rule pair. Each pair is scored on the entity's relationship to
+   that pair's client; the strictest result wins (restricted > materiality > out of scope).
+   items: one { client, rule, level, rels } per pair that applies, so the badge can show where it came from. */
+function evalNode(id, pairs) {
+  var items = [], level = null;
+  pairs.forEach(function (p) {
+    var best = null, why = [];
+    (p.rels.get(id) || []).forEach(function (r) {
+      var l = p.rule[relGroup(r)];
+      if (!l) return;
+      if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
+      else if (l === best) why.push(r);
+    });
+    if (!best) return;
+    items.push({ client: p.client, rule: p.rule, level: best, rels: why });
+    if (!level || LEVEL_RANK[best] > LEVEL_RANK[level]) level = best;
+  });
+  items.sort(function (a, b) { return LEVEL_RANK[b.level] - LEVEL_RANK[a.level]; });
+  return { level: level, items: items };
+}
+
+/* ═══ ENGAGEMENTS ═════════════════════════════════════════════════════
+   Port of acct-audit-rule-engagement-tree. Identifies audit and non-audit clients from matter names and works
+   out the rule to apply to each audit client: the strictest of the framework its audit matters are under
+   (the "[Audit - X]" suffix) and the framework Moody's data puts the entity under. Nothing passes between parties.
+   ═══════════════════════════════════════════════════════════════════ */
+var FRAMEWORK_RANK = { "SEC/PCAOB": 6, "EU-537": 5, "UK-FRC": 4, "IESBA-PIE": 3, "IESBA": 2, "AICPA": 1 };
+var FRAMEWORK_RULE = { "SEC/PCAOB": "SEC", "EU-537": "EU", "UK-FRC": "UK", "IESBA-PIE": "IESBA-PIE", "IESBA": "IESBA", "AICPA": "AICPA" };
+var US_MIC = ["XNAS", "XNYS", "ARCX", "XASE", "BATS", "IEXG"];
+/* EU/EEA/UK exchanges: the skill names the group but not the list, so this is a working list. Extend as needed. */
+var EU_MIC = ["XLON", "XPAR", "XAMS", "XBRU", "XETR", "XFRA", "XMIL", "XMAD", "XSTO", "XCSE", "XHEL", "XOSL", "XDUB",
+              "XLIS", "XWBO", "XATH", "XWAR", "XPRA", "XBUD", "XLUX", "XICE", "XCYS", "XMAL", "XLJU", "XZAG", "XBUL", "XBRA", "XRIS", "XTAL", "XLIT"];
+var EU_COUNTRIES = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO".split(" ");
+
+/* Audit flag comes from the matter name only: the whole word "audit", after removing every "non-audit" variant */
+function isAuditMatter(name) {
+  return /\baudit\b/.test(String(name || "").toLowerCase().replace(/non[\s-]?audit/g, ""));
+}
+
+/* Framework named by a "[Audit - X]" suffix at the very end of the name, else null. Never inferred from other wording. */
+function basisOf(name) {
+  var m = /\[\s*audit\s*-\s*(sec\/pcaob|sec|eu-537|uk-frc|iesba-pie|iesba|aicpa)\s*\]\s*$/i.exec(String(name || ""));
+  if (!m) return null;
+  var v = m[1].toUpperCase();
+  return v === "SEC" ? "SEC/PCAOB" : v;
+}
+
+function strictest(list) {
+  return list.reduce(function (best, f) {
+    return f && (!best || FRAMEWORK_RANK[f] > FRAMEWORK_RANK[best]) ? f : best;
+  }, null);
+}
+
+/* Entity rule from Moody's fields: issuer, PIE by sector and country tests; the strictest that fires. null = unknown. */
+function entityFramework(o) {
+  if (!o) return null;
+  var codes = function (v) { return [].concat(v == null ? [] : v).map(String); };
+  var found = [], ex = String(o.exchange || "").toUpperCase();
+  if (o.listed === "Listed") {
+    found.push(!ex ? "IESBA-PIE" : US_MIC.indexOf(ex) > -1 ? "SEC/PCAOB" : EU_MIC.indexOf(ex) > -1 ? "EU-537" : "IESBA-PIE");
+  }
+  var sector = codes(o.nace).some(function (c) { return c === "6419" || c === "6492" || c.indexOf("65") === 0; })
+    || codes(o.naics2017).some(function (c) { return c.indexOf("5221") === 0 || c.indexOf("5241") === 0; })
+    || codes(o.ussic).some(function (c) { return c.indexOf("60") === 0 || c.indexOf("63") === 0; });
+  if (sector) found.push("IESBA-PIE");
+  var cc = String(o.countryIso || "").toUpperCase();
+  if (cc) found.push(cc === "US" ? "AICPA" : cc === "GB" ? "UK-FRC" : EU_COUNTRIES.indexOf(cc) > -1 ? "EU-537" : "IESBA");
+  return strictest(found);
+}
+
+/* id -> { audit, nonAudit, apply (a RULES key, audit clients only) } for every party that has a matter */
+function buildEngagements(data) {
+  var out = new Map();
+  data.nodes.forEach(function (n) {
+    if (out.has(n.id) || !n.matters || !n.matters.length) return;
+    var audit = n.matters.filter(function (m) { return isAuditMatter(m.name); });
+    var existing = strictest(audit.map(function (m) { return basisOf(m.name); }));
+    var apply = audit.length ? strictest([existing, entityFramework(n.orbis)]) : null;
+    out.set(n.id, { audit: audit.length > 0, nonAudit: audit.length < n.matters.length, apply: apply ? FRAMEWORK_RULE[apply] : null });
+  });
+  return out;
+}
+
+/* One row per audit client (target first) carrying its applied rule. With no engagement data, the target alone. */
+function autoAuditRows(data, target) {
+  var seen = new Set(), ids = [];
+  [target].concat(data.nodes).forEach(function (n) {
+    var e = state.engage.get(n.id);
+    if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); ids.push(n.id); }
+  });
+  if (!ids.length) return [{ client: target.id, rule: state.auditRows[0] ? state.auditRows[0].rule : null }];
+  return ids.map(function (id) { return { client: id, rule: state.engage.get(id).apply }; });
+}
+
+/* Small dots after the pin: filled = audit client, ring = non-audit client (both when it holds both) */
+function engageDots(id) {
+  var e = state.engage && state.engage.get(id), out = [];
+  function dot(kind, label) {
+    var s = document.createElement("span");
+    s.className = "eng " + kind;
+    s.setAttribute("role", "img");
+    s.setAttribute("aria-label", label);
+    s.title = label;
+    return s;
+  }
+  if (e && e.audit) out.push(dot("audit", "Audit client"));
+  if (e && e.nonAudit) out.push(dot("non", "Non-audit client"));
+  return out;
+}
+
+function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
+
+var state = {
+  mode: "general",
+  auditRows: [{ client: null, rule: null }], /* one audit client + rule per row */
+  relCache: new Map(),
+  engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
+  collapsed: { audit: false, filter: false }, /* toolbar sections folded away */
+  rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
+  loadSeq: 0,
+  trees: [],
+  affTrees: [],
+  filterPill: null,
+  data: null,
+  target: null,
+  owners: [],
+  filter: "",
+  expanded: { tree: new Set(), aff: new Set() }
+};
+
+var $ = function (id) { return document.getElementById(id); };
+
+/* ═══ HELPERS ═════════════════════════════════════════════════════════ */
+function indexNodes(list, parentsOf) {
+  var byId = new Map(), kids = new Map();
+  list.forEach(function (n) { byId.set(n.id, n); });
+  list.forEach(function (n) {
+    parentsOf(n).forEach(function (p) {
+      if (!byId.has(p)) return;
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(n);
+    });
+  });
+  return { byId: byId, kids: kids };
+}
+
+function ancestorsOf(id, idx, parentsOf) {
+  var out = new Set(), stack = [id];
+  while (stack.length) {
+    var n = idx.byId.get(stack.pop());
+    if (!n) continue;
+    parentsOf(n).forEach(function (p) {
+      if (idx.byId.has(p) && !out.has(p)) { out.add(p); stack.push(p); }
+    });
+  }
+  return out;
+}
+
+function resolveTarget(query, nodes) {
+  var q = query.trim().toLowerCase();
+  if (!q) return null;
+  var exact = nodes.filter(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase() === q; });
+  if (exact.length) return exact[0];
+  var partial = nodes.filter(function (n) { return n.name.toLowerCase().indexOf(q) !== -1; });
+  return partial.length ? partial[0] : null;
+}
+
+/* ═══ ENTITY METADATA ═════════════════════════════════════════════════
+   Stored on each tree node; nothing in the UI reads it yet.
+     isTarget       boolean, true for the target company
+     relToTarget    array of labels (Ultimate Parent, Immediate Parent, Indirect Parent,
+                    Immediate Subsidiary, Indirect Subsidiary, Sibling, Cousin) in that order.
+                    An entity holds every label any of its placements supports.
+     idParty        Intapp party id, or null when the entity has no party record
+   Classification follows entity-relationship-classification.md.
+   ═══════════════════════════════════════════════════════════════════ */
+var REL_ORDER = ["Ultimate Parent", "Immediate Parent", "Indirect Parent",
+                 "Immediate Subsidiary", "Indirect Subsidiary", "Sibling", "Cousin"];
+
+/* Every upward path from id, as arrays [id, parent, ..., top]. A path stops at a repeat (cycle guard). */
+function upwardPaths(id, byId) {
+  var out = [];
+  (function walk(path) {
+    var n = byId.get(path[path.length - 1]);
+    var ps = n ? n.parents.filter(function (p) { return byId.has(p) && path.indexOf(p) === -1; }) : [];
+    if (!ps.length) { out.push(path); return; }
+    ps.forEach(function (p) { walk(path.concat(p)); });
+  })([id]);
+  return out;
+}
+
+/* Classify every node in one hierarchy relative to the target: id -> Set of REL_ORDER labels.
+   If the target is not in this hierarchy nothing in it is related to it. */
+function classify(nodes, targetId) {
+  var byId = new Map(), result = new Map();
+  nodes.forEach(function (n) { byId.set(n.id, n); });
+  if (!byId.has(targetId)) return result;
+  var tPaths = upwardPaths(targetId, byId);
+
+  nodes.forEach(function (n) {
+    if (n.id === targetId) return;
+    var rels = result.get(n.id) || new Set();
+    result.set(n.id, rels);
+    var isRoot = !n.parents.some(function (p) { return byId.has(p); });
+
+    /* Above the target: n appears on a path up from the target */
+    tPaths.forEach(function (path) {
+      var d = path.indexOf(n.id);
+      if (d < 1) return;
+      if (isRoot) rels.add("Ultimate Parent");
+      if (d === 1) rels.add("Immediate Parent");
+      else if (!isRoot) rels.add("Indirect Parent");
+    });
+
+    upwardPaths(n.id, byId).forEach(function (ep) {
+      /* Below the target: the target appears on a path up from n */
+      var d = ep.indexOf(targetId);
+      if (d >= 1) rels.add(d === 1 ? "Immediate Subsidiary" : "Indirect Subsidiary");
+
+      /* Sibling / Cousin: for each pair of placements, the lowest common ancestor on those two paths */
+      tPaths.forEach(function (tp) {
+        for (var dt = 0; dt < tp.length; dt++) {
+          var de = ep.indexOf(tp[dt]);
+          if (de === -1) continue;
+          if (dt > 0 && de > 0) rels.add(dt === 1 && de === 1 ? "Sibling" : "Cousin");
+          break; /* first shared node is the lowest; one is an ancestor of the other if either index is 0 */
+        }
+      });
+    });
+  });
+  return result;
+}
+
+var AFF_PREFIX = "CA - ";
+
+/* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
+   gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
+/* Labels for every entity id relative to one anchor entity (the target, or any audit client). */
+function relLabels(nodes, affiliates, anchorId) {
+  var treeRels = classify(nodes, anchorId);
+  var affRels = classify(affiliates, anchorId);
+  var out = new Map();
+  nodes.concat(affiliates).forEach(function (n) {
+    if (out.has(n.id)) return;
+    var t = treeRels.get(n.id), a = affRels.get(n.id);
+    out.set(n.id, REL_ORDER.filter(function (r) { return t && t.has(r); })
+      .concat(REL_ORDER.filter(function (r) { return a && a.has(r); }).map(function (r) { return AFF_PREFIX + r; })));
+  });
+  return out;
+}
+
+function computeEntityMeta(nodes, affiliates, targetId) {
+  state.relCache = new Map();
+  var targetRels = relLabels(nodes, affiliates, targetId);
+  var everyone = nodes.concat(affiliates);
+
+  var parties = new Map();
+  everyone.forEach(function (n) {
+    if (n.idParty && !parties.has(n.id)) parties.set(n.id, n.idParty);
+  });
+
+  var meta = new Map();
+  everyone.forEach(function (n) {
+    if (meta.has(n.id)) return;
+    meta.set(n.id, { isTarget: n.id === targetId, relToTarget: targetRels.get(n.id), idParty: parties.get(n.id) || null });
+  });
+
+  everyone.forEach(function (n) {
+    var m = meta.get(n.id);
+    n.isTarget = m.isTarget;
+    n.relToTarget = m.relToTarget;
+    n.idParty = m.idParty;
+  });
+}
+
+/* ═══ PLACEMENTS ══════════════════════════════════════════════════════
+   The grids draw placements: one row per place an entity appears, children exactly as the provider listed them.
+   Each placement gets a key (its path of positions) and hasTarget (the target is this node or below it).
+   ═══════════════════════════════════════════════════════════════════ */
+function normTree(t) {
+  return Array.isArray(t) ? { id: t[0], name: t[1], children: (t[2] || []).map(normTree) } : t;
+}
+
+/* Derive placements from a flat parents list (every parent gets a copy of the subtree). */
+function placementsFromFlat(list, parentsOf) {
+  var idx = indexNodes(list, parentsOf);
+  var roots = list.filter(function (n) { return !parentsOf(n).some(function (p) { return idx.byId.has(p); }); });
+  function build(n, stack) {
+    var kids = [];
+    (idx.kids.get(n.id) || []).forEach(function (k) {
+      if (stack.indexOf(k.id) === -1) kids.push(build(k, stack.concat(n.id)));
+    });
+    return { id: n.id, name: n.name, children: kids };
+  }
+  return roots.map(function (r) { return build(r, []); });
+}
+
+function ensurePlacements(data) {
+  data.trees = data.trees ? data.trees.map(normTree) : placementsFromFlat(data.nodes, function (n) { return n.parents; });
+  data.affTrees = data.affTrees ? data.affTrees.map(normTree)
+    : placementsFromFlat(data.affiliates, function (n) { return n.parents; });
+}
+
+function annotate(roots, targetId) {
+  (function walk(list, parentKey) {
+    list.forEach(function (p, i) {
+      p.key = parentKey === null ? String(i) : parentKey + "/" + i;
+      walk(p.children, p.key);
+      p.hasTarget = p.id === targetId || p.children.some(function (c) { return c.hasTarget; });
+    });
+  })(roots, null);
+}
+
+/* ═══ LOAD TARGET ═════════════════════════════════════════════════════ */
+function loadTarget() {
+  var err = $("target-err");
+  err.textContent = "";
+  var query = $("target-input").value;
+  if (!query.trim()) { err.textContent = "Enter a target company."; return; }
+
+  getData(query).then(function (data) {
+    var target = (data.targetId && data.nodes.filter(function (n) { return n.id === data.targetId; })[0]) || resolveTarget(query, data.nodes);
+    if (!target) { err.textContent = "No company found for “" + query.trim() + "”."; return; }
+
+    ensurePlacements(data);
+    annotate(data.trees, target.id);
+    annotate(data.affTrees, target.id);
+    /* Ultimate owners: the roots of the trees that contain the target */
+    var shown = data.trees.filter(function (r) { return r.hasTarget; });
+    if (!shown.length) shown = data.trees;
+    var owners = shown.map(function (r) { return { id: r.id, name: r.name }; });
+
+    computeEntityMeta(data.nodes, data.affiliates, target.id);
+    state.data = data;
+    state.target = target;
+    /* Audit clients come from the matters: one row each, with the rule that applies to it */
+    state.engage = buildEngagements(data);
+    state.rowsTouched = false;
+    state.auditRows = autoAuditRows(data, target);
+    state.owners = owners;
+    state.trees = shown;
+    state.affTrees = data.affTrees;
+    state.expanded.tree = new Set();
+    state.expanded.aff = new Set();
+    state.filter = "";
+    state.filterPill = null;
+    $("filter-input").value = "";
+
+    /* Default expansion: every placement on a path down to the target, in both grids */
+    [["tree", state.trees], ["aff", state.affTrees]].forEach(function (g) {
+      (function open(list) {
+        list.forEach(function (pl) {
+          if (pl.hasTarget && pl.id !== target.id) state.expanded[g[0]].add(pl.key);
+          open(pl.children);
+        });
+      })(g[1]);
+    });
+
+    $("app").style.display = "block";
+    renderTitle();
+    renderAll();
+    if (isLive()) { /* bold/tooltips and audit clients fill in as the lookups return */
+      var seq = ++state.loadSeq;
+      enrichPartyIds(data, owners, seq);
+      enrichEngagements(data, owners, seq);
+    }
+  }).catch(function (e) { err.textContent = e.message; });
+}
+
+/* Report title: pin, Name (ID); footnote names the tree(s) when the target is not an ultimate owner */
+function renderTitle() {
+  var t = state.target, h = $("report-title-text");
+  h.innerHTML = "";
+  h.appendChild(pinIcon());
+  var nm = document.createElement("span");
+  nm.textContent = t.name;
+  h.appendChild(nm);
+  var id = document.createElement("span");
+  id.className = "node-id";
+  id.textContent = "(" + t.id + ")";
+  h.appendChild(id);
+
+  var isOwner = state.owners.some(function (o) { return o.id === t.id; });
+  var foot = $("report-footnote");
+  if (isOwner) {
+    foot.textContent = "";
+  } else {
+    var names = state.owners.map(function (o) { return o.name + " (" + o.id + ")"; });
+    foot.textContent = "Part of the " + names.join(" and ") + (names.length > 1 ? " trees" : " tree");
+  }
+  $("report-title").hidden = false;
+}
+
+/* ═══ GRID RENDERER ═══════════════════════════════════════════════════
+   One renderer for both grids: expand/collapse toggle, indent, name, id,
+   plus extra columns contributed by the active mode.
+   ═══════════════════════════════════════════════════════════════════ */
+/* Blue map pin marking the target company wherever it appears */
+function pinIcon() {
+  var ns = "http://www.w3.org/2000/svg";
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "pin");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", "Target company");
+  var title = document.createElementNS(ns, "title");
+  title.textContent = "Target company";
+  svg.appendChild(title);
+  var path = document.createElementNS(ns, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", "M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z");
+  svg.appendChild(path);
+  return svg;
+}
+
+/* Mode-specific columns: Independence adds the audit rule result (strictest across all client/rule pairs). */
+function extraColumns(pairs) {
+  if (!pairs.length) return [];
+  return [{
+    title: pairs.length === 1 ? pairs[0].rule.label : "Audit rule",
+    cell: function (n, td) {
+      var res = evalNode(n.id, pairs);
+      if (res.level) td.appendChild(ruleBadge(n, res));
+    }
+  }];
+}
+
+/* Clickable badge: opens the popover listing every client/rule pair that flagged this entity */
+function ruleBadge(node, res) {
+  var b = document.createElement("button");
+  b.type = "button";
+  b.className = "rule-badge " + res.level;
+  b.textContent = LEVEL_LABELS[res.level] + (res.items.length > 1 ? " · " + res.items.length : "");
+  b.title = "Show where this came from";
+  b.setAttribute("aria-haspopup", "dialog");
+  b.addEventListener("click", function () {
+    if (state.whyFor === node.id) closeWhy(); else showWhy(b, node, res);
+  });
+  return b;
+}
+
+function relText(r) {
+  return r.indexOf(AFF_PREFIX) === 0 ? "Close affiliate · " + r.slice(AFF_PREFIX.length) : r;
+}
+
+function showWhy(anchor, node, res) {
+  closeWhy();
+  var pop = document.createElement("div");
+  pop.id = "why-pop";
+  pop.setAttribute("role", "dialog");
+
+  var h = document.createElement("h3");
+  h.textContent = node.name + " (" + node.id + ")";
+  pop.appendChild(h);
+
+  res.items.forEach(function (it) {
+    var row = document.createElement("div");
+    row.className = "why-item" + (it.level === res.level ? "" : " lost");
+    var badge = document.createElement("span");
+    badge.className = "rule-badge " + it.level;
+    badge.textContent = LEVEL_LABELS[it.level];
+    row.appendChild(badge);
+    var txt = document.createElement("div");
+    var line1 = document.createElement("div");
+    line1.textContent = it.rule.label + ": " + it.rels.map(relText).join(", ") + " of " + it.client.name;
+    var line2 = document.createElement("div");
+    line2.className = "node-id";
+    line2.style.marginLeft = "0";
+    line2.textContent = "Audit client " + it.client.id + (it.level === res.level ? "" : " · overridden by a stricter result");
+    txt.appendChild(line1);
+    txt.appendChild(line2);
+    row.appendChild(txt);
+    pop.appendChild(row);
+  });
+
+  if (res.items.length > 1) {
+    var note = document.createElement("div");
+    note.className = "why-note";
+    note.textContent = "Strictest result applies: Restricted over Materiality check.";
+    pop.appendChild(note);
+  }
+
+  document.body.appendChild(pop);
+  var r = anchor.getBoundingClientRect();
+  var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
+  var top = r.bottom + 6;
+  if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+  state.whyFor = node.id;
+}
+
+function closeWhy() {
+  var pop = $("why-pop");
+  if (pop) pop.remove();
+  state.whyFor = null;
+}
+
+/* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
+/* Quick filters. Exclusive with each other and with the text search. Every filter keeps the chain above each
+   match; the parents/subs filter also keeps everything below the target. */
+var FILTER_PILLS = [
+  { key: "party",      label: "Intapp Parties Only" },
+  { key: "parents",    label: "Target + Parents Only" },
+  { key: "parentsSubs", label: "Target + Parents/Subs Only" }
+];
+
+function renderGrid(gridKey, containerId, countId, roots, byId) {
+  var metaOf = function (pl) { return byId.get(pl.id) || pl; };
+  var txt = state.filter.trim().toLowerCase();
+  var filtering = !!txt || !!state.filterPill;
+  var tid = state.target && state.target.id;
+
+  /* Visible placements = matches + everything above them (upward is always kept); filtering force-expands */
+  var vis = null;
+  if (filtering) {
+    vis = new Set();
+    (function mark(pl, underTarget) {
+      var isT = pl.id === tid;
+      var kidVisible = false;
+      pl.children.forEach(function (c) { if (mark(c, underTarget || isT)) kidVisible = true; });
+      var m = metaOf(pl), self;
+      if (state.filterPill === "party") self = !!m.idParty;
+      else if (state.filterPill === "parents") self = isT;
+      else if (state.filterPill === "parentsSubs") self = isT || underTarget;
+      else self = (pl.name + " " + pl.id).toLowerCase().indexOf(txt) !== -1;
+      var v = self || kidVisible;
+      if (v) vis.add(pl.key);
+      return v;
+    })({ children: roots, id: null, name: "", key: "" }, false);
+  }
+
+  var pairs = auditPairs();
+  var cols = extraColumns(pairs);
+  var table = document.createElement("table");
+  table.className = "grid";
+  var thead = document.createElement("thead");
+  var hr = document.createElement("tr");
+  var pinTh = document.createElement("th");
+  var showEng = showEngagement();
+  pinTh.className = "pin-col" + (showEng ? " wide" : "");
+  pinTh.setAttribute("aria-label", "Target company");
+  hr.appendChild(pinTh);
+
+  /* Expand/collapse everything in this grid */
+  var expandable = [], uniq = new Set();
+  (function scan(list) {
+    list.forEach(function (pl) {
+      uniq.add(pl.id);
+      if (pl.children.length) expandable.push(pl.key);
+      scan(pl.children);
+    });
+  })(roots);
+  var allOpen = expandable.length > 0 && expandable.every(function (k) { return state.expanded[gridKey].has(k); });
+  var nameTh = document.createElement("th");
+  nameTh.className = "name-col";
+  if (expandable.length) {
+    var all = document.createElement("button");
+    all.className = "toggle";
+    all.textContent = allOpen ? "\u25BE" : "\u25B8";
+    all.title = allOpen ? "Collapse all" : "Expand all";
+    all.setAttribute("aria-label", all.title);
+    all.addEventListener("click", function () {
+      var set = state.expanded[gridKey];
+      if (allOpen) set.clear();
+      else expandable.forEach(function (k) { set.add(k); });
+      renderAll();
+    });
+    nameTh.appendChild(all);
+  }
+  hr.appendChild(nameTh);
+
+  cols.forEach(function (c) {
+    var th = document.createElement("th");
+    th.className = "icon-col";
+    th.textContent = c.title;
+    hr.appendChild(th);
+  });
+  var fillTh = document.createElement("th");
+  fillTh.className = "fill";
+  hr.appendChild(fillTh);
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  var tbody = document.createElement("tbody");
+  var shown = 0;
+
+  function walk(pl, depth) {
+    if (vis && !vis.has(pl.key)) return;
+    var node = metaOf(pl);
+    var kids = pl.children.filter(function (c) { return !vis || vis.has(c.key); });
+    var open = filtering || state.expanded[gridKey].has(pl.key);
+    shown++;
+
+    var tr = document.createElement("tr");
+    if (pairs.length) {
+      var lvl = evalNode(node.id, pairs).level;
+      if (lvl) tr.className = lvl;
+    }
+
+    var pinTd = document.createElement("td");
+    pinTd.className = "pin-col" + (showEng ? " wide" : "");
+    if (showEng) {
+      var mk = document.createElement("div");
+      mk.className = "mark";
+      var ps = document.createElement("span");
+      ps.className = "mark-pin";
+      if (node.isTarget) ps.appendChild(pinIcon());
+      var ds = document.createElement("span");
+      ds.className = "mark-dots";
+      engageDots(node.id).forEach(function (d) { ds.appendChild(d); });
+      mk.appendChild(ps);
+      mk.appendChild(ds);
+      pinTd.appendChild(mk);
+    } else if (node.isTarget) {
+      pinTd.appendChild(pinIcon());
+    }
+    tr.appendChild(pinTd);
+
+    var nameTd = document.createElement("td");
+    nameTd.className = "name-cell";
+    var inner = document.createElement("div");
+    inner.className = "name-inner";
+    nameTd.appendChild(inner);
+    var ind = document.createElement("span");
+    ind.className = "indent";
+    ind.style.width = (depth * 20) + "px";
+    inner.appendChild(ind);
+
+    var tg = document.createElement("button");
+    tg.className = "toggle" + (kids.length ? "" : " leaf");
+    tg.textContent = open ? "▾" : "▸";
+    tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
+    if (kids.length) {
+      tg.addEventListener("click", function () {
+        var set = state.expanded[gridKey];
+        if (set.has(pl.key)) set.delete(pl.key); else set.add(pl.key);
+        renderAll();
+      });
+    }
+    inner.appendChild(tg);
+
+    var nm = document.createElement("span");
+    nm.className = "node-name";
+    nm.textContent = pl.name;
+    if (node.idParty) nm.classList.add("has-party"); /* bold = entity has an Intapp party record */
+    nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
+    inner.appendChild(nm);
+    var idSp = document.createElement("span");
+    idSp.className = "node-id";
+    idSp.textContent = "(" + pl.id + ")";
+    inner.appendChild(idSp);
+    tr.appendChild(nameTd);
+
+
+    cols.forEach(function (c) {
+      var td = document.createElement("td");
+      td.className = "icon-col";
+      c.cell(node, td);
+      tr.appendChild(td);
+    });
+    var fillTd = document.createElement("td");
+    fillTd.className = "fill";
+    tr.appendChild(fillTd);
+    tbody.appendChild(tr);
+
+    if (open) kids.forEach(function (k) { walk(k, depth + 1); });
+  }
+
+  roots.forEach(function (r) { walk(r, 0); });
+  table.appendChild(tbody);
+
+  var host = $(containerId);
+  host.innerHTML = "";
+  if (!shown) {
+    var e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = "No matching entities.";
+    host.appendChild(e);
+  } else {
+    host.appendChild(table);
+  }
+  $(countId).textContent = (filtering ? "filtered · " : "") + uniq.size + " entities";
+  return uniq.size;
+}
+
+/* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
+function renderAll() {
+  closeWhy();
+  if (!state.data) return;
+  $("eng-key").hidden = !showEngagement();
+
+  /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
+  var treeByid = new Map(), affById = new Map();
+  state.data.nodes.forEach(function (n) { treeByid.set(n.id, n); });
+  state.data.affiliates.forEach(function (n) { affById.set(n.id, n); });
+  var treeCount = renderGrid("tree", "tree-grid", "tree-count", state.trees, treeByid);
+  var affCount = renderGrid("aff", "aff-grid", "aff-count", state.affTrees, affById);
+
+  $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
+  renderRuleBar();
+  renderFilterPills();
+}
+
+function renderFilterPills() {
+  var host = $("filter-pills");
+  host.innerHTML = "";
+  FILTER_PILLS.forEach(function (f) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "pill" + (state.filterPill === f.key ? " active" : "");
+    b.textContent = f.label;
+    b.setAttribute("aria-pressed", state.filterPill === f.key ? "true" : "false");
+    b.addEventListener("click", function () {
+      /* exclusive: choosing a pill clears the search text; choosing the active pill turns it off */
+      state.filterPill = state.filterPill === f.key ? null : f.key;
+      state.filter = "";
+      $("filter-input").value = "";
+      renderAll();
+    });
+    host.appendChild(b);
+  });
+}
+
+function renderRuleBar() {
+  var bar = $("bar-independence");
+  bar.hidden = state.mode !== "independence";
+  if (bar.hidden) return;
+  var host = $("audit-rows");
+  host.innerHTML = "";
+  state.auditRows.forEach(function (row, i) {
+    var line = document.createElement("div");
+    line.className = "audit-row";
+
+    line.appendChild(clientDropdown(row));
+
+    var pills = document.createElement("div");
+    pills.className = "row-pills";
+    RULES.forEach(function (r) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "pill" + (row.rule === r.key ? " active" : "");
+      b.textContent = r.label;
+      b.title = r.cite;
+      b.setAttribute("aria-pressed", row.rule === r.key ? "true" : "false");
+      b.addEventListener("click", function () {
+        row.rule = row.rule === r.key ? null : r.key;
+        state.rowsTouched = true;
+        renderAll();
+      });
+      pills.appendChild(b);
+    });
+    line.appendChild(pills);
+
+    if (state.auditRows.length > 1) {
+      var rm = document.createElement("button");
+      rm.type = "button";
+      rm.className = "icon-btn";
+      rm.textContent = "\u00D7";
+      rm.title = "Remove this audit client";
+      rm.setAttribute("aria-label", "Remove this audit client");
+      rm.addEventListener("click", function () {
+        state.auditRows.splice(i, 1);
+        state.rowsTouched = true;
+        renderAll();
+      });
+      line.appendChild(rm);
+    }
+    host.appendChild(line);
+  });
+  $("add-audit").disabled = !state.data;
+
+  var pairs = auditPairs(), sum = $("rule-summary");
+  if (!state.data) { sum.textContent = "Load a target company first."; return; }
+  if (!pairs.length) { sum.textContent = "Select an audit client and a rule to mark restricted and materiality-check entities."; return; }
+  var seen = new Set(), c = { restricted: 0, materiality: 0 };
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
+    if (seen.has(n.id)) return;
+    seen.add(n.id);
+    var l = evalNode(n.id, pairs).level;
+    if (l) c[l]++;
+  });
+  sum.textContent = c.restricted + " restricted \u00B7 " + c.materiality + " materiality check";
+}
+
+/* Audit client dropdown for one row. The target is pinned at the top; clients already used in another row are disabled. */
+function clientDropdown(row) {
+  var wrap = document.createElement("div");
+  wrap.className = "dd";
+  var btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "dd-btn";
+  btn.setAttribute("aria-haspopup", "listbox");
+  btn.setAttribute("aria-expanded", "false");
+  wrap.appendChild(btn);
+
+  if (!state.data) {
+    btn.disabled = true;
+    var none = document.createElement("span");
+    none.className = "dd-name placeholder";
+    none.textContent = "Load a target company first";
+    btn.appendChild(none);
+    return wrap;
+  }
+
+  var tid = state.target.id;
+  var sel = row.client && state.data.nodes.filter(function (n) { return n.id === row.client; })[0];
+  if (sel && sel.id === tid) btn.appendChild(pinIcon());
+  var nm = document.createElement("span");
+  nm.className = "dd-name" + (sel ? "" : " placeholder");
+  nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit client\u2026";
+  btn.appendChild(nm);
+  if (sel) engageDots(sel.id).forEach(function (d) { btn.appendChild(d); });
+  var caret = document.createElement("span");
+  caret.className = "dd-caret";
+  caret.textContent = "\u25BE";
+  btn.appendChild(caret);
+
+  var menu = document.createElement("div");
+  menu.className = "dd-menu";
+  var search = document.createElement("input");
+  search.type = "text";
+  search.className = "dd-search";
+  search.placeholder = "Search entities\u2026";
+  search.autocomplete = "off";
+  var list = document.createElement("div");
+  list.className = "dd-list";
+  list.setAttribute("role", "listbox");
+  menu.appendChild(search);
+  menu.appendChild(list);
+  wrap.appendChild(menu);
+
+  var usedElsewhere = new Set();
+  state.auditRows.forEach(function (r) { if (r !== row && r.client) usedElsewhere.add(r.client); });
+  var target = state.data.nodes.filter(function (n) { return n.id === tid; })[0] || state.target;
+  var all = [target].concat(state.data.nodes.filter(function (n) { return n.id !== tid; }));
+
+  function fill(q) {
+    q = q.trim().toLowerCase();
+    list.innerHTML = "";
+    var items = all.filter(function (n) { return !q || (n.name + " " + n.id).toLowerCase().indexOf(q) !== -1; });
+    if (!items.length) {
+      var e = document.createElement("div");
+      e.className = "dd-empty";
+      e.textContent = "No matching entities.";
+      list.appendChild(e);
+      return;
+    }
+    items.forEach(function (n) {
+      var isT = n.id === tid;
+      var o = document.createElement("button");
+      o.type = "button";
+      o.className = "dd-opt" + (row.client === n.id ? " active" : "");
+      o.setAttribute("role", "option");
+      if (isT) o.appendChild(pinIcon());
+      var name = document.createElement("span");
+      name.textContent = n.name;
+      o.appendChild(name);
+      var id = document.createElement("span");
+      id.className = "node-id";
+      id.textContent = "(" + n.id + ")";
+      o.appendChild(id);
+      engageDots(n.id).forEach(function (d) { o.appendChild(d); });
+      var used = usedElsewhere.has(n.id);
+      if (isT || used) {
+        var tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = isT ? (used ? "Target · in use" : "Target") : "In use";
+        o.appendChild(tag);
+      }
+      o.disabled = used;
+      o.addEventListener("click", function () {
+        row.client = n.id;
+        state.rowsTouched = true;
+        renderAll();
+      });
+      list.appendChild(o);
+      if (isT && items.length > 1) {
+        var sep = document.createElement("div");
+        sep.className = "dd-sep";
+        list.appendChild(sep);
+      }
+    });
+  }
+  fill("");
+  search.addEventListener("input", function () { fill(search.value); });
+
+  btn.addEventListener("click", function () {
+    var open = !wrap.classList.contains("open");
+    closeDropdowns();
+    if (open) {
+      wrap.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+      search.focus();
+    }
+  });
+  return wrap;
+}
+
+function closeDropdowns() {
+  document.querySelectorAll(".dd.open").forEach(function (d) {
+    d.classList.remove("open");
+    d.querySelector(".dd-btn").setAttribute("aria-expanded", "false");
+  });
+}
+
+/* ═══ MODES (gear) — selection only; features land per mode later ═══ */
+function setMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll(".gear-opt").forEach(function (b) {
+    b.classList.toggle("active", b.getAttribute("data-mode") === mode);
+  });
+  var badge = $("mode-badge");
+  badge.textContent = MODES[mode].label;
+  badge.classList.toggle("show", mode !== "general");
+  closeGear();
+  renderAll();
+  renderRuleBar(); /* also runs before any target is loaded */
+}
+
+function closeGear() {
+  $("gear-menu").classList.remove("open");
+  $("gear-btn").setAttribute("aria-expanded", "false");
+}
+
+/* ═══ WIRING ══════════════════════════════════════════════════════════ */
+$("gear-btn").addEventListener("click", function (e) {
+  e.stopPropagation();
+  var open = $("gear-menu").classList.toggle("open");
+  this.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", function (e) {
+  if (!$("gear-wrap").contains(e.target)) closeGear();
+  if (!e.target.closest(".dd")) closeDropdowns();
+  if (!e.target.closest("#why-pop, .rule-badge")) closeWhy();
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") { closeGear(); closeDropdowns(); closeWhy(); }
+});
+window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
+window.addEventListener("resize", closeWhy);
+function applyCollapse() {
+  ["audit", "filter"].forEach(function (k) {
+    var c = state.collapsed[k], h = $("head-" + k);
+    $("body-" + k).hidden = c;
+    h.classList.toggle("closed", c);
+    h.setAttribute("aria-expanded", c ? "false" : "true");
+    h.querySelector(".tb-chev").textContent = c ? "\u25B8" : "\u25BE";
+  });
+}
+document.querySelectorAll(".tb-head").forEach(function (h) {
+  h.addEventListener("click", function () {
+    var k = h.getAttribute("data-sec");
+    state.collapsed[k] = !state.collapsed[k];
+    applyCollapse();
+  });
+});
+$("add-audit").addEventListener("click", function () {
+  state.auditRows.push({ client: null, rule: null });
+  state.rowsTouched = true;
+  renderAll();
+});
+document.querySelectorAll(".gear-opt").forEach(function (b) {
+  b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+});
+
+$("load-btn").addEventListener("click", loadTarget);
+$("target-input").addEventListener("keydown", function (e) { if (e.key === "Enter") loadTarget(); });
+$("filter-input").addEventListener("input", function () {
+  state.filter = this.value;
+  state.filterPill = null; /* typing replaces any active pill */
+  renderAll();
+});
+$("clear-btn").addEventListener("click", function () {
+  state.filter = "";
+  state.filterPill = null;
+  $("filter-input").value = "";
+  renderAll();
+});
+
+
+/* Sample mode suggests its IDs; live mode takes a Party ID and a provider. */
+if (isLive()) {
+  $("provider").hidden = false;
+  $("target-input").placeholder = "Party ID, e.g. 1096";
+  $("target-input").removeAttribute("list");
+} else {
+  sampleSets().forEach(function (set, i) {
+    var list = i === 0 ? set.nodes : set.nodes.filter(function (n) { return n.id === set.targetId; });
+    list.forEach(function (n) {
+      var o = document.createElement("option");
+      o.value = n.id;
+      o.label = n.name;
+      $("target-list").appendChild(o);
+    });
+  });
+}
+</script>
+</body>
+</html>
