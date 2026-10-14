@@ -16,6 +16,7 @@
     --hdr-border: #4b4b7a; --hdr-hover: rgba(255,255,255,.1);
     --shadow: rgba(0,0,0,.18);
     --pin: #2563eb;
+    --eng: #ea580c;
     --bar-bg: #e8ebf4; --bar-head: #d6dcec; --bar-border: #bcc4dc;
     --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c;
   }
@@ -28,6 +29,7 @@
       --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
       --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
       --pin: #60a5fa;
+      --eng: #fb923c;
       --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
       --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
       color-scheme: dark;
@@ -41,6 +43,7 @@
     --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
     --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
     --pin: #60a5fa;
+    --eng: #fb923c;
     --bar-bg: #242839; --bar-head: #2e3450; --bar-border: #444b68;
     --restr-bg: #3d1d22; --restr-fg: #f87171; --mat-bg: #3b2814; --mat-fg: #fb923c;
     color-scheme: dark;
@@ -163,13 +166,16 @@
   #body-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
   /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
-  th.pin-col.wide, td.pin-col.wide { width: 58px; text-align: left; padding-left: 10px; }
+  th.pin-col.wide, td.pin-col.wide { width: 70px; text-align: left; padding-left: 10px; }
   .mark { display: flex; align-items: center; gap: 4px; }
   .mark-pin { width: 14px; height: 14px; flex: none; }
-  .mark-dots { width: 24px; display: flex; align-items: center; gap: 3px; flex: none; }
-  .eng { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: none; }
-  .eng.audit { background: var(--accent); }
-  .eng.non { border: 2px solid var(--muted); }
+  .mark-dots { width: 36px; display: flex; align-items: center; gap: 3px; flex: none; }
+  /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
+  .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
+  .eng svg { display: block; }
+  .eng.audit svg { width: 14px; height: 14px; fill: var(--eng); stroke: var(--eng); stroke-width: 1; stroke-linejoin: round; }
+  .eng.non { width: 17px; height: 17px; border: 1.5px solid var(--eng); border-radius: 50%; background: #fff; }
+  .eng.non svg { width: 11px; height: 11px; fill: none; stroke: var(--eng); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
   .dd .eng { margin-left: 2px; }
   .eng-key { display: flex; gap: 14px; margin: 8px 20px 0; font-size: 11px; color: var(--muted); }
   .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
@@ -317,8 +323,8 @@
 
   <!-- Legend sits under the toolbars -->
   <div class="eng-key" id="eng-key" hidden>
-    <span><i class="eng audit"></i>Audit client</span>
-    <span><i class="eng non"></i>Non-audit client</span>
+    <span><span data-eng="audit"></span>Audit client</span>
+    <span><span data-eng="non"></span>Non-audit client</span>
   </div>
 
   <div class="section">
@@ -770,19 +776,39 @@ function autoAuditRows(data, target) {
   return ids.map(function (id) { return { client: id, rule: state.engage.get(id).apply }; });
 }
 
-/* Small dots after the pin: filled = audit client, ring = non-audit client (both when it holds both) */
+/* Icons after the pin: orange shield = audit client, orange handshake on a white badge = non-audit client
+   (both when it holds both). Paths are 24x24 line-icon outlines. */
+var ENG_PATHS = {
+  audit: ["M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"],
+  non: ["m11 17 2 2a1 1 0 1 0 3-3",
+        "m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4",
+        "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8"]
+};
+var ENG_LABEL = { audit: "Audit client", non: "Non-audit client" };
+
+function engIcon(kind) {
+  var ns = "http://www.w3.org/2000/svg";
+  var wrap = document.createElement("span");
+  wrap.className = "eng " + kind;
+  wrap.setAttribute("role", "img");
+  wrap.setAttribute("aria-label", ENG_LABEL[kind]);
+  wrap.title = ENG_LABEL[kind];
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  ENG_PATHS[kind].forEach(function (d) {
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+  });
+  wrap.appendChild(svg);
+  return wrap;
+}
+
 function engageDots(id) {
   var e = state.engage && state.engage.get(id), out = [];
-  function dot(kind, label) {
-    var s = document.createElement("span");
-    s.className = "eng " + kind;
-    s.setAttribute("role", "img");
-    s.setAttribute("aria-label", label);
-    s.title = label;
-    return s;
-  }
-  if (e && e.audit) out.push(dot("audit", "Audit client"));
-  if (e && e.nonAudit) out.push(dot("non", "Non-audit client"));
+  if (e && e.audit) out.push(engIcon("audit"));
+  if (e && e.nonAudit) out.push(engIcon("non"));
   return out;
 }
 
@@ -1631,6 +1657,9 @@ function applyCollapse() {
     h.querySelector(".tb-chev").textContent = c ? "\u25B8" : "\u25BE";
   });
 }
+document.querySelectorAll("[data-eng]").forEach(function (el) {
+  el.replaceWith(engIcon(el.getAttribute("data-eng")));
+});
 document.querySelectorAll(".tb-head").forEach(function (h) {
   h.addEventListener("click", function () {
     var k = h.getAttribute("data-sec");
