@@ -327,6 +327,7 @@
     <div class="section-head">
       <h2>Corporate tree</h2>
       <span class="eng-key" hidden>
+        <span><span data-eng="target"></span>Target company</span>
         <span><span data-eng="audit"></span>Audit client</span>
         <span><span data-eng="non"></span>Non-audit client</span>
       </span>
@@ -339,6 +340,7 @@
     <div class="section-head">
       <h2>Close affiliates</h2>
       <span class="eng-key" hidden>
+        <span><span data-eng="target"></span>Target company</span>
         <span><span data-eng="audit"></span>Audit client</span>
         <span><span data-eng="non"></span>Non-audit client</span>
       </span>
@@ -1669,7 +1671,10 @@ function applyCollapse() {
   });
 }
 document.querySelectorAll("[data-eng]").forEach(function (el) {
-  el.replaceWith(engIcon(el.getAttribute("data-eng")));
+  var kind = el.getAttribute("data-eng");
+  var icon = kind === "target" ? pinIcon() : engIcon(kind);
+  if (kind === "target") { icon.removeAttribute("role"); icon.removeAttribute("aria-label"); icon.setAttribute("aria-hidden", "true"); icon.querySelector("title").remove(); } /* the text beside it names it */
+  el.replaceWith(icon);
 });
 document.querySelectorAll(".tb-head").forEach(function (h) {
   h.addEventListener("click", function () {
