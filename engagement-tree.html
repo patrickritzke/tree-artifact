@@ -116,7 +116,6 @@
   button.rpill { cursor: pointer; }
   button.rpill:hover { background: var(--tint); }
   button.rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .rpill.unk { border-style: dashed; border-color: var(--muted); color: var(--muted); }
   .rpill.apply { background: var(--tint); }
 
   /* Audit / non-audit marks before the name: orange shield = audit client, handshake on a white badge = non-audit client */
@@ -546,11 +545,10 @@ function engIcon(kind) {
 
 function ruleCell(td, info, kind) {
   if (!info) return;
-  var pill, label;
+  var pill;
   if (kind === "r") {
-    if (!info.audit) return;
-    label = info.existing || "Not labelled";
-    pill = el("button", "rpill" + (info.existing ? "" : " unk"), label);
+    if (!info.audit || !info.existing) return;
+    pill = el("button", "rpill", info.existing);
     pill.title = "Show engagements";
   } else if (kind === "p") {
     if (!info.entity) return;
