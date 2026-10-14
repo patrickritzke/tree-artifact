@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Audit Rule Engagement Tree</title>
+<style>
+  /* Same shell as the Corporate Tree page: dark header, toolbar, grid. Tokens are shared so light and dark match. */
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --head: #f9fafb; --hover: #f3f4f6;
+    --fg: #1a1a2e; --fg-strong: #111827; --fg-2: #374151; --muted: #6b7280; --faint: #9ca3af;
+    --border: #e5e7eb; --border-2: #d1d5db;
+    --accent: #6366f1; --accent-fg: #4338ca; --err: #dc2626;
+    --btn-bg: #1a1a2e; --btn-fg: #ffffff; --btn-hover: #2d2d4e;
+    --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af;
+    --shadow: rgba(0,0,0,.18);
+    --eng: #ea580c;
+    --tint: #eef0fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+      --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+      --border: #2d303d; --border-2: #3a3e4e;
+      --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+      --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+      --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+      --eng: #fb923c; --tint: #23263a;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12131a; --surface: #1b1d27; --head: #20222d; --hover: #262936;
+    --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4; --muted: #9aa0b0; --faint: #7b8194;
+    --border: #2d303d; --border-2: #3a3e4e;
+    --accent: #8b8ff5; --accent-fg: #a5a8ff; --err: #f87171;
+    --btn-bg: #e6e7ee; --btn-fg: #12131a; --btn-hover: #ffffff;
+    --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6);
+    --eng: #fb923c; --tint: #23263a;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px; background: var(--bg); color: var(--fg); min-height: 100%;
+  }
+  button { font: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ── Header ── */
+  #header {
+    background: var(--hdr-bg); color: var(--hdr-fg); padding: 8px 20px; display: flex; align-items: center; gap: 12px;
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 100; box-shadow: 0 2px 6px var(--shadow);
+  }
+  #header-title { font-size: 14px; font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #node-count { font-size: 12px; color: var(--hdr-muted); white-space: nowrap; }
+
+  /* ── Toolbar ── */
+  .toolbar { margin: 10px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .toolbar .panel-title { font-size: 12px; font-weight: 600; color: var(--fg-2); white-space: nowrap; }
+  .toolbar input[type=text] {
+    padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; font: inherit; font-size: 12px;
+    background: var(--surface); color: var(--fg); outline: none; transition: border-color .15s; width: 320px; max-width: 100%;
+  }
+  .toolbar input:focus { border-color: var(--accent); }
+  .btn {
+    padding: 3px 12px; border: 1px solid var(--btn-bg); border-radius: 6px; background: var(--btn-bg); color: var(--btn-fg);
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
+  }
+  .btn:hover { background: var(--btn-hover); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  #err { font-size: 12px; color: var(--err); }
+
+  /* ── Report title ── */
+  #report-title { margin: 10px 20px 4px; }
+  #report-title h1 { font-size: 18px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
+  #report-title .node-id { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+
+  /* ── Grid ── */
+  .section { margin: 10px 20px 0; }
+  .section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .section-head h2 { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+  .section-head .count { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .grid-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+  table.grid { width: 100%; border-collapse: collapse; }
+  table.grid th {
+    position: sticky; top: 0; background: var(--head); text-align: left; font-size: 10px; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--muted); font-weight: 600; padding: 4px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.grid td { padding: 1px 10px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
+  table.grid tr:last-child td { border-bottom: none; }
+  table.grid tr.anc .node-name { color: var(--muted); }
+  th.mark-col, td.mark-col { width: 62px; padding-left: 10px; padding-right: 0; }
+  table.grid th.name-col, table.grid td.name-cell { width: 1%; white-space: nowrap; }
+  table.grid th.rule-col, table.grid td.rule-col { width: 1%; min-width: 130px; }
+  table.grid th.fill, table.grid td.fill { width: auto; padding: 0; }
+  .name-inner { display: flex; align-items: center; }
+  .indent { display: inline-block; flex-shrink: 0; }
+  .toggle { width: 18px; height: 18px; flex-shrink: 0; border: none; background: none; cursor: pointer; color: var(--muted); font-size: 10px; border-radius: 4px; }
+  .toggle:hover { background: var(--border); }
+  .toggle.leaf { visibility: hidden; cursor: default; }
+  .node-name { font-weight: 400; color: var(--fg-strong); margin-left: 2px; }
+  .node-name.eng-party { font-weight: 700; }
+  .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .empty { padding: 24px; color: var(--muted); font-size: 13px; }
+  #foot { margin: 8px 20px 0; font-size: 11px; color: var(--muted); line-height: 1.5; }
+  #app { display: none; padding-bottom: 30px; }
+
+  /* Rule pills: label only; the reasons are in the popup */
+  .rpill {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: none;
+    color: var(--accent-fg); border: 1px solid var(--accent);
+  }
+  button.rpill { cursor: pointer; }
+  button.rpill:hover { background: var(--tint); }
+  button.rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rpill.unk { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+  .rpill.apply { background: var(--tint); }
+
+  /* Audit / non-audit marks before the name: orange shield = audit client, handshake on a white badge = non-audit client */
+  .mark { display: flex; align-items: center; gap: 3px; width: 40px; }
+  .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
+  .eng svg { display: block; }
+  .eng.audit svg { width: 14px; height: 14px; fill: var(--eng); stroke: var(--eng); stroke-width: 1; stroke-linejoin: round; }
+  .eng.non { width: 17px; height: 17px; border: 1.5px solid var(--eng); border-radius: 50%; background: #fff; }
+  .eng.non svg { width: 11px; height: 11px; fill: none; stroke: var(--eng); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .eng-key { display: flex; gap: 12px; margin-left: 6px; font-size: 11px; color: var(--muted); }
+  .eng-key span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ── Popup ── */
+  #pop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s; }
+  #pop-backdrop.open { opacity: 1; pointer-events: auto; }
+  .pop-panel { position: relative; background: var(--surface); color: var(--fg-2); border-radius: 12px; box-shadow: 0 8px 32px var(--shadow); width: 440px; max-width: 92vw; max-height: 80vh; overflow-y: auto; padding: 18px 20px; font-size: 13px; line-height: 1.45; }
+  .pop-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
+  .pop-panel h2 { font-size: 15px; font-weight: 700; color: var(--fg-strong); margin: 0 24px 2px 0; }
+  .pop-panel .sec { font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: var(--fg-strong); }
+  .pop-panel .lead { margin: 12px 0 4px; color: var(--fg-strong); }
+  .pop-panel ul { padding-left: 18px; }
+  .pop-panel li { margin-bottom: 4px; }
+  .pop-panel .id { color: var(--muted); white-space: nowrap; }
+  .pop-panel .tag { font-size: 10px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); margin-left: 6px; white-space: nowrap; }
+  .pop-panel .gov { margin-top: 8px; padding: 8px 10px; background: var(--tint); border-left: 3px solid var(--accent); border-radius: 4px; color: var(--fg-strong); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <span id="header-title">Audit Rule Engagement Tree</span>
+  <span id="node-count"></span>
+</div>
+
+<div class="toolbar" id="owner-bar">
+  <label class="panel-title" for="owner-input">Ultimate owner:</label>
+  <input id="owner-input" type="text" list="owner-list" placeholder="BvD ID, e.g. FR100000001" autocomplete="off" />
+  <datalist id="owner-list"></datalist>
+  <button class="btn" id="load-btn">Load</button>
+  <span id="err"></span>
+</div>
+
+<div id="report-title" hidden><h1 id="report-title-text"></h1></div>
+
+<div id="app">
+  <div class="section">
+    <div class="section-head">
+      <h2>Engaged parties</h2>
+      <span class="eng-key">
+        <span><span data-eng="audit"></span>Audit client</span>
+        <span><span data-eng="non"></span>Non-audit client</span>
+      </span>
+      <span class="count" id="tree-count"></span>
+    </div>
+    <div class="grid-wrap" id="grid"></div>
+  </div>
+  <div id="foot"></div>
+</div>
+
+<div id="pop-backdrop"><div class="pop-panel" id="pop" role="dialog" aria-modal="true"></div></div>
+
+<script>
+/* ═══ TOOL CALLS ══════════════════════════════════════════════════════════
+   Steps, as in the acct-audit-rule-engagement-tree skill:
+     1. get_component_group(ultimateOwnerBvdId)        -> Client / Matter / Party members of the family
+     2. matter.clientId is the party id (same id space in this tenant), so no get_client call is needed
+     3. matter names already carry the "[Audit - X]" suffix, so no get_matter call is needed
+     4. get_party(ultimateOwnerBvdId, ["CorporateFamily"]) -> the hierarchy only
+     5. get_party(partyId, ["Notes"]) per engaged party, in parallel -> Orbis JSON note
+   Live data comes from the Intapp host, which injects window.celeste. Anywhere else the built-in sample answers
+   with the same response shapes, so the same code path runs.
+   ═══════════════════════════════════════════════════════════════════════ */
+function isLive() { return typeof window.celeste !== "undefined"; }
+
+function callTool(name, args) {
+  return isLive() ? celeste.query("intapp_compliance__" + name, args) : Promise.resolve(MOCK(name, args));
+}
+
+function extractObj(raw, key) {
+  if (!raw) return null;
+  if (typeof raw === "object" && !Array.isArray(raw) && (!key || key in raw)) return raw;
+  if (Array.isArray(raw)) {
+    for (var i = 0; i < raw.length; i++) {
+      var b = raw[i];
+      var v = (b && b.text != null) ? b.text : (b && b.content != null) ? b.content : (b && b.value != null) ? b.value : (b && b.data != null) ? b.data : b;
+      if (typeof v === "string") {
+        try { var p = JSON.parse(v); if (!key || key in p) return p; } catch (e) {}
+      }
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        if (!key || key in v) return v;
+        var envs = ["result", "data", "value", "payload"];
+        for (var j = 0; j < envs.length; j++) {
+          if (v[envs[j]] && typeof v[envs[j]] === "object" && (!key || key in v[envs[j]])) return v[envs[j]];
+        }
+      }
+    }
+  }
+  if (typeof raw === "string") {
+    try { var p2 = JSON.parse(raw); if (!key || key in p2) return p2; } catch (e2) {}
+  }
+  return null;
+}
+
+/* ═══ SAMPLE (answers the tool calls when there is no host) ═══════════════ */
+var SAMPLE_OWNER = "FR100000001";
+var SAMPLE_TREE = {
+  externalId: "FR100000001", name: "Brightwater Group SA", subCompanies: [
+    { externalId: "FR100000002", name: "Brightwater Assurance SA", subCompanies: [
+      { externalId: "AT100000003", name: "Brightwater Austria GmbH", subCompanies: [] },
+      { externalId: "DE100000004", name: "Brightwater Services GmbH", subCompanies: [] } ] },
+    { externalId: "US100000005", name: "Brightwater Capital Inc.", subCompanies: [
+      { externalId: "US100000006", name: "Brightwater Securities LLC", subCompanies: [
+        { externalId: "JP100000007", name: "Brightwater Japan K.K.", subCompanies: [] } ] } ] },
+    { externalId: "HK100000008", name: "Brightwater Asia Ltd", subCompanies: [] },
+    { externalId: "TW100000009", name: "Brightwater Taiwan Co., Ltd.", subCompanies: [] },
+    { externalId: "BR100000011", name: "Brightwater Brasil Ltda", subCompanies: [] } ] };
+var SAMPLE_MATTERS = [
+  ["FR100000001", "FR100000001_aud1", "Brightwater Group SA - Consolidated Audit FY2025 [Audit - EU-537]"],
+  ["FR100000002", "FR100000002_aud1", "Brightwater Assurance SA - Statutory Audit FY2025 [Audit - EU-537]"],
+  ["AT100000003", "AT100000003_aud1", "Brightwater Austria GmbH - Statutory Audit FY2025 [Audit - IESBA]"],
+  ["AT100000003", "AT100000003_aud2", "Brightwater Austria GmbH - Group Reporting Audit FY2025 [Audit - EU-537]"],
+  ["AT100000003", "AT100000003_con1", "Brightwater Austria GmbH - Non-Audit Tax Advisory"],
+  ["DE100000004", "DE100000004_con1", "Brightwater Services GmbH - Transfer Pricing Review"],
+  ["US100000005", "US100000005_aud1", "Brightwater Capital Inc. - Annual Audit FY2025 [Audit - AICPA]"],
+  ["JP100000007", "JP100000007_aud1", "Brightwater Japan K.K. - Audit FY2025"],
+  ["HK100000008", "HK100000008_aud1", "Brightwater Asia Ltd - Statutory Audit FY2025 [Audit - UK-FRC]"],
+  ["TW100000009", "TW100000009_con1", "Brightwater Taiwan Co., Ltd. - Advisory Retainer"],
+  ["BR100000011", "BR100000011_aud1", "Brightwater Brasil Ltda - Audit FY2025 [Audit - AICPA]"],
+  ["XX100000010", "XX100000010_aud1", "Brightwater Escrow Ltd - Audit FY2025 [Audit - IESBA]"]
+];
+var SAMPLE_ORBIS = {
+  FR100000001: { countryIso: "FR", listed: "Listed", exchange: "XPAR", nace: "6420" },
+  FR100000002: { countryIso: "FR", listed: "Unlisted", nace: "6512" },
+  AT100000003: { countryIso: "AT", listed: "Unlisted", nace: "6420" },
+  DE100000004: { countryIso: "DE", listed: "Unlisted", nace: "7022" },
+  US100000005: { countryIso: "US", listed: "Unlisted", nace: "6419", naics2017: "522110", ussic: "602" },
+  JP100000007: { countryIso: "JP", listed: "Listed", exchange: "XJPX", nace: "6420" },
+  TW100000009: { countryIso: "TW", listed: "Unlisted", nace: "6419" },
+  BR100000011: { countryIso: "BR", listed: "Unlisted", nace: "6420" }
+  /* HK100000008 has no note, so its entity rule is unknown */
+};
+function sampleNote(id, rec, modifiedOn) {
+  var fields = Object.keys(rec).map(function (k) { return '"' + k + '": ' + JSON.stringify(rec[k]); }).join(", ");
+  return { modifiedOn: modifiedOn, message: '<div><div><span>"' + id + '": {</span><span>' + fields + '</span><span>}</span></div></div>' };
+}
+function MOCK(name, a) {
+  if (name === "get_component_group") {
+    if (a.componentGroupName !== SAMPLE_OWNER) return { groupId: a.componentGroupName, groupMembers: [] };
+    var members = [{ type: "Client", clientId: SAMPLE_OWNER, name: "Brightwater Group SA" }];
+    SAMPLE_MATTERS.forEach(function (m) { members.push({ type: "Matter", clientId: m[0], matterId: m[1], name: m[2] }); });
+    members.push({ type: "Party", partyId: SAMPLE_OWNER, name: "Brightwater Group SA" });
+    members.push({ type: "Client", clientId: "XX100000010", name: "Brightwater Escrow Ltd" });
+    return { groupId: SAMPLE_OWNER, name: SAMPLE_OWNER, active: true, groupMembers: members };
+  }
+  if (name === "get_party") {
+    var props = a.propertiesToLoad || [];
+    if (props.indexOf("CorporateFamily") !== -1) {
+      return { partyId: a.partyId, name: "Brightwater Group SA", bureauVanDijkId: a.partyId,
+               corporateTrees: [{ name: "Brightwater Group SA", rootCompanyId: SAMPLE_OWNER, providerType: "BureauVanDijk", rootCompany: SAMPLE_TREE }], notes: [] };
+    }
+    var notes = [];
+    if (props.indexOf("Notes") !== -1 && SAMPLE_ORBIS[a.partyId]) {
+      notes.push({ modifiedOn: "2026-10-13", message: "<div>Call notes: follow up next week.</div>" }); /* free-form, newest, must be skipped */
+      notes.push(sampleNote(a.partyId, SAMPLE_ORBIS[a.partyId], "2026-10-12"));
+    }
+    return { partyId: a.partyId, bureauVanDijkId: a.partyId, notes: notes };
+  }
+  return null;
+}
+
+/* ═══ ENGAGEMENTS ═════════════════════════════════════════════════════════ */
+var RANK = { "SEC/PCAOB": 6, "EU-537": 5, "UK-FRC": 4, "IESBA-PIE": 3, "IESBA": 2, "AICPA": 1 };
+var US_MIC = ["XNAS", "XNYS", "ARCX", "XASE", "BATS", "IEXG"];
+/* EU/EEA/UK exchanges: the skill names the group but not the list, so this is a working list. Extend as needed. */
+var EU_MIC = ["XLON", "XPAR", "XAMS", "XBRU", "XETR", "XFRA", "XMIL", "XMAD", "XSTO", "XCSE", "XHEL", "XOSL", "XDUB",
+              "XLIS", "XWBO", "XATH", "XWAR", "XPRA", "XBUD", "XLUX", "XICE", "XCYS", "XMAL", "XLJU", "XZAG", "XBUL", "XBRA", "XRIS", "XTAL", "XLIT"];
+var EU_COUNTRIES = "AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO".split(" ");
+
+/* Audit flag comes from the matter name only: the whole word "audit", after removing every "non-audit" variant */
+function isAuditMatter(name) {
+  return /\baudit\b/.test(String(name || "").toLowerCase().replace(/non[\s-]?audit/g, ""));
+}
+
+/* Framework named by a "[Audit - X]" suffix at the very end of the name, else null. Never inferred from other wording. */
+var BASIS_RE = /\s*\[\s*audit\s*-\s*(sec\/pcaob|sec|eu-537|uk-frc|iesba-pie|iesba|aicpa)\s*\]\s*$/i;
+function basisOf(name) {
+  var m = BASIS_RE.exec(String(name || ""));
+  if (!m) return null;
+  var v = m[1].toUpperCase();
+  return v === "SEC" ? "SEC/PCAOB" : v;
+}
+function displayName(name) { return String(name || "").replace(BASIS_RE, "").trim(); }
+
+function strictest(list) {
+  return list.reduce(function (best, f) { return f && (!best || RANK[f] > RANK[best]) ? f : best; }, null);
+}
+
+function countryName(cc) {
+  try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch (e) { return cc; }
+}
+
+/* Entity rule from Moody's fields only. Three tests (listing, industry, country); the strictest framework that applies
+   is the entity rule, and every lower-ranked different framework is "also". Returns null when nothing applies. */
+function entityRule(o) {
+  if (!o) return null;
+  var codes = function (v) { return [].concat(v == null ? [] : v).map(String); };
+  var hits = [];
+  var ex = String(o.exchange || "").toUpperCase();
+  if (o.listed === "Listed") {
+    if (!ex) hits.push({ jur: "IESBA-PIE", why: "Listed company" });
+    else if (US_MIC.indexOf(ex) > -1) hits.push({ jur: "SEC/PCAOB", why: "Listed on a US exchange" });
+    else if (EU_MIC.indexOf(ex) > -1) hits.push({ jur: "EU-537", why: "Listed on an EU, EEA or UK exchange" });
+    else hits.push({ jur: "IESBA-PIE", why: "Listed on an exchange outside the US, EU/EEA and UK" });
+  }
+  var parts = [];
+  codes(o.nace).forEach(function (c) { if (c === "6419" || c === "6492" || c.indexOf("65") === 0) parts.push("NACE " + c); });
+  codes(o.naics2017).forEach(function (c) { if (c.indexOf("5221") === 0 || c.indexOf("5241") === 0) parts.push("NAICS " + c); });
+  codes(o.ussic).forEach(function (c) { if (c.indexOf("60") === 0 || c.indexOf("63") === 0) parts.push("US SIC " + c); });
+  if (parts.length) hits.push({ jur: "IESBA-PIE", why: "Industry codes mark it as a credit institution or insurer (" + parts.join(", ") + ")" });
+  var cc = String(o.countryIso || "").toUpperCase();
+  if (cc) {
+    var nm = countryName(cc);
+    if (cc === "US") hits.push({ jur: "AICPA", why: "Country is the US" });
+    else if (cc === "GB") hits.push({ jur: "UK-FRC", why: "Country is the UK" });
+    else if (EU_COUNTRIES.indexOf(cc) > -1) hits.push({ jur: "EU-537", why: "Country is " + nm + " (EU)" });
+    else hits.push({ jur: "IESBA", why: "Country is " + nm });
+  }
+  var entity = strictest(hits.map(function (h) { return h.jur; }));
+  if (!entity) return null;
+  var because = hits.filter(function (h) { return h.jur === entity; }).map(function (h) { return h.why; });
+  var also = [], seen = {};
+  hits.filter(function (h) { return h.jur !== entity; })
+      .sort(function (a, b) { return RANK[b.jur] - RANK[a.jur]; })
+      .forEach(function (h) {
+        if (seen[h.jur]) { seen[h.jur].because += "; " + h.why.charAt(0).toLowerCase() + h.why.slice(1); return; }
+        seen[h.jur] = { jur: h.jur, because: h.why };
+        also.push(seen[h.jur]);
+      });
+  return { entity: entity, why: { because: because, also: also } };
+}
+
+function joinList(a) { return a.length < 3 ? a.join(" and ") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; }
+
+/* Why the apply rule is what it is, by case */
+function applyWhy(existing, entity) {
+  if (existing && entity) {
+    if (existing === entity) return "Audit engagements and the entity rule are both " + existing + ".";
+    if (RANK[existing] > RANK[entity]) return "Audit engagements are under " + existing + ", which is stricter than the entity rule, " + entity + ".";
+    return "The entity rule, " + entity + ", is stricter than the audit engagement rule, " + existing + ".";
+  }
+  if (existing) return "Audit engagements are under " + existing + ", so " + existing + " applies.";
+  if (entity) return "The entity rule is " + entity + ", so " + entity + " applies.";
+  return null;
+}
+
+/* Everything shown for one engaged party */
+function buildParty(matters, orbis) {
+  var aud = [], non = [];
+  matters.forEach(function (m) {
+    if (isAuditMatter(m.name)) aud.push({ name: displayName(m.name), id: m.id, basis: basisOf(m.name) });
+    else non.push({ name: displayName(m.name), id: m.id, basis: null });
+  });
+  var audit = aud.length > 0;
+  var bases = [];
+  aud.forEach(function (g) { if (g.basis && bases.indexOf(g.basis) === -1) bases.push(g.basis); });
+  var existing = audit ? strictest(bases) : null;
+  var ent = entityRule(orbis);
+  var entity = ent ? ent.entity : null;
+  var apply = audit ? strictest([existing, entity]) : null;
+  var governs = null;
+  if (audit && bases.length > 1) {
+    bases.sort(function (a, b) { return RANK[b] - RANK[a]; });
+    governs = "Audit engagements are under " + joinList(bases) + ". " + existing + " is the strictest, so it applies to this client.";
+  }
+  return {
+    audit: audit, nonAudit: non.length > 0, existing: existing, entity: entity, apply: apply,
+    applyWhy: apply ? applyWhy(existing, entity) : null,
+    engagements: { audit: aud, nonAudit: non }, governs: governs, why: ent ? ent.why : null
+  };
+}
+
+/* Orbis note: HTML wrapping a JSON fragment keyed by the party's BvD id. Newest note holding that key wins. */
+function noteJson(html) {
+  var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
+  var text = (doc.body.textContent || "").trim();
+  var tries = [text, "{" + text + "}"];
+  for (var i = 0; i < tries.length; i++) {
+    try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
+  }
+  return null;
+}
+function orbisFromNotes(party, bvdId) {
+  var notes = (party.notes || []).slice().sort(function (a, b) { return String(b.modifiedOn).localeCompare(String(a.modifiedOn)); });
+  for (var i = 0; i < notes.length; i++) {
+    var obj = noteJson(notes[i].message), rec = obj && obj[bvdId];
+    if (rec && typeof rec === "object") {
+      return { countryIso: rec.countryIso, listed: rec.listed, exchange: rec.exchange, nace: rec.nace, naics2017: rec.naics2017, ussic: rec.ussic };
+    }
+  }
+  return null;
+}
+
+/* Pre-order flatten with a recursion-stack guard (not a global visited set, so repeated subtrees re-expand) */
+function flatten(root) {
+  var out = [];
+  (function walk(node, depth, stack) {
+    var id = node && node.externalId;
+    if (!id || stack.indexOf(id) !== -1) return;
+    out.push({ id: id, name: node.name || id, depth: depth });
+    (node.subCompanies || []).forEach(function (c) { walk(c, depth + 1, stack.concat(id)); });
+  })(root, 0, []);
+  return out;
+}
+
+/* Keep a node when it is engaged or has an engaged descendant; kept nodes retain their depth and order */
+function filterTree(flat, engaged) {
+  var keep = flat.map(function () { return false; });
+  for (var i = flat.length - 1; i >= 0; i--) {
+    if (engaged.has(flat[i].id)) keep[i] = true;
+    if (keep[i]) {
+      for (var j = i - 1; j >= 0; j--) { if (flat[j].depth < flat[i].depth) { keep[j] = true; break; } }
+    }
+  }
+  return flat.filter(function (n, i) { return keep[i]; });
+}
+
+/* The whole run for one ultimate owner */
+function run(ownerId) {
+  return callTool("get_component_group", { componentGroupName: ownerId }).then(function (raw) {
+    var g = extractObj(raw, "groupMembers");
+    var members = (g && g.groupMembers) || [];
+    if (!members.length) throw new Error("Component group " + ownerId + " did not resolve.");
+
+    var names = new Map(), byParty = new Map();
+    members.forEach(function (m) {
+      if (!m) return;
+      if ((m.type === "Client" || m.type === "Party") && (m.clientId || m.partyId) && m.name) names.set(m.clientId || m.partyId, m.name);
+      if (m.type === "Matter" && m.clientId && m.name) {
+        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
+        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
+      }
+    });
+    if (!byParty.size) throw new Error("No engagements found for " + ownerId + ".");
+
+    return Promise.all([
+      callTool("get_party", { partyId: ownerId, propertiesToLoad: ["CorporateFamily"] }),
+      Promise.all(Array.from(byParty.keys()).map(function (id) {
+        return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+          .then(function (praw) { var p = extractObj(praw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
+          .catch(function () { return [id, null]; });
+      }))
+    ]).then(function (res) {
+      var party = extractObj(res[0], "partyId");
+      var trees = (party && party.corporateTrees) || [];
+      var tree = trees.filter(function (t) { return t.rootCompanyId === ownerId; })[0] || trees[0];
+      if (!tree || !tree.rootCompany) throw new Error("Corporate tree not found for " + ownerId + ".");
+
+      var orbis = new Map();
+      res[1].forEach(function (pr) { orbis.set(pr[0], pr[1]); });
+      var info = new Map();
+      byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
+
+      var flat = flatten(tree.rootCompany);
+      var nodes = filterTree(flat, new Set(Array.from(info.keys())));
+      var inTree = new Set(flat.map(function (n) { return n.id; }));
+      flat.forEach(function (n) { names.set(n.id, n.name); }); /* the tree's own names win */
+
+      var notes = [];
+      var missing = Array.from(info.keys()).filter(function (id) { return !inTree.has(id); })
+        .map(function (id) { return (names.get(id) || id) + " (" + id + ")"; });
+      if (missing.length) notes.push("Engaged but not in the tree: " + missing.join(", ") + ".");
+      var noNote = [], noCountry = [];
+      info.forEach(function (v, id) {
+        if (v.entity) return;
+        var label = (names.get(id) || id);
+        if (!orbis.get(id)) noNote.push(label); else noCountry.push(label);
+      });
+      if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
+      if (noCountry.length) notes.push("No country recorded, so its entity rule is unknown: " + noCountry.join(", ") + ".");
+      notes.unshift("Entity rule from Moody's Orbis data recorded in party notes.");
+
+      return { guo: { id: ownerId, name: tree.rootCompany.name || ownerId }, nodes: nodes, info: info, footer: notes };
+    });
+  });
+}
+
+/* ═══ STATE & RENDER ══════════════════════════════════════════════════════ */
+var $ = function (id) { return document.getElementById(id); };
+var state = { result: null, collapsed: new Set() };
+
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+var ENG_PATHS = {
+  audit: ["M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"],
+  non: ["m11 17 2 2a1 1 0 1 0 3-3",
+        "m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4",
+        "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8"]
+};
+var ENG_LABEL = { audit: "Audit client", non: "Non-audit client" };
+function engIcon(kind) {
+  var ns = "http://www.w3.org/2000/svg";
+  var wrap = el("span", "eng " + kind);
+  wrap.setAttribute("role", "img");
+  wrap.setAttribute("aria-label", ENG_LABEL[kind]);
+  wrap.title = ENG_LABEL[kind];
+  var svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  ENG_PATHS[kind].forEach(function (d) {
+    var path = document.createElementNS(ns, "path");
+    path.setAttribute("d", d);
+    svg.appendChild(path);
+  });
+  wrap.appendChild(svg);
+  return wrap;
+}
+
+function ruleCell(td, info, kind) {
+  if (!info) return;
+  var pill, label;
+  if (kind === "r") {
+    if (!info.audit) return;
+    label = info.existing || "Not labelled";
+    pill = el("button", "rpill" + (info.existing ? "" : " unk"), label);
+    pill.title = "Show engagements";
+  } else if (kind === "p") {
+    if (!info.entity) return;
+    pill = el("button", "rpill", info.entity);
+    pill.title = "Why this entity rule";
+  } else {
+    if (!info.audit || !info.apply) return;
+    pill = el("button", "rpill apply", info.apply);
+    pill.title = "Why this rule applies";
+  }
+  pill.type = "button";
+  pill.setAttribute("aria-haspopup", "dialog");
+  pill.addEventListener("click", function () { openPop(pill, info, kind); });
+  td.appendChild(pill);
+}
+
+function renderGrid() {
+  var R = state.result, nodes = R.nodes;
+  var hasKids = nodes.map(function (n, i) { return i + 1 < nodes.length && nodes[i + 1].depth > n.depth; });
+  var table = el("table", "grid");
+  var hr = el("tr");
+  hr.appendChild(el("th", "mark-col"));
+  var nameTh = el("th", "name-col");
+  var parents = nodes.map(function (n, i) { return i; }).filter(function (i) { return hasKids[i]; });
+  if (parents.length) {
+    var allOpen = parents.every(function (i) { return !state.collapsed.has(i); });
+    var all = el("button", "toggle", allOpen ? "▾" : "▸");
+    all.type = "button";
+    all.title = allOpen ? "Collapse all" : "Expand all";
+    all.setAttribute("aria-label", all.title);
+    all.addEventListener("click", function () {
+      if (allOpen) parents.forEach(function (i) { state.collapsed.add(i); }); else state.collapsed.clear();
+      renderGrid();
+    });
+    nameTh.appendChild(all);
+  }
+  hr.appendChild(nameTh);
+  ["Existing Audit Rule", "Entity Rule", "Apply Audit Rule"].forEach(function (t) { hr.appendChild(el("th", "rule-col", t)); });
+  hr.appendChild(el("th", "fill"));
+  var thead = el("thead");
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  var tbody = el("tbody"), hideBelow = null;
+  nodes.forEach(function (n, i) {
+    if (hideBelow !== null) { if (n.depth > hideBelow) return; hideBelow = null; }
+    var info = R.info.get(n.id);
+    var tr = el("tr", info ? "" : "anc");
+
+    var mk = el("td", "mark-col");
+    if (info) {
+      var box = el("div", "mark");
+      if (info.audit) box.appendChild(engIcon("audit"));
+      if (info.nonAudit) box.appendChild(engIcon("non"));
+      mk.appendChild(box);
+    }
+    tr.appendChild(mk);
+
+    var nameTd = el("td", "name-cell"), inner = el("div", "name-inner");
+    var ind = el("span", "indent");
+    ind.style.width = (n.depth * 20) + "px";
+    inner.appendChild(ind);
+    var open = !state.collapsed.has(i);
+    var tg = el("button", "toggle" + (hasKids[i] ? "" : " leaf"), open ? "▾" : "▸");
+    tg.type = "button";
+    tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
+    if (hasKids[i]) tg.addEventListener("click", function () {
+      if (state.collapsed.has(i)) state.collapsed.delete(i); else state.collapsed.add(i);
+      renderGrid();
+    });
+    inner.appendChild(tg);
+    inner.appendChild(el("span", "node-name" + (info ? " eng-party" : ""), n.name));
+    inner.appendChild(el("span", "node-id", "(" + n.id + ")"));
+    nameTd.appendChild(inner);
+    tr.appendChild(nameTd);
+
+    ["r", "p", "a"].forEach(function (k) { var td = el("td", "rule-col"); ruleCell(td, info, k); tr.appendChild(td); });
+    tr.appendChild(el("td", "fill"));
+    tbody.appendChild(tr);
+    if (hasKids[i] && !open) hideBelow = n.depth;
+  });
+  table.appendChild(tbody);
+
+  var host = $("grid");
+  host.innerHTML = "";
+  host.appendChild(table);
+}
+
+function renderResult() {
+  var R = state.result, audit = 0, non = 0, shown = new Set();
+  R.nodes.forEach(function (n) {
+    var v = R.info.get(n.id);
+    if (!v || shown.has(n.id)) return;
+    shown.add(n.id);
+    if (v.audit) audit++; else if (v.nonAudit) non++;
+  });
+  var h = $("report-title-text");
+  h.textContent = R.guo.name + " Corporate Tree Relationships";
+  h.appendChild(el("span", "node-id", "(" + R.guo.id + ")"));
+  $("report-title").hidden = false;
+  $("node-count").textContent = shown.size + " engaged · " + audit + " audit clients · " + non + " non-audit only";
+  $("tree-count").textContent = R.nodes.length + " parties shown";
+  var foot = $("foot");
+  foot.innerHTML = "";
+  R.footer.forEach(function (t) { foot.appendChild(el("div", null, t)); });
+  $("app").style.display = "block";
+  renderGrid();
+}
+
+/* ═══ POPUPS ══════════════════════════════════════════════════════════════ */
+var opener = null;
+function li(text, node) { var x = el("li"); if (text != null) x.textContent = text; if (node) x.appendChild(node); return x; }
+function lead(parent, bold, rest) {
+  var d = el("div", "lead");
+  d.appendChild(el("b", null, bold));
+  d.appendChild(document.createTextNode(" " + rest));
+  parent.appendChild(d);
+}
+function engList(parent, title, list) {
+  if (!list.length) return;
+  parent.appendChild(el("div", "sec", title));
+  var ul = el("ul");
+  list.forEach(function (g) {
+    var x = el("li");
+    x.appendChild(document.createTextNode(g.name + " "));
+    x.appendChild(el("span", "id", "(" + g.id + ")"));
+    if (g.basis) x.appendChild(el("span", "tag", g.basis));
+    ul.appendChild(x);
+  });
+  parent.appendChild(ul);
+}
+
+function openPop(btn, info, kind) {
+  opener = btn;
+  var pop = $("pop");
+  pop.innerHTML = "";
+  var x = el("button", "pop-close", "×");
+  x.type = "button";
+  x.setAttribute("aria-label", "Close");
+  x.addEventListener("click", closePop);
+  pop.appendChild(x);
+  var name = btn.closest("tr").querySelector(".node-name").textContent;
+  pop.appendChild(el("h2", null, name));
+
+  if (kind === "p") {
+    var w = info.why || {};
+    if (w.because && w.because.length) {
+      lead(pop, info.entity, "is the entity rule because");
+      var ul = el("ul");
+      w.because.forEach(function (t) { ul.appendChild(li(t)); });
+      pop.appendChild(ul);
+    }
+    if (w.also && w.also.length) {
+      pop.appendChild(el("div", "sec", "Other, less strict rules that also apply"));
+      var ul2 = el("ul");
+      w.also.forEach(function (a) {
+        var x2 = el("li");
+        x2.appendChild(el("b", null, a.jur));
+        x2.appendChild(document.createTextNode(" — " + a.because));
+        ul2.appendChild(x2);
+      });
+      pop.appendChild(ul2);
+    }
+  } else if (kind === "a") {
+    lead(pop, info.apply, "applies because");
+    pop.appendChild(el("div", null, info.applyWhy || ""));
+  } else {
+    engList(pop, "Audit engagements", info.engagements.audit);
+    engList(pop, "Non-audit engagements", info.engagements.nonAudit);
+    if (info.audit && info.existing) {
+      lead(pop, info.existing, "is the existing audit rule");
+      if (info.governs) pop.appendChild(el("div", "gov", info.governs));
+    }
+  }
+  $("pop-backdrop").classList.add("open");
+  x.focus();
+}
+function closePop() {
+  $("pop-backdrop").classList.remove("open");
+  if (opener) opener.focus();
+  opener = null;
+}
+
+/* ═══ LOAD & WIRING ═══════════════════════════════════════════════════════ */
+function load() {
+  var err = $("err");
+  err.textContent = "";
+  var id = $("owner-input").value.trim().toUpperCase();
+  if (!id) { err.textContent = "Enter the ultimate owner's BvD ID."; return; }
+  $("load-btn").disabled = true;
+  run(id).then(function (result) {
+    state.result = result;
+    state.collapsed = new Set();
+    renderResult();
+  }).catch(function (e) {
+    err.textContent = e.message;
+  }).then(function () { $("load-btn").disabled = false; });
+}
+
+$("load-btn").addEventListener("click", load);
+$("owner-input").addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
+$("pop-backdrop").addEventListener("click", function (e) { if (e.target === $("pop-backdrop")) closePop(); });
+document.addEventListener("keydown", function (e) { if (e.key === "Escape") closePop(); });
+document.querySelectorAll("[data-eng]").forEach(function (e) { e.replaceWith(engIcon(e.getAttribute("data-eng"))); });
+
+if (isLive()) {
+  $("owner-input").placeholder = "BvD ID of the ultimate owner";
+  $("owner-input").removeAttribute("list");
+} else {
+  var o = document.createElement("option");
+  o.value = SAMPLE_OWNER;
+  o.label = "Brightwater Group SA";
+  $("owner-list").appendChild(o);
+}
+</script>
+</body>
+</html>
