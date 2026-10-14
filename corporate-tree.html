@@ -1729,6 +1729,39 @@ if (isLive()) {
     });
   });
 }
+
+/* A party id can be passed in, so the page loads without typing:
+     - the page URL:       ?partyId=9906   (or #partyId=9906; "party" also works)
+     - the host context:   celeste.getContext(), read now and again when the host's init message arrives
+   Context keys are checked defensively (partyId, party_id, party.partyId, party.id, params.partyId, input.partyId).
+   The first id found wins, and it fills the input and loads. */
+function partyFromUrl() {
+  try {
+    var q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    return q.get("partyId") || q.get("party") || h.get("partyId") || h.get("party");
+  } catch (e) { return null; }
+}
+function partyFromContext(ctx) {
+  if (!ctx || typeof ctx !== "object") return null;
+  var v = ctx.partyId || ctx.party_id || (ctx.party && (ctx.party.partyId || ctx.party.id)) ||
+          (ctx.params && ctx.params.partyId) || (ctx.input && ctx.input.partyId);
+  return v != null && String(v).trim() ? String(v).trim() : null;
+}
+var autoLoaded = false;
+function autoLoad(id) {
+  if (autoLoaded || !id) return;
+  autoLoaded = true;
+  $("target-input").value = id;
+  loadTarget();
+}
+autoLoad(partyFromUrl());
+if (typeof window.celeste !== "undefined") {
+  try { autoLoad(partyFromContext(window.celeste.getContext())); } catch (e) { /* no context yet */ }
+}
+window.addEventListener("message", function (ev) {
+  var m = ev.data;
+  if (ev.source === window.parent && m && m.type === "celeste.rpc.init") autoLoad(partyFromContext(m.context));
+});
 </script>
 </body>
 </html>
