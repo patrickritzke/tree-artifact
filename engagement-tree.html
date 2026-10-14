@@ -76,6 +76,7 @@
   #report-title { margin: 10px 20px 4px; }
   #report-title h1 { font-size: 18px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
   #report-title .node-id { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+  #report-title .footnote { font-size: 11px; color: var(--muted); }
 
   /* ── Grid ── */
   .section { margin: 10px 20px 0; }
@@ -151,14 +152,14 @@
 </div>
 
 <div class="toolbar" id="owner-bar">
-  <label class="panel-title" for="owner-input">Ultimate owner:</label>
-  <input id="owner-input" type="text" list="owner-list" placeholder="BvD ID, e.g. FR100000001" autocomplete="off" />
-  <datalist id="owner-list"></datalist>
+  <label class="panel-title" for="party-input">Party ID:</label>
+  <input id="party-input" type="text" list="party-list" placeholder="Party ID, e.g. 30003" autocomplete="off" />
+  <datalist id="party-list"></datalist>
   <button class="btn" id="load-btn">Load</button>
   <span id="err"></span>
 </div>
 
-<div id="report-title" hidden><h1 id="report-title-text"></h1></div>
+<div id="report-title" hidden><h1 id="report-title-text"></h1><div class="footnote" id="report-footnote"></div></div>
 
 <div id="app">
   <div class="section">
@@ -179,11 +180,11 @@
 
 <script>
 /* ═══ TOOL CALLS ══════════════════════════════════════════════════════════
-   Steps, as in the acct-audit-rule-engagement-tree skill:
-     1. get_component_group(ultimateOwnerBvdId)        -> Client / Matter / Party members of the family
-     2. matter.clientId is the party id (same id space in this tenant), so no get_client call is needed
-     3. matter names already carry the "[Audit - X]" suffix, so no get_matter call is needed
-     4. get_party(ultimateOwnerBvdId, ["CorporateFamily"]) -> the hierarchy only
+   Steps, as in the acct-audit-rule-engagement-tree skill, starting from any party in the family:
+     1. get_party(partyId, ["CorporateFamily"])   -> the hierarchy; its root is the ultimate owner (GUO) BvD id
+     2. get_component_group(guoBvdId)             -> Client / Matter / Party members of the family
+     3. matter.clientId is the party id (same id space in this tenant), so no get_client call is needed
+     4. matter names already carry the "[Audit - X]" suffix, so no get_matter call is needed
      5. get_party(partyId, ["Notes"]) per engaged party, in parallel -> Orbis JSON note
    Live data comes from the Intapp host, which injects window.celeste. Anywhere else the built-in sample answers
    with the same response shapes, so the same code path runs.
@@ -221,6 +222,7 @@ function extractObj(raw, key) {
 
 /* ═══ SAMPLE (answers the tool calls when there is no host) ═══════════════ */
 var SAMPLE_OWNER = "FR100000001";
+var SAMPLE_PARTIES = { "30001": "FR100000001", "30003": "AT100000003", "30005": "US100000005", "30008": "HK100000008" };
 var SAMPLE_TREE = {
   externalId: "FR100000001", name: "Brightwater Group SA", subCompanies: [
     { externalId: "FR100000002", name: "Brightwater Assurance SA", subCompanies: [
@@ -273,8 +275,11 @@ function MOCK(name, a) {
   if (name === "get_party") {
     var props = a.propertiesToLoad || [];
     if (props.indexOf("CorporateFamily") !== -1) {
-      return { partyId: a.partyId, name: "Brightwater Group SA", bureauVanDijkId: a.partyId,
-               corporateTrees: [{ name: "Brightwater Group SA", rootCompanyId: SAMPLE_OWNER, providerType: "BureauVanDijk", rootCompany: SAMPLE_TREE }], notes: [] };
+      var bvd = SAMPLE_PARTIES[a.partyId] || a.partyId;
+      var hit = flatten(SAMPLE_TREE).filter(function (n) { return n.id === bvd; })[0];
+      if (!hit) return null;
+      return { partyId: a.partyId, name: hit.name, bureauVanDijkId: bvd, externalDataProvider: "BureauVanDijk",
+               corporateTrees: [{ name: SAMPLE_TREE.name, rootCompanyId: SAMPLE_OWNER, providerType: "BureauVanDijk", rootCompany: SAMPLE_TREE }], notes: [] };
     }
     var notes = [];
     if (props.indexOf("Notes") !== -1 && SAMPLE_ORBIS[a.partyId]) {
@@ -442,62 +447,64 @@ function filterTree(flat, engaged) {
   return flat.filter(function (n, i) { return keep[i]; });
 }
 
-/* The whole run for one ultimate owner */
-function run(ownerId) {
-  return callTool("get_component_group", { componentGroupName: ownerId }).then(function (raw) {
-    var g = extractObj(raw, "groupMembers");
-    var members = (g && g.groupMembers) || [];
-    if (!members.length) throw new Error("Component group " + ownerId + " did not resolve.");
+/* The whole run, starting from any party in the family */
+function run(partyId) {
+  return callTool("get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] }).then(function (praw) {
+    var party = extractObj(praw, "partyId");
+    if (!party) throw new Error("Could not load party " + partyId + ".");
+    var trees = party.corporateTrees || [];
+    var tree = trees.filter(function (t) { return t.providerType === "BureauVanDijk"; })[0] || trees[0];
+    if (!tree || !tree.rootCompany || !tree.rootCompany.externalId) throw new Error("No corporate tree found for party " + partyId + ".");
+    var ownerId = tree.rootCompany.externalId;   /* the ultimate owner (GUO) */
 
-    var names = new Map(), byParty = new Map();
-    members.forEach(function (m) {
-      if (!m) return;
-      if ((m.type === "Client" || m.type === "Party") && (m.clientId || m.partyId) && m.name) names.set(m.clientId || m.partyId, m.name);
-      if (m.type === "Matter" && m.clientId && m.name) {
-        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
-        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
-      }
-    });
-    if (!byParty.size) throw new Error("No engagements found for " + ownerId + ".");
+    return callTool("get_component_group", { componentGroupName: ownerId }).then(function (raw) {
+      var g = extractObj(raw, "groupMembers");
+      var members = (g && g.groupMembers) || [];
+      if (!members.length) throw new Error("Component group " + ownerId + " did not resolve.");
 
-    return Promise.all([
-      callTool("get_party", { partyId: ownerId, propertiesToLoad: ["CorporateFamily"] }),
-      Promise.all(Array.from(byParty.keys()).map(function (id) {
-        return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
-          .then(function (praw) { var p = extractObj(praw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
-          .catch(function () { return [id, null]; });
-      }))
-    ]).then(function (res) {
-      var party = extractObj(res[0], "partyId");
-      var trees = (party && party.corporateTrees) || [];
-      var tree = trees.filter(function (t) { return t.rootCompanyId === ownerId; })[0] || trees[0];
-      if (!tree || !tree.rootCompany) throw new Error("Corporate tree not found for " + ownerId + ".");
-
-      var orbis = new Map();
-      res[1].forEach(function (pr) { orbis.set(pr[0], pr[1]); });
-      var info = new Map();
-      byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
-
-      var flat = flatten(tree.rootCompany);
-      var nodes = filterTree(flat, new Set(Array.from(info.keys())));
-      var inTree = new Set(flat.map(function (n) { return n.id; }));
-      flat.forEach(function (n) { names.set(n.id, n.name); }); /* the tree's own names win */
-
-      var notes = [];
-      var missing = Array.from(info.keys()).filter(function (id) { return !inTree.has(id); })
-        .map(function (id) { return (names.get(id) || id) + " (" + id + ")"; });
-      if (missing.length) notes.push("Engaged but not in the tree: " + missing.join(", ") + ".");
-      var noNote = [], noCountry = [];
-      info.forEach(function (v, id) {
-        if (v.entity) return;
-        var label = (names.get(id) || id);
-        if (!orbis.get(id)) noNote.push(label); else noCountry.push(label);
+      var names = new Map(), byParty = new Map();
+      members.forEach(function (m) {
+        if (!m) return;
+        if ((m.type === "Client" || m.type === "Party") && (m.clientId || m.partyId) && m.name) names.set(m.clientId || m.partyId, m.name);
+        if (m.type === "Matter" && m.clientId && m.name) {
+          if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
+          byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
+        }
       });
-      if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
-      if (noCountry.length) notes.push("No country recorded, so its entity rule is unknown: " + noCountry.join(", ") + ".");
-      notes.unshift("Entity rule from Moody's Orbis data recorded in party notes.");
+      if (!byParty.size) throw new Error("No engagements found for " + ownerId + ".");
 
-      return { guo: { id: ownerId, name: tree.rootCompany.name || ownerId }, nodes: nodes, info: info, footer: notes };
+      return Promise.all(Array.from(byParty.keys()).map(function (id) {
+        return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+          .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
+          .catch(function () { return [id, null]; });
+      })).then(function (pairs) {
+        var orbis = new Map();
+        pairs.forEach(function (pr) { orbis.set(pr[0], pr[1]); });
+        var info = new Map();
+        byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
+
+        var flat = flatten(tree.rootCompany);
+        var nodes = filterTree(flat, new Set(Array.from(info.keys())));
+        var inTree = new Set(flat.map(function (n) { return n.id; }));
+        flat.forEach(function (n) { names.set(n.id, n.name); }); /* the tree's own names win */
+
+        var notes = [];
+        var missing = Array.from(info.keys()).filter(function (id) { return !inTree.has(id); })
+          .map(function (id) { return (names.get(id) || id) + " (" + id + ")"; });
+        if (missing.length) notes.push("Engaged but not in the tree: " + missing.join(", ") + ".");
+        var noNote = [], noCountry = [];
+        info.forEach(function (v, id) {
+          if (v.entity) return;
+          var label = (names.get(id) || id);
+          if (!orbis.get(id)) noNote.push(label); else noCountry.push(label);
+        });
+        if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
+        if (noCountry.length) notes.push("No country recorded, so its entity rule is unknown: " + noCountry.join(", ") + ".");
+        notes.unshift("Entity rule from Moody's Orbis data recorded in party notes.");
+
+        var found = (party.bureauVanDijkId || partyId) === ownerId ? null : { id: partyId, name: party.name || partyId };
+        return { guo: { id: ownerId, name: tree.rootCompany.name || ownerId }, from: found, nodes: nodes, info: info, footer: notes };
+      });
     });
   });
 }
@@ -644,6 +651,7 @@ function renderResult() {
   var h = $("report-title-text");
   h.textContent = R.guo.name + " Corporate Tree Relationships";
   h.appendChild(el("span", "node-id", "(" + R.guo.id + ")"));
+  $("report-footnote").textContent = R.from ? "Found from " + R.from.name + " (" + R.from.id + ")" : "";
   $("report-title").hidden = false;
   $("node-count").textContent = shown.size + " engaged · " + audit + " audit clients · " + non + " non-audit only";
   $("tree-count").textContent = R.nodes.length + " parties shown";
@@ -732,8 +740,8 @@ function closePop() {
 function load() {
   var err = $("err");
   err.textContent = "";
-  var id = $("owner-input").value.trim().toUpperCase();
-  if (!id) { err.textContent = "Enter the ultimate owner's BvD ID."; return; }
+  var id = $("party-input").value.trim().toUpperCase();
+  if (!id) { err.textContent = "Enter a party ID."; return; }
   $("load-btn").disabled = true;
   run(id).then(function (result) {
     state.result = result;
@@ -741,23 +749,30 @@ function load() {
     renderResult();
   }).catch(function (e) {
     err.textContent = e.message;
+    state.result = null; /* do not leave the previous party's tree under a new error */
+    $("app").style.display = "none";
+    $("report-title").hidden = true;
+    $("node-count").textContent = "";
   }).then(function () { $("load-btn").disabled = false; });
 }
 
 $("load-btn").addEventListener("click", load);
-$("owner-input").addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
+$("party-input").addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
 $("pop-backdrop").addEventListener("click", function (e) { if (e.target === $("pop-backdrop")) closePop(); });
 document.addEventListener("keydown", function (e) { if (e.key === "Escape") closePop(); });
 document.querySelectorAll("[data-eng]").forEach(function (e) { e.replaceWith(engIcon(e.getAttribute("data-eng"))); });
 
 if (isLive()) {
-  $("owner-input").placeholder = "BvD ID of the ultimate owner";
-  $("owner-input").removeAttribute("list");
+  $("party-input").placeholder = "Party ID, e.g. 9906";
+  $("party-input").removeAttribute("list");
 } else {
-  var o = document.createElement("option");
-  o.value = SAMPLE_OWNER;
-  o.label = "Brightwater Group SA";
-  $("owner-list").appendChild(o);
+  var names = { "30001": "Brightwater Group SA", "30003": "Brightwater Austria GmbH", "30005": "Brightwater Capital Inc.", "30008": "Brightwater Asia Ltd" };
+  Object.keys(names).forEach(function (id) {
+    var o = document.createElement("option");
+    o.value = id;
+    o.label = names[id];
+    $("party-list").appendChild(o);
+  });
 }
 </script>
 </body>
