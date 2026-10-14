@@ -155,11 +155,8 @@
   }
   .tb-head.closed { border-radius: 7px; }
   .tb-head:hover { filter: brightness(.97); }
-  .tb-headrow { display: flex; align-items: center; background: var(--bar-head); border-radius: 7px 7px 0 0; padding-left: 10px; }
-  .tb-headrow.closed { border-radius: 7px; }
-  .tb-headrow .tb-head { background: none; border-radius: inherit; padding-left: 6px; flex: 1; }
-  .tb-headrow input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent); flex: none; }
-  .tb-body.off #audit-rows, .tb-body.off .audit-foot { opacity: .5; }
+  .audit-row input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent); flex: none; }
+  .audit-row.off .dd, .audit-row.off .row-pills { opacity: .5; }
   .tb-chev { width: 10px; font-size: 10px; color: var(--muted); }
   .tb-head .summary { margin-left: auto; font-weight: 400; }
   .tb-body { padding: 7px 10px 8px; }
@@ -298,12 +295,9 @@
 <div id="app">
   <!-- Independence (gear) -->
   <div class="toolbar tb" id="bar-independence" hidden>
-    <div class="tb-headrow">
-      <input type="checkbox" id="audit-on" checked aria-label="Apply audit rules" title="Turn audit rules on or off" />
-      <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
-        <span class="tb-chev">▾</span><span>Apply Audit Rules</span><span class="summary" id="rule-summary"></span>
-      </button>
-    </div>
+    <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
+      <span class="tb-chev">▾</span><span>Apply Audit Rules</span><span class="summary" id="rule-summary"></span>
+    </button>
     <div class="tb-body" id="body-audit">
       <div id="audit-rows"></div>
       <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
@@ -615,7 +609,7 @@ function enrichEngagements(data, owners, seq) {
       pairs.forEach(function (pr) { if (pr && pr[1]) orbis.set(pr[0], pr[1]); });
       everyone.forEach(function (n) { if (orbis.has(n.id)) n.orbis = orbis.get(n.id); });
       state.engage = buildEngagements(data);
-      if (!state.rowsTouched) state.auditRows = autoAuditRows(data, state.target);
+      if (!state.rowsTouched) state.auditRows = autoAuditRows(data);
       renderAll();
     });
   }).catch(function () { /* engagements are an enhancement: leave the tree as it is */ });
@@ -676,13 +670,13 @@ function relsFor(clientId) {
 
 /* The active audit rows as { client, rule, rels }: a row counts once it has both an audit client and a rule. */
 function auditPairs() {
-  if (state.mode !== "independence" || !state.data || !state.auditOn) return [];
+  if (state.mode !== "independence" || !state.data) return [];
   var byId = new Map();
   state.data.nodes.forEach(function (n) { byId.set(n.id, n); });
   var pairs = [];
   state.auditRows.forEach(function (row) {
     var rule = RULES.filter(function (r) { return r.key === row.rule; })[0];
-    var client = row.client && byId.get(row.client);
+    var client = row.on && row.client && byId.get(row.client);
     if (rule && client) pairs.push({ client: client, rule: rule, rels: relsFor(client.id) });
   });
   return pairs;
@@ -771,15 +765,15 @@ function buildEngagements(data) {
   return out;
 }
 
-/* One row per audit client (target first) carrying its applied rule. With no engagement data, the target alone. */
-function autoAuditRows(data, target) {
-  var seen = new Set(), ids = [];
-  [target].concat(data.nodes).forEach(function (n) {
+/* One row per audit client in the tree, in tree order, each carrying its applied rule and switched on.
+   With no engagement data, one empty row. */
+function autoAuditRows(data) {
+  var seen = new Set(), rows = [];
+  data.nodes.forEach(function (n) {
     var e = state.engage.get(n.id);
-    if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); ids.push(n.id); }
+    if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); rows.push({ client: n.id, rule: e.apply, on: true }); }
   });
-  if (!ids.length) return [{ client: target.id, rule: state.auditRows[0] ? state.auditRows[0].rule : null }];
-  return ids.map(function (id) { return { client: id, rule: state.engage.get(id).apply }; });
+  return rows.length ? rows : [{ client: null, rule: null, on: true }];
 }
 
 /* Icons after the pin: orange shield = audit client, orange handshake on a white badge = non-audit client
@@ -837,10 +831,9 @@ function showEngagement() { return state.mode === "independence" && !!state.enga
 
 var state = {
   mode: "general",
-  auditRows: [{ client: null, rule: null }], /* one audit client + rule per row */
+  auditRows: [{ client: null, rule: null, on: true }], /* one audit client + rule per row; on = the row is applied */
   relCache: new Map(),
   engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
-  auditOn: true, /* master switch for the audit rules; the rows are kept while it is off */
   collapsed: { audit: false, filter: false }, /* toolbar sections folded away */
   rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
@@ -1062,7 +1055,7 @@ function loadTarget() {
     /* Audit clients come from the matters: one row each, with the rule that applies to it */
     state.engage = buildEngagements(data);
     state.rowsTouched = false;
-    state.auditRows = autoAuditRows(data, target);
+    state.auditRows = autoAuditRows(data);
     state.owners = owners;
     state.trees = shown;
     state.affTrees = data.affTrees;
@@ -1446,7 +1439,19 @@ function renderRuleBar() {
   host.innerHTML = "";
   state.auditRows.forEach(function (row, i) {
     var line = document.createElement("div");
-    line.className = "audit-row";
+    line.className = "audit-row" + (row.on ? "" : " off");
+
+    var on = document.createElement("input");
+    on.type = "checkbox";
+    on.checked = row.on;
+    on.title = "Apply this audit client's rule";
+    on.setAttribute("aria-label", "Apply this audit client's rule");
+    on.addEventListener("change", function () {
+      row.on = on.checked;
+      state.rowsTouched = true;
+      renderAll();
+    });
+    line.appendChild(on);
 
     line.appendChild(clientDropdown(row));
 
@@ -1485,13 +1490,14 @@ function renderRuleBar() {
     host.appendChild(line);
   });
   $("add-audit").disabled = !state.data;
-  $("audit-on").checked = state.auditOn;
-  $("body-audit").classList.toggle("off", !state.auditOn);
 
   var pairs = auditPairs(), sum = $("rule-summary");
   if (!state.data) { sum.textContent = "Load a target company first."; return; }
-  if (!state.auditOn) { sum.textContent = "Off"; return; }
-  if (!pairs.length) { sum.textContent = "Select an audit client and a rule to mark restricted and materiality-check entities."; return; }
+  if (!pairs.length) {
+    var allOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
+    sum.textContent = allOff ? "All audit clients are switched off." : "Select an audit client and a rule to mark restricted and materiality-check entities.";
+    return;
+  }
   var seen = new Set(), c = { restricted: 0, materiality: 0 };
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
     if (seen.has(n.id)) return;
@@ -1665,7 +1671,6 @@ function applyCollapse() {
     var c = state.collapsed[k], h = $("head-" + k);
     $("body-" + k).hidden = c;
     h.classList.toggle("closed", c);
-    if (h.parentElement.classList.contains("tb-headrow")) h.parentElement.classList.toggle("closed", c);
     h.setAttribute("aria-expanded", c ? "false" : "true");
     h.querySelector(".tb-chev").textContent = c ? "\u25B8" : "\u25BE";
   });
@@ -1683,12 +1688,8 @@ document.querySelectorAll(".tb-head").forEach(function (h) {
     applyCollapse();
   });
 });
-$("audit-on").addEventListener("change", function () {
-  state.auditOn = this.checked;
-  renderAll();
-});
 $("add-audit").addEventListener("click", function () {
-  state.auditRows.push({ client: null, rule: null });
+  state.auditRows.push({ client: null, rule: null, on: true });
   state.rowsTouched = true;
   renderAll();
 });
