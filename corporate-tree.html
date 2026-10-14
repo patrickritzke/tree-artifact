@@ -550,8 +550,9 @@ function enrichEngagements(data, owners, seq) {
     });
     if (!byParty.size) return;
 
+    /* The tree is master: matters for anyone not in it (including close-affiliate-only entities) are ignored */
     var everyone = data.nodes.concat(data.affiliates), auditIds = [];
-    everyone.forEach(function (n) {
+    data.nodes.forEach(function (n) {
       var ms = byParty.get(n.id);
       if (!ms) return;
       n.matters = ms;
@@ -718,7 +719,7 @@ function entityFramework(o) {
 /* id -> { audit, nonAudit, apply (a RULES key, audit clients only) } for every party that has a matter */
 function buildEngagements(data) {
   var out = new Map();
-  data.nodes.concat(data.affiliates).forEach(function (n) {
+  data.nodes.forEach(function (n) {
     if (out.has(n.id) || !n.matters || !n.matters.length) return;
     var audit = n.matters.filter(function (m) { return isAuditMatter(m.name); });
     var existing = strictest(audit.map(function (m) { return basisOf(m.name); }));
