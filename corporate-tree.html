@@ -507,6 +507,77 @@ function enrichPartyIds(data, owners, seq) {
   });
 }
 
+/* Engagements (live). The ultimate owner's component group lists Client / Matter / Party members; a matter's
+   clientId is the party's provider id (same id space as the tree), so matter -> party needs no get_client call.
+   Matter names carry the "[Audit - X]" suffix, so get_matter is not needed either. The entity rule comes from the
+   Orbis JSON note on each audit client (get_party with propertiesToLoad ["Notes"]); failures leave that entity unknown. */
+function noteJson(html) {
+  var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
+  var text = (doc.body.textContent || "").trim();
+  var tries = [text, "{" + text + "}"];
+  for (var i = 0; i < tries.length; i++) {
+    try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
+  }
+  return null;
+}
+
+/* The newest note that parses and holds a record keyed by the party's own BvD id */
+function orbisFromNotes(party, bvdId) {
+  var notes = (party.notes || []).slice().sort(function (a, b) { return String(b.modifiedOn).localeCompare(String(a.modifiedOn)); });
+  for (var i = 0; i < notes.length; i++) {
+    var obj = noteJson(notes[i].message), rec = obj && obj[bvdId];
+    if (rec && typeof rec === "object") {
+      return { countryIso: rec.countryIso, listed: rec.listed, exchange: rec.exchange,
+               nace: rec.nace, naics2017: rec.naics2017, ussic: rec.ussic };
+    }
+  }
+  return null;
+}
+
+function enrichEngagements(data, owners, seq) {
+  Promise.all(owners.map(function (o) {
+    return celeste.query("intapp_compliance__get_component_group", { componentGroupName: o.id })
+      .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
+      .catch(function () { return []; });
+  })).then(function (lists) {
+    var byParty = new Map();
+    lists.forEach(function (members) {
+      members.forEach(function (m) {
+        if (!m || m.type !== "Matter" || !m.clientId || !m.name) return;
+        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
+        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
+      });
+    });
+    if (!byParty.size) return;
+
+    var everyone = data.nodes.concat(data.affiliates), auditIds = [];
+    everyone.forEach(function (n) {
+      var ms = byParty.get(n.id);
+      if (!ms) return;
+      n.matters = ms;
+      if (ms.some(function (x) { return isAuditMatter(x.name); }) && auditIds.indexOf(n.id) === -1) auditIds.push(n.id);
+    });
+
+    /* Notes only for audit clients: that is all the applied rule needs */
+    return Promise.all(auditIds.map(function (id) {
+      return celeste.query("intapp_compliance__get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+        .then(function (raw) {
+          var p = extractObj(raw, "partyId");
+          return p ? [id, orbisFromNotes(p, p.bureauVanDijkId || id)] : null;
+        })
+        .catch(function () { return null; });
+    })).then(function (pairs) {
+      if (seq !== state.loadSeq || state.data !== data) return; /* a newer load replaced this one */
+      var orbis = new Map();
+      pairs.forEach(function (pr) { if (pr && pr[1]) orbis.set(pr[0], pr[1]); });
+      everyone.forEach(function (n) { if (orbis.has(n.id)) n.orbis = orbis.get(n.id); });
+      state.engage = buildEngagements(data);
+      if (!state.rowsTouched) state.auditRows = autoAuditRows(data, state.target);
+      renderAll();
+    });
+  }).catch(function () { /* engagements are an enhancement: leave the tree as it is */ });
+}
+
 function getData(target) {
   return isLive() ? loadLive((target || "").trim()) : Promise.resolve(pickSample(target));
 }
@@ -691,6 +762,7 @@ var state = {
   auditRows: [{ client: null, rule: null }], /* one audit client + rule per row */
   relCache: new Map(),
   engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
+  rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
   trees: [],
   affTrees: [],
@@ -909,6 +981,7 @@ function loadTarget() {
     state.target = target;
     /* Audit clients come from the matters: one row each, with the rule that applies to it */
     state.engage = buildEngagements(data);
+    state.rowsTouched = false;
     state.auditRows = autoAuditRows(data, target);
     state.owners = owners;
     state.trees = shown;
@@ -932,7 +1005,11 @@ function loadTarget() {
     $("app").style.display = "block";
     renderTitle();
     renderAll();
-    if (isLive()) enrichPartyIds(data, owners, ++state.loadSeq); /* bold/tooltips fill in once party ids arrive */
+    if (isLive()) { /* bold/tooltips and audit clients fill in as the lookups return */
+      var seq = ++state.loadSeq;
+      enrichPartyIds(data, owners, seq);
+      enrichEngagements(data, owners, seq);
+    }
   }).catch(function (e) { err.textContent = e.message; });
 }
 
@@ -1318,6 +1395,7 @@ function renderRuleBar() {
       b.setAttribute("aria-pressed", row.rule === r.key ? "true" : "false");
       b.addEventListener("click", function () {
         row.rule = row.rule === r.key ? null : r.key;
+        state.rowsTouched = true;
         renderAll();
       });
       pills.appendChild(b);
@@ -1333,6 +1411,7 @@ function renderRuleBar() {
       rm.setAttribute("aria-label", "Remove this audit client");
       rm.addEventListener("click", function () {
         state.auditRows.splice(i, 1);
+        state.rowsTouched = true;
         renderAll();
       });
       line.appendChild(rm);
@@ -1442,6 +1521,7 @@ function clientDropdown(row) {
       o.disabled = used;
       o.addEventListener("click", function () {
         row.client = n.id;
+        state.rowsTouched = true;
         renderAll();
       });
       list.appendChild(o);
@@ -1511,6 +1591,7 @@ window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it wo
 window.addEventListener("resize", closeWhy);
 $("add-audit").addEventListener("click", function () {
   state.auditRows.push({ client: null, rule: null });
+  state.rowsTouched = true;
   renderAll();
 });
 document.querySelectorAll(".gear-opt").forEach(function (b) {
