@@ -152,6 +152,11 @@
   }
   .tb-head.closed { border-radius: 7px; }
   .tb-head:hover { filter: brightness(.97); }
+  .tb-headrow { display: flex; align-items: center; background: var(--bar-head); border-radius: 7px 7px 0 0; padding-left: 10px; }
+  .tb-headrow.closed { border-radius: 7px; }
+  .tb-headrow .tb-head { background: none; border-radius: inherit; padding-left: 6px; flex: 1; }
+  .tb-headrow input[type=checkbox] { margin: 0; cursor: pointer; accent-color: var(--accent); flex: none; }
+  .tb-body.off #audit-rows, .tb-body.off .audit-foot { opacity: .5; }
   .tb-chev { width: 10px; font-size: 10px; color: var(--muted); }
   .tb-head .summary { margin-left: auto; font-weight: 400; }
   .tb-body { padding: 7px 10px 8px; }
@@ -286,9 +291,12 @@
 <div id="app">
   <!-- Independence (gear) -->
   <div class="toolbar tb" id="bar-independence" hidden>
-    <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
-      <span class="tb-chev">▾</span><span>Audit Clients</span><span class="summary" id="rule-summary"></span>
-    </button>
+    <div class="tb-headrow">
+      <input type="checkbox" id="audit-on" checked aria-label="Apply audit rules" title="Turn audit rules on or off" />
+      <button class="tb-head" id="head-audit" data-sec="audit" type="button" aria-expanded="true">
+        <span class="tb-chev">▾</span><span>Apply Audit Rules</span><span class="summary" id="rule-summary"></span>
+      </button>
+    </div>
     <div class="tb-body" id="body-audit">
       <div id="audit-rows"></div>
       <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
@@ -656,7 +664,7 @@ function relsFor(clientId) {
 
 /* The active audit rows as { client, rule, rels }: a row counts once it has both an audit client and a rule. */
 function auditPairs() {
-  if (state.mode !== "independence" || !state.data) return [];
+  if (state.mode !== "independence" || !state.data || !state.auditOn) return [];
   var byId = new Map();
   state.data.nodes.forEach(function (n) { byId.set(n.id, n); });
   var pairs = [];
@@ -785,6 +793,7 @@ var state = {
   auditRows: [{ client: null, rule: null }], /* one audit client + rule per row */
   relCache: new Map(),
   engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
+  auditOn: true, /* master switch for the audit rules; the rows are kept while it is off */
   collapsed: { audit: false, filter: false }, /* toolbar sections folded away */
   rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
@@ -1439,9 +1448,12 @@ function renderRuleBar() {
     host.appendChild(line);
   });
   $("add-audit").disabled = !state.data;
+  $("audit-on").checked = state.auditOn;
+  $("body-audit").classList.toggle("off", !state.auditOn);
 
   var pairs = auditPairs(), sum = $("rule-summary");
   if (!state.data) { sum.textContent = "Load a target company first."; return; }
+  if (!state.auditOn) { sum.textContent = "Off"; return; }
   if (!pairs.length) { sum.textContent = "Select an audit client and a rule to mark restricted and materiality-check entities."; return; }
   var seen = new Set(), c = { restricted: 0, materiality: 0 };
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
@@ -1614,6 +1626,7 @@ function applyCollapse() {
     var c = state.collapsed[k], h = $("head-" + k);
     $("body-" + k).hidden = c;
     h.classList.toggle("closed", c);
+    if (h.parentElement.classList.contains("tb-headrow")) h.parentElement.classList.toggle("closed", c);
     h.setAttribute("aria-expanded", c ? "false" : "true");
     h.querySelector(".tb-chev").textContent = c ? "\u25B8" : "\u25BE";
   });
@@ -1624,6 +1637,10 @@ document.querySelectorAll(".tb-head").forEach(function (h) {
     state.collapsed[k] = !state.collapsed[k];
     applyCollapse();
   });
+});
+$("audit-on").addEventListener("change", function () {
+  state.auditOn = this.checked;
+  renderAll();
 });
 $("add-audit").addEventListener("click", function () {
   state.auditRows.push({ client: null, rule: null });
