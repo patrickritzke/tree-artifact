@@ -893,41 +893,6 @@ var state = {
 
 var $ = function (id) { return document.getElementById(id); };
 
-/* ═══ HELPERS ═════════════════════════════════════════════════════════ */
-function indexNodes(list, parentsOf) {
-  var byId = new Map(), kids = new Map();
-  list.forEach(function (n) { byId.set(n.id, n); });
-  list.forEach(function (n) {
-    parentsOf(n).forEach(function (p) {
-      if (!byId.has(p)) return;
-      if (!kids.has(p)) kids.set(p, []);
-      kids.get(p).push(n);
-    });
-  });
-  return { byId: byId, kids: kids };
-}
-
-function ancestorsOf(id, idx, parentsOf) {
-  var out = new Set(), stack = [id];
-  while (stack.length) {
-    var n = idx.byId.get(stack.pop());
-    if (!n) continue;
-    parentsOf(n).forEach(function (p) {
-      if (idx.byId.has(p) && !out.has(p)) { out.add(p); stack.push(p); }
-    });
-  }
-  return out;
-}
-
-function resolveTarget(query, nodes) {
-  var q = query.trim().toLowerCase();
-  if (!q) return null;
-  var exact = nodes.filter(function (n) { return n.id.toLowerCase() === q || n.name.toLowerCase() === q; });
-  if (exact.length) return exact[0];
-  var partial = nodes.filter(function (n) { return n.name.toLowerCase().indexOf(q) !== -1; });
-  return partial.length ? partial[0] : null;
-}
-
 /* ═══ ENTITY METADATA ═════════════════════════════════════════════════
    Stored on each tree node; nothing in the UI reads it yet.
      isTarget       boolean, true for the target company
@@ -1040,30 +1005,6 @@ function computeEntityMeta(nodes, affiliates, targetId) {
    The grids draw placements: one row per place an entity appears, children exactly as the provider listed them.
    Each placement gets a key (its path of positions) and hasTarget (the target is this node or below it).
    ═══════════════════════════════════════════════════════════════════ */
-function normTree(t) {
-  return Array.isArray(t) ? { id: t[0], name: t[1], children: (t[2] || []).map(normTree) } : t;
-}
-
-/* Derive placements from a flat parents list (every parent gets a copy of the subtree). */
-function placementsFromFlat(list, parentsOf) {
-  var idx = indexNodes(list, parentsOf);
-  var roots = list.filter(function (n) { return !parentsOf(n).some(function (p) { return idx.byId.has(p); }); });
-  function build(n, stack) {
-    var kids = [];
-    (idx.kids.get(n.id) || []).forEach(function (k) {
-      if (stack.indexOf(k.id) === -1) kids.push(build(k, stack.concat(n.id)));
-    });
-    return { id: n.id, name: n.name, children: kids };
-  }
-  return roots.map(function (r) { return build(r, []); });
-}
-
-function ensurePlacements(data) {
-  data.trees = data.trees ? data.trees.map(normTree) : placementsFromFlat(data.nodes, function (n) { return n.parents; });
-  data.affTrees = data.affTrees ? data.affTrees.map(normTree)
-    : placementsFromFlat(data.affiliates, function (n) { return n.parents; });
-}
-
 function annotate(roots, targetId) {
   (function walk(list, parentKey) {
     list.forEach(function (p, i) {
@@ -1675,7 +1616,6 @@ function setFamily(data) {
   var target = data.nodes.filter(function (n) { return n.id === data.targetId; })[0];
   if (!target) throw new Error("This party is not in a corporate tree.");
 
-  ensurePlacements(data);
   annotate(data.trees, target.id);
   annotate(data.affTrees, target.id);
   /* Ultimate owners: the roots of the trees that contain the target */
