@@ -202,7 +202,7 @@
   .why-item.lost { opacity: .6; }
   .why-item .rule-badge { cursor: default; }
   .why-item .rule-badge:hover { background: none; }
-  .why-sub { margin: 5px 0 0 18px; padding-left: 8px; border-left: 2px solid var(--border); }
+  .why-sub { margin: 5px 0 0 18px; padding-left: 8px; border-left: 2px solid var(--border); display: grid; gap: 3px; }
   .why-item .rpill { cursor: default; }
   .relpill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--hover); color: var(--fg-2); }
   .why-note { margin-top: 6px; color: var(--muted); }
@@ -1104,31 +1104,29 @@ function showWhy(anchor, node, res) {
   h.textContent = node.name + " (" + node.id + ")";
   pop.appendChild(h);
 
-  /* Per result: "<level> by <rule> from <client>", then, indented, "This entity is a <relationship> to <client>" */
-  var who = function (parent, c) {
-    parent.appendChild(el("b", null, c.name));
-    parent.appendChild(el("span", "node-id", "(" + c.id + ")"));
-  };
+  /* Per result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
   res.items.forEach(function (it) {
     var row = el("div", "why-item" + (it.level === res.level ? "" : " lost"));
     var l1 = el("div");
     l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
     l1.appendChild(document.createTextNode(" by "));
     l1.appendChild(el("span", "rpill", it.rule.label));
-    l1.appendChild(document.createTextNode(" from "));
-    who(l1, it.client);
     if (it.level !== res.level) l1.appendChild(el("span", "node-id", "overridden by a stricter result"));
     row.appendChild(l1);
-    var l2 = el("div", "why-sub");
-    l2.appendChild(document.createTextNode("This entity is "));
+    var sub = el("div", "why-sub"), from = el("div");
+    from.appendChild(document.createTextNode("from "));
+    from.appendChild(el("b", null, it.client.name));
+    from.appendChild(el("span", "node-id", "(" + it.client.id + ")"));
+    sub.appendChild(from);
+    var as = el("div");
+    as.appendChild(document.createTextNode("as "));
     it.rels.forEach(function (r, i) {
-      if (i) l2.appendChild(document.createTextNode(" and "));
-      l2.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
-      l2.appendChild(el("span", "relpill", r));
+      if (i) as.appendChild(document.createTextNode(" and "));
+      as.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
+      as.appendChild(el("span", "relpill", r));
     });
-    l2.appendChild(document.createTextNode(" to "));
-    who(l2, it.client);
-    row.appendChild(l2);
+    sub.appendChild(as);
+    row.appendChild(sub);
     pop.appendChild(row);
   });
 
