@@ -285,8 +285,31 @@
   #pages { flex: 1; }
   .page { display: none; }
   .page.active { display: block; }
-  #step-label { font-size: 12px; color: var(--hdr-muted); white-space: nowrap; }
+  #top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 100; }
+  #top #header { position: static; }
+  #party-chip { font-size: 12px; color: var(--hdr-muted); border: 1px solid var(--hdr-border); border-radius: 999px; padding: 1px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+  /* ── Progress bar: the four wizard steps, always at the top ── */
+  .stepper { padding: 7px 20px 6px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: 0 2px 6px var(--shadow); font-size: 12px; }
+  .stepper ol { display: flex; align-items: center; list-style: none; overflow: hidden; }
+  .st { display: flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+  .st + .st::before { content: ""; width: 22px; height: 2px; margin: 0 8px; background: var(--border-2); border-radius: 1px; }
+  .st.done + .st::before, .st.cur::before { background: var(--accent); }
+  .st .dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border-2); display: grid; place-items: center; font-size: 10px; font-weight: 700; flex: none; }
+  .st.done { color: var(--fg-2); }
+  .st.done .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .st.cur { color: var(--fg-strong); font-weight: 600; }
+  .st.cur .dot { border-color: var(--accent); color: var(--accent-fg); }
+  .st.busy .dot { background: transparent; border-color: var(--border-2); border-top-color: var(--accent); color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .stepper .status { margin-top: 5px; padding-left: 24px; color: var(--muted); font-size: 11.5px; line-height: 1.35; min-height: 15px; }
+  .stepper .status .b { color: var(--fg-strong); font-weight: 600; }
+  .stepper .status .bad { color: var(--restr-fg); }
+  .stepper .status .mid { color: var(--mat-fg); }
+  .stepper .status .ok { color: var(--ok-fg); }
+  @media (max-width: 760px) { .st:not(.cur):not(.busy) .lbl { display: none; } .st + .st::before { width: 10px; margin: 0 4px; } }
   body[data-step="0"] #header { display: none; }
+  body[data-step="0"] .stepper { box-shadow: none; }
 
   .wiz-foot {
     position: sticky; bottom: 0; z-index: 90; display: flex; align-items: center; gap: 12px; padding: 10px 20px;
@@ -297,7 +320,7 @@
   #wiz-back[hidden] + #wiz-err { text-align: right; }
 
   /* ── Start page ── */
-  .start { min-height: calc(100vh - 62px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 20px 40px; text-align: center; }
+  .start { min-height: calc(100vh - 62px - 50px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 20px 40px; text-align: center; }
   .start .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; transform: scale(1.8); }
   .start h1 { font-size: 22px; font-weight: 400; color: var(--fg-strong); margin-bottom: 20px; }
   .start input {
@@ -347,10 +370,13 @@
 </head>
 <body>
 
-<div id="header">
-  <span id="header-title">Non-Audit Engagement</span>
-  <span id="node-count" hidden></span>
-  <span id="step-label"></span>
+<div id="top">
+  <div id="header">
+    <span id="header-title">Non-Audit Engagement</span>
+    <span id="party-chip" hidden></span>
+    <span id="node-count" hidden></span>
+  </div>
+  <nav id="stepper" class="stepper" aria-label="Progress"></nav>
 </div>
 
 <main id="pages">
@@ -1462,6 +1488,7 @@ function renderAll() {
   $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
   renderRuleBar();
   renderFilterPills();
+  if (step === 3) updateStepper(); /* keep the progress bar in step with edits */
 }
 
 function renderFilterPills() {
@@ -2098,6 +2125,66 @@ function renderResult() {
   host.appendChild(nl);
 }
 
+/* ═══ PROGRESS BAR ════════════════════════════════════════════════════════
+   Four named steps always at the top. The five pages map onto them: entering the party and confirming its tree are both
+   Find Tree. The highlighted step is the one whose result is on screen; finished steps are ticked. While a button works,
+   the spinner sits on the step being worked out. The line under the steps says what was just found. */
+var STEP_LABELS = ["Find Tree", "Identify Audit Relationships", "Apply Inheritance Rules", "Independence Decision"];
+var PAGE_STEP = [0, 0, 1, 2, 3];
+var WORKING = ["Finding the party and its corporate tree…", "Reading engagements and Orbis notes…",
+               "Applying the rules across the family…", "Working out the decision…"];
+var busyStep = -1;
+
+/* Unique entities that come out restricted / needing a materiality check under the audit rows now switched on */
+function tally() {
+  var pairs = auditPairs(), seen = new Set(), c = { restricted: 0, materiality: 0 };
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
+    if (seen.has(n.id)) return;
+    seen.add(n.id);
+    var l = evalNode(n.id, pairs).level;
+    if (l) c[l]++;
+  });
+  return { rules: pairs.length, r: c.restricted, m: c.materiality };
+}
+
+/* [text, class] segments for the line under the steps, built from the wizard's own state */
+function statusFor(n) {
+  if (n === 0) return [["Enter the party the engagement is for"]];
+  if (n === 1) return [["Found", "b"], [" · " + treeLine()]];
+  if (n === 2) {
+    var a = 0, na = 0;
+    state.engInfo.forEach(function (v) { if (v.audit) a++; else if (v.nonAudit) na++; });
+    return a + na ? [[a + " audit client" + (a === 1 ? "" : "s"), "b"], [" · " + na + " non-audit only"]] : [["No engagements found in this tree"]];
+  }
+  if (n === 3) {
+    var t = tally();
+    return t.rules ? [[t.r + " restricted", "b bad"], [" · "], [t.m + " materiality check", "mid"]] : [["No audit rules switched on"]];
+  }
+  var A = state.assessment, r = 0, m = 0;
+  A.reasons.forEach(function (x) { if (x.level === "restricted") r++; else m++; });
+  var cls = A.level === "restricted" ? "bad" : A.level === "materiality" ? "mid" : "ok";
+  return [[A.headline, "b " + cls], [r + m ? " · " + [r ? r + " restricted" : "", m ? m + " to check" : ""].filter(Boolean).join(", ") : ""]];
+}
+
+function updateStepper() {
+  var last = step === STEPS.length - 1, cur = PAGE_STEP[step], eff = busyStep > cur ? busyStep : cur;
+  var ol = el("ol");
+  STEP_LABELS.forEach(function (t, i) {
+    var done = last || i < eff;
+    var li = el("li", "st" + (done ? " done" : i === eff ? " cur" : "") + (i === busyStep ? " busy" : ""));
+    if (i === eff && !last) li.setAttribute("aria-current", "step");
+    li.appendChild(el("span", "dot", done ? "✓" : String(i + 1)));
+    li.appendChild(el("span", "lbl", t));
+    ol.appendChild(li);
+  });
+  var status = el("div", "status");
+  (busyStep >= 0 ? [[WORKING[busyStep]]] : statusFor(step)).forEach(function (s) { status.appendChild(el("span", s[1] || null, s[0])); });
+  var host = $("stepper");
+  host.innerHTML = "";
+  host.appendChild(ol);
+  host.appendChild(status);
+}
+
 /* ═══ WIZARD ══════════════════════════════════════════════════════════════ */
 var step = 0;
 var STEPS = [
@@ -2122,7 +2209,6 @@ function show(n) {
   step = n;
   document.querySelectorAll(".page").forEach(function (p) { p.classList.toggle("active", p.id === STEPS[n].id); });
   document.body.setAttribute("data-step", String(n));
-  $("step-label").textContent = "Step " + (n + 1) + " of " + STEPS.length;
   $("node-count").hidden = n !== 3;
   $("wiz-back").hidden = n === 0;
   $("wiz-next").textContent = STEPS[n].next;
@@ -2130,6 +2216,11 @@ function show(n) {
   closeWhy();
   closeDropdowns();
   if (STEPS[n].enter) STEPS[n].enter();
+  var chip = $("party-chip");
+  chip.hidden = n < 1;
+  if (n >= 1) chip.textContent = state.target.name + " (" + state.target.id + ")";
+  busyStep = -1;
+  updateStepper();
   window.scrollTo(0, 0);
 }
 
@@ -2138,9 +2229,12 @@ function advance() {
   $("wiz-err").textContent = "";
   btn.disabled = true;
   btn.textContent = "Working…";
+  /* The spinner goes on the step being worked out: the first button works on Find Tree, the rest on the next step */
+  busyStep = from === 0 ? 0 : from + 1 < STEPS.length ? PAGE_STEP[from + 1] : -1;
+  updateStepper();
   new Promise(function (resolve) { resolve(STEPS[from].go()); })
     .then(function (to) { show(typeof to === "number" ? to : from + 1); })
-    .catch(function (e) { $("wiz-err").textContent = e.message; btn.textContent = STEPS[step].next; })
+    .catch(function (e) { $("wiz-err").textContent = e.message; btn.textContent = STEPS[step].next; busyStep = -1; updateStepper(); })
     .then(function () { btn.disabled = false; });
 }
 
