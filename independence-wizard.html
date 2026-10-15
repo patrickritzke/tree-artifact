@@ -851,7 +851,6 @@ var state = {
   engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
   engInfo: null, /* id -> everything the engagement page shows for a party */
   engNotes: [],
-  engCollapsed: new Set(),
   rulesRun: false, /* the audit rows have been filled from the engagements */
   assessment: null,
   collapsed: { audit: false }, /* toolbar sections folded away */
@@ -1117,11 +1116,12 @@ function closeWhy() {
   state.whyFor = null;
 }
 
-/* gridKey names the expand state; roots are the placements to draw */
-function renderGrid(gridKey, containerId, countId, roots, byId) {
+/* The one grid for the engagement step and the independence step. gridKey names the expand state; roots are the
+   placements to draw. opt: pairs and cols (the extra columns), redraw (repaint after a toggle), nameCls (name style). */
+function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   var metaOf = function (pl) { return byId.get(pl.id) || pl; };
-  var pairs = auditPairs();
-  var cols = extraColumns(pairs);
+  var pairs = opt.pairs;
+  var cols = opt.cols;
   var table = document.createElement("table");
   table.className = "grid";
   var thead = document.createElement("thead");
@@ -1154,7 +1154,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
       var set = state.expanded[gridKey];
       if (allOpen) set.clear();
       else expandable.forEach(function (k) { set.add(k); });
-      renderAll();
+      opt.redraw();
     });
     nameTh.appendChild(all);
   }
@@ -1162,7 +1162,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
 
   cols.forEach(function (c) {
     var th = document.createElement("th");
-    th.className = "icon-col";
+    th.className = "icon-col" + (c.cls || "");
     th.textContent = c.title;
     hr.appendChild(th);
   });
@@ -1216,15 +1216,14 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
       tg.addEventListener("click", function () {
         var set = state.expanded[gridKey];
         if (set.has(pl.key)) set.delete(pl.key); else set.add(pl.key);
-        renderAll();
+        opt.redraw();
       });
     }
     inner.appendChild(tg);
 
     var nm = document.createElement("span");
-    nm.className = "node-name";
+    nm.className = "node-name " + opt.nameCls(node);
     nm.textContent = pl.name;
-    if (node.idParty) nm.classList.add("has-party"); /* bold = entity has an Intapp party record */
     nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
     inner.appendChild(nm);
     var idSp = document.createElement("span");
@@ -1236,7 +1235,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
 
     cols.forEach(function (c) {
       var td = document.createElement("td");
-      td.className = "icon-col";
+      td.className = "icon-col" + (c.cls || "");
       c.cell(node, td);
       tr.appendChild(td);
     });
@@ -1272,9 +1271,12 @@ function renderAll() {
   document.querySelectorAll(".eng-key").forEach(function (k) { k.hidden = !showEngagement(); });
 
   /* One grid: the tree(s) that contain the target, with close-affiliate entities the tree lacks merged in */
-  var byId = new Map();
+  var byId = new Map(), pairs = auditPairs();
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
-  $("node-count").textContent = renderGrid("tree", "tree-grid", "tree-count", state.trees, byId) + " entities";
+  $("node-count").textContent = renderGrid("tree", "tree-grid", "tree-count", state.trees, byId, {
+    pairs: pairs, cols: extraColumns(pairs), redraw: renderAll,
+    nameCls: function (n) { return n.idParty ? "has-party" : ""; } /* bold = entity has an Intapp party record */
+  }) + " entities";
   renderRuleBar();
 }
 
@@ -1632,7 +1634,6 @@ function setFamily(data) {
   state.engage = null;
   state.engInfo = null;
   state.engNotes = [];
-  state.engCollapsed = new Set();
   state.rulesRun = false;
   state.rowsTouched = false;
   state.assessment = null;
@@ -1711,101 +1712,44 @@ function findEngagements() {
       });
       state.rulesRun = false;
       state.rowsTouched = false;
-      state.engCollapsed = new Set();
+      delete state.expanded.eng;
     });
   });
 }
 
-/* Pre-order list of the drawn placements, with depth */
-function flattenPlacements(roots) {
+/* Keep a placement when it is engaged or has an engaged descendant */
+function filterTree(list, engaged) {
   var out = [];
-  (function walk(list, depth) {
-    list.forEach(function (p) { out.push({ id: p.id, name: p.name, depth: depth }); walk(p.children, depth + 1); });
-  })(roots, 0);
+  list.forEach(function (p) {
+    var kids = filterTree(p.children, engaged);
+    if (engaged.has(p.id) || kids.length) out.push({ id: p.id, name: p.name, key: p.key, children: kids });
+  });
   return out;
 }
 
-/* Keep a node when it is engaged or has an engaged descendant; kept nodes retain their depth and order */
-function filterTree(flat, engaged) {
-  var keep = flat.map(function () { return false; });
-  for (var i = flat.length - 1; i >= 0; i--) {
-    if (engaged.has(flat[i].id)) keep[i] = true;
-    if (keep[i]) {
-      for (var j = i - 1; j >= 0; j--) { if (flat[j].depth < flat[i].depth) { keep[j] = true; break; } }
-    }
-  }
-  return flat.filter(function (n, i) { return keep[i]; });
-}
-
 function renderEngPage() {
-  var info = state.engInfo;
-  var nodes = filterTree(flattenPlacements(state.trees), new Set(Array.from(info.keys())));
-  var hasKids = nodes.map(function (n, i) { return i + 1 < nodes.length && nodes[i + 1].depth > n.depth; });
-  var host = $("eng-grid");
+  var info = state.engInfo, host = $("eng-grid");
+  var roots = filterTree(state.trees, new Set(Array.from(info.keys())));
   host.innerHTML = "";
-  $("eng-count").textContent = info.size ? nodes.length + " parties shown" : "";
   document.querySelectorAll("#page-eng .eng-key").forEach(function (k) { k.hidden = !info.size; });
+  $("eng-count").textContent = "";
 
   if (!info.size) {
     host.appendChild(el("div", "empty", "No engagements were found for this corporate tree, so there are no audit relationships to apply."));
   } else {
-    var table = el("table", "grid"), hr = el("tr");
-    hr.appendChild(el("th", "pin-col wide"));
-    var nameTh = el("th", "name-col");
-    var parents = nodes.map(function (n, i) { return i; }).filter(function (i) { return hasKids[i]; });
-    if (parents.length) {
-      var allOpen = parents.every(function (i) { return !state.engCollapsed.has(i); });
-      var all = el("button", "toggle", allOpen ? "▾" : "▸");
-      all.type = "button";
-      all.title = allOpen ? "Collapse all" : "Expand all";
-      all.setAttribute("aria-label", all.title);
-      all.addEventListener("click", function () {
-        if (allOpen) parents.forEach(function (i) { state.engCollapsed.add(i); }); else state.engCollapsed.clear();
-        renderEngPage();
-      });
-      nameTh.appendChild(all);
+    if (!state.expanded.eng) {
+      state.expanded.eng = new Set();
+      (function open(list) { list.forEach(function (p) { state.expanded.eng.add(p.key); open(p.children); }); })(roots);
     }
-    hr.appendChild(nameTh);
-    ["Existing Audit Rule", "Entity Rule", "Apply Audit Rule"].forEach(function (t) { hr.appendChild(el("th", "icon-col rule-col", t)); });
-    hr.appendChild(el("th", "fill"));
-    var thead = el("thead");
-    thead.appendChild(hr);
-    table.appendChild(thead);
-
-    var tbody = el("tbody"), hideBelow = null;
-    nodes.forEach(function (n, i) {
-      if (hideBelow !== null) { if (n.depth > hideBelow) return; hideBelow = null; }
-      var pi = info.get(n.id), tr = el("tr");
-
-      var mk = el("td", "pin-col wide");
-      mk.appendChild(markCell(n.id === state.target.id, n.id));
-      tr.appendChild(mk);
-
-      var nameTd = el("td", "name-cell"), inner = el("div", "name-inner");
-      var ind = el("span", "indent");
-      ind.style.width = (n.depth * 20) + "px";
-      inner.appendChild(ind);
-      var open = !state.engCollapsed.has(i);
-      var tg = el("button", "toggle" + (hasKids[i] ? "" : " leaf"), open ? "▾" : "▸");
-      tg.type = "button";
-      tg.setAttribute("aria-label", open ? "Collapse" : "Expand");
-      if (hasKids[i]) tg.addEventListener("click", function () {
-        if (state.engCollapsed.has(i)) state.engCollapsed.delete(i); else state.engCollapsed.add(i);
-        renderEngPage();
-      });
-      inner.appendChild(tg);
-      inner.appendChild(el("span", "node-name" + (pi ? " eng-party" : " anc"), n.name));
-      inner.appendChild(el("span", "node-id", "(" + n.id + ")"));
-      nameTd.appendChild(inner);
-      tr.appendChild(nameTd);
-
-      ["r", "p", "a"].forEach(function (k) { var td = el("td", "icon-col rule-col"); ruleCell(td, pi, k); tr.appendChild(td); });
-      tr.appendChild(el("td", "fill"));
-      tbody.appendChild(tr);
-      if (hasKids[i] && !open) hideBelow = n.depth;
+    var byId = new Map();
+    state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
+    renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
+      pairs: [], redraw: renderEngPage,
+      nameCls: function (n) { return info.get(n.id) ? "eng-party" : "anc"; },
+      cols: [["Existing Audit Rule", "r"], ["Entity Rule", "p"], ["Apply Audit Rule", "a"]].map(function (c) {
+        return { title: c[0], cls: " rule-col", cell: function (n, td) { ruleCell(td, info.get(n.id), c[1]); } };
+      })
     });
-    table.appendChild(tbody);
-    host.appendChild(table);
   }
 
   var foot = $("eng-foot");
