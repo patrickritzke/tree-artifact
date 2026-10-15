@@ -385,7 +385,7 @@ function buildParty(matters, orbis) {
   var bases = [];
   aud.forEach(function (g) { if (g.basis && bases.indexOf(g.basis) === -1) bases.push(g.basis); });
   var existing = audit ? strictest(bases) : null;
-  var ent = entityRule(orbis);
+  var ent = audit ? entityRule(orbis) : null;   /* non-audit parties carry no audit rule at all */
   var entity = ent ? ent.entity : null;
   var apply = audit ? strictest([existing, entity]) : null;
   var governs = null;
@@ -471,7 +471,9 @@ function run(partyId) {
       });
       if (!byParty.size) throw new Error("No engagements found for " + ownerId + ".");
 
-      return Promise.all(Array.from(byParty.keys()).map(function (id) {
+      /* Notes only for audit clients: that is all the rules need */
+      var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
+      return Promise.all(auditIds.map(function (id) {
         return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
           .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
           .catch(function () { return [id, null]; });
@@ -492,7 +494,7 @@ function run(partyId) {
         if (missing.length) notes.push("Engaged but not in the tree: " + missing.join(", ") + ".");
         var noNote = [], noCountry = [];
         info.forEach(function (v, id) {
-          if (v.entity) return;
+          if (!v.audit || v.entity) return;
           var label = (names.get(id) || id);
           if (!orbis.get(id)) noNote.push(label); else noCountry.push(label);
         });
@@ -551,7 +553,7 @@ function ruleCell(td, info, kind) {
     pill = el("button", "rpill", info.existing);
     pill.title = "Show engagements";
   } else if (kind === "p") {
-    if (!info.entity) return;
+    if (!info.audit || !info.entity) return;
     pill = el("button", "rpill", info.entity);
     pill.title = "Why this entity rule";
   } else {

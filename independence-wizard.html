@@ -854,7 +854,7 @@ function buildParty(matters, orbis) {
   var bases = [];
   aud.forEach(function (g) { if (g.basis && bases.indexOf(g.basis) === -1) bases.push(g.basis); });
   var existing = audit ? strictest(bases) : null;
-  var ent = entityRule(orbis);
+  var ent = audit ? entityRule(orbis) : null;   /* non-audit parties carry no audit rule at all */
   var entity = ent ? ent.entity : null;
   var apply = audit ? strictest([existing, entity]) : null;
   var governs = null;
@@ -1700,7 +1700,7 @@ function ruleCell(td, info, kind) {
     pill = el("button", "rpill", info.existing);
     pill.title = "Show engagements";
   } else if (kind === "p") {
-    if (!info.entity) return;
+    if (!info.audit || !info.entity) return;
     pill = el("button", "rpill", info.entity);
     pill.title = "Why this entity rule";
   } else {
@@ -1866,7 +1866,9 @@ function findEngagements() {
     data.nodes.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
     computeEntityMeta(data.nodes, data.affiliates, state.target.id);
 
-    return Promise.all(Array.from(byParty.keys()).map(function (id) {
+    /* Notes only for audit clients: non-audit parties carry no audit rule */
+    var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
+    return Promise.all(auditIds.map(function (id) {
       return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
         .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
         .catch(function () { return [id, null]; });
@@ -1879,7 +1881,7 @@ function findEngagements() {
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
       var noNote = [], noCountry = [];
       info.forEach(function (v, id) {
-        if (v.entity) return;
+        if (!v.audit || v.entity) return;
         if (!orbis.get(id)) noNote.push(names.get(id) || id); else noCountry.push(names.get(id) || id);
       });
       if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
