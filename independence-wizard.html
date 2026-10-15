@@ -499,13 +499,13 @@
      2. get_component_group(ownerBvdId)            -> Client / Matter / Party members; matter.clientId is the party id
                                                       (same id space as the tree), and matter names carry "[Audit - X]"
      3. get_party(partyId, ["Notes"]) per audit/engaged party, in parallel -> Orbis JSON note (entity rule)
-   Live data comes from the Intapp host, which injects window.celeste. Anywhere else the built-in sample answers
-   with the same response shapes, so the same code path runs.
+   Data comes from the Intapp host, which injects window.celeste. Without a host there is nothing to read from.
    ═══════════════════════════════════════════════════════════════════════ */
 function isLive() { return typeof window.celeste !== "undefined"; }
 
 function callTool(name, args) {
-  return isLive() ? celeste.query("intapp_compliance__" + name, args) : Promise.resolve(MOCK(name, args));
+  return isLive() ? celeste.query("intapp_compliance__" + name, args)
+                  : Promise.reject(new Error("This page needs the Intapp host to load data."));
 }
 
 function extractObj(raw, key) {
@@ -609,101 +609,6 @@ function loadFamily(partyId) {
     return { nodes: Array.from(map.values()), affiliates: Array.from(aff.values()), targetId: targetId,
              trees: treeRoots, affTrees: affRoots };
   });
-}
-
-/* ═══ SAMPLE (answers the tool calls when there is no host) ═══════════════ */
-var SAMPLE_OWNER = "FR100000001";
-var SAMPLE_PARTIES = { "30001": "FR100000001", "30003": "AT100000003", "30004": "DE100000004", "30005": "US100000005",
-                       "30007": "JP100000007", "30008": "HK100000008", "30009": "TW100000009" };
-var SAMPLE_PARTY_LABELS = { "30008": "Brightwater Asia Ltd", "30004": "Brightwater Services GmbH", "30007": "Brightwater Japan K.K.", "30009": "Brightwater Taiwan Co., Ltd.",
-                            "30003": "Brightwater Austria GmbH", "30005": "Brightwater Capital Inc.", "30001": "Brightwater Group SA" };
-var SAMPLE_TREE = {
-  externalId: "FR100000001", name: "Brightwater Group SA", subCompanies: [
-    { externalId: "FR100000002", name: "Brightwater Assurance SA", subCompanies: [
-      { externalId: "AT100000003", name: "Brightwater Austria GmbH", subCompanies: [] },
-      { externalId: "DE100000004", name: "Brightwater Services GmbH", subCompanies: [] } ] },
-    { externalId: "US100000005", name: "Brightwater Capital Inc.", subCompanies: [
-      { externalId: "US100000006", name: "Brightwater Securities LLC", subCompanies: [
-        { externalId: "JP100000007", name: "Brightwater Japan K.K.", subCompanies: [] } ] } ] },
-    { externalId: "HK100000008", name: "Brightwater Asia Ltd", subCompanies: [] },
-    { externalId: "TW100000009", name: "Brightwater Taiwan Co., Ltd.", subCompanies: [] },
-    { externalId: "BR100000011", name: "Brightwater Brasil Ltda", subCompanies: [] } ] };
-var SAMPLE_AFF = [{ id: "HA100000001", name: "Harbor Advisory Group", closeAffiliates: [
-  { id: "AT100000003", name: "Brightwater Austria GmbH", closeAffiliates: [] },
-  { id: "US100000005", name: "Brightwater Capital Inc.", closeAffiliates: [{ id: "HA100000002", name: "Harbor Trust Co.", closeAffiliates: [] }] },
-  { id: "TW100000009", name: "Brightwater Taiwan Co., Ltd.", closeAffiliates: [] } ] }];
-var SAMPLE_MATTERS = [
-  ["FR100000001", "FR100000001_aud1", "Brightwater Group SA - Consolidated Audit FY2025 [Audit - EU-537]"],
-  ["FR100000002", "FR100000002_aud1", "Brightwater Assurance SA - Statutory Audit FY2025 [Audit - EU-537]"],
-  ["AT100000003", "AT100000003_aud1", "Brightwater Austria GmbH - Statutory Audit FY2025 [Audit - IESBA]"],
-  ["AT100000003", "AT100000003_aud2", "Brightwater Austria GmbH - Group Reporting Audit FY2025 [Audit - EU-537]"],
-  ["AT100000003", "AT100000003_con1", "Brightwater Austria GmbH - Non-Audit Tax Advisory"],
-  ["DE100000004", "DE100000004_con1", "Brightwater Services GmbH - Transfer Pricing Review"],
-  ["US100000005", "US100000005_aud1", "Brightwater Capital Inc. - Annual Audit FY2025 [Audit - AICPA]"],
-  ["JP100000007", "JP100000007_aud1", "Brightwater Japan K.K. - Audit FY2025"],
-  ["HK100000008", "HK100000008_aud1", "Brightwater Asia Ltd - Statutory Audit FY2025 [Audit - UK-FRC]"],
-  ["TW100000009", "TW100000009_con1", "Brightwater Taiwan Co., Ltd. - Advisory Retainer"],
-  ["BR100000011", "BR100000011_aud1", "Brightwater Brasil Ltda - Audit FY2025 [Audit - AICPA]"],
-  ["XX100000010", "XX100000010_aud1", "Brightwater Escrow Ltd - Audit FY2025 [Audit - IESBA]"]  /* not in the tree: ignored */
-];
-var SAMPLE_ORBIS = {
-  FR100000001: { countryIso: "FR", listed: "Listed", exchange: "XPAR", nace: "6420" },
-  FR100000002: { countryIso: "FR", listed: "Unlisted", nace: "6512" },
-  AT100000003: { countryIso: "AT", listed: "Unlisted", nace: "6420" },
-  DE100000004: { countryIso: "DE", listed: "Unlisted", nace: "7022" },
-  US100000005: { countryIso: "US", listed: "Unlisted", nace: "6419", naics2017: "522110", ussic: "602" },
-  JP100000007: { countryIso: "JP", listed: "Listed", exchange: "XJPX", nace: "6420" },
-  TW100000009: { countryIso: "TW", listed: "Unlisted", nace: "6419" },
-  BR100000011: { countryIso: "BR", listed: "Unlisted", nace: "6420" }
-  /* HK100000008 has no note, so its entity rule is unknown */
-};
-function flattenRaw(root) {
-  var out = [];
-  (function walk(node) { out.push({ id: node.externalId, name: node.name }); (node.subCompanies || []).forEach(walk); })(root);
-  return out;
-}
-function sampleNote(id, rec, modifiedOn) {
-  var fields = Object.keys(rec).map(function (k) { return '"' + k + '": ' + JSON.stringify(rec[k]); }).join(", ");
-  return { modifiedOn: modifiedOn, message: '<div><div><span>"' + id + '": {</span><span>' + fields + '</span><span>}</span></div></div>' };
-}
-function MOCK(name, a) {
-  if (name === "search_entities") {
-    var kw = String(a.keyword || "").toLowerCase();
-    return { results: Object.keys(SAMPLE_PARTY_LABELS).sort().map(function (id) { return { id: id, name: SAMPLE_PARTY_LABELS[id] }; })
-      .filter(function (r) { return r.name.toLowerCase().indexOf(kw) !== -1 || r.id.indexOf(kw) !== -1; }) };
-  }
-  if (name === "get_component_group") {
-    if (a.componentGroupName !== SAMPLE_OWNER) return { groupId: a.componentGroupName, groupMembers: [] };
-    var members = [], seen = {};
-    SAMPLE_MATTERS.forEach(function (m) {
-      if (!seen[m[0]]) {
-        seen[m[0]] = 1;
-        var nm = (flattenRaw(SAMPLE_TREE).filter(function (n) { return n.id === m[0]; })[0] || {}).name || m[0];
-        members.push({ type: "Client", clientId: m[0], name: nm });
-        members.push({ type: "Party", partyId: m[0], name: nm });
-      }
-      members.push({ type: "Matter", clientId: m[0], matterId: m[1], name: m[2] });
-    });
-    return { groupId: SAMPLE_OWNER, name: SAMPLE_OWNER, active: true, groupMembers: members };
-  }
-  if (name === "get_party") {
-    var props = a.propertiesToLoad || [];
-    if (props.indexOf("CorporateFamily") !== -1) {
-      var bvd = SAMPLE_PARTIES[a.partyId] || a.partyId;
-      var hit = flattenRaw(SAMPLE_TREE).filter(function (n) { return n.id === bvd; })[0];
-      if (!hit) return null;
-      return { partyId: a.partyId, name: hit.name, bureauVanDijkId: bvd, externalDataProvider: "BureauVanDijk",
-               corporateTrees: [{ name: SAMPLE_TREE.name, rootCompanyId: SAMPLE_OWNER, providerType: "BureauVanDijk", rootCompany: SAMPLE_TREE }],
-               closeAffiliates: { closeAffiliates: SAMPLE_AFF }, notes: [] };
-    }
-    var notes = [];
-    if (props.indexOf("Notes") !== -1 && SAMPLE_ORBIS[a.partyId]) {
-      notes.push({ modifiedOn: "2026-10-13", message: "<div>Call notes: follow up next week.</div>" }); /* free-form, newest, must be skipped */
-      notes.push(sampleNote(a.partyId, SAMPLE_ORBIS[a.partyId], "2026-10-12"));
-    }
-    return { partyId: a.partyId, bureauVanDijkId: a.partyId, notes: notes };
-  }
-  return null;
 }
 
 /* ═══ STATE ═══════════════════════════════════════════════════════════ */
@@ -2231,14 +2136,14 @@ function bindPartySearch(input, results, idField, opts) {
     close();
     if (opts.onPick) opts.onPick(h);
   }
-  function render(hits) {
+  function render(hits, empty) {
     results.innerHTML = "";
     rows = [];
     sel = -1;
     if (!hits.length) {
       var none = document.createElement("div");
       none.className = "row none";
-      none.textContent = "No parties found";
+      none.textContent = empty || "No parties found";
       results.appendChild(none);
     }
     hits.slice(0, 25).forEach(function (h) {
@@ -2264,7 +2169,7 @@ function bindPartySearch(input, results, idField, opts) {
     if (q.length < 2) { close(); return; }
     callTool("search_entities", { keyword: q, entityTypes: ["Party"] })
       .then(function (raw) { if (mine === seq) render(partyHits(raw)); })
-      .catch(function () { if (mine === seq) close(); });
+      .catch(function (e) { if (mine === seq) render([], "Search unavailable: " + e.message); });
   }
 
   input.addEventListener("input", function () {
