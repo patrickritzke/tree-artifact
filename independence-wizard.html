@@ -199,7 +199,6 @@
   }
   #why-pop h3 { font-size: 13px; font-weight: 600; color: var(--fg-strong); margin-bottom: 6px; }
   .why-item { padding: 6px 0; border-top: 1px solid var(--hover); }
-  .why-item.lost { opacity: .6; }
   .why-item .rule-badge { cursor: default; }
   .why-item .rule-badge:hover { background: none; }
   .why-sub { margin: 5px 0 0 18px; padding-left: 8px; border-left: 2px solid var(--border); display: grid; gap: 3px; }
@@ -1105,13 +1104,13 @@ function showWhy(anchor, node, res) {
   pop.appendChild(h);
 
   /* Per result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
-  res.items.forEach(function (it) {
-    var row = el("div", "why-item" + (it.level === res.level ? "" : " lost"));
+  res.items.forEach(function (it, i) {
+    if (it.level !== res.level && (!i || res.items[i - 1].level === res.level)) pop.appendChild(el("div", "sec", "Other rules"));
+    var row = el("div", "why-item");
     var l1 = el("div");
     l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
     l1.appendChild(document.createTextNode(" by "));
     l1.appendChild(el("span", "rpill", it.rule.label));
-    if (it.level !== res.level) l1.appendChild(el("span", "node-id", "overridden by a stricter result"));
     row.appendChild(l1);
     var sub = el("div", "why-sub"), from = el("div");
     from.appendChild(document.createTextNode("from "));
