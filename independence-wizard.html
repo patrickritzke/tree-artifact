@@ -224,29 +224,20 @@
   .node-id { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .empty { padding: 24px; color: var(--muted); font-size: 13px; }
   #app { display: none; padding-bottom: 40px; }
-/* Rule pills: label only; the reasons are in the popup */
+/* Rule pill: label only; the reasons show on hover */
   .rpill {
-    display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: none;
-    color: var(--accent-fg); border: 1px solid var(--accent);
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; background: var(--tint);
+    color: var(--accent-fg); border: 1px solid var(--accent); cursor: help;
   }
-  button.rpill { cursor: pointer; }
-  button.rpill:hover { background: var(--tint); }
-  button.rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .rpill.apply { background: var(--tint); }
-
-  /* ── Popup ── */
-  #pop-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 200; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .18s; }
-  #pop-backdrop.open { opacity: 1; pointer-events: auto; }
-  .pop-panel { position: relative; background: var(--surface); color: var(--fg-2); border-radius: 12px; box-shadow: 0 8px 32px var(--shadow); width: 440px; max-width: 92vw; max-height: 80vh; overflow-y: auto; padding: 18px 20px; font-size: 13px; line-height: 1.45; }
-  .pop-close { position: absolute; top: 10px; right: 12px; border: none; background: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
-  .pop-panel h2 { font-size: 15px; font-weight: 700; color: var(--fg-strong); margin: 0 24px 2px 0; }
-  .pop-panel .sec { font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: var(--fg-strong); }
-  .pop-panel .lead { margin: 12px 0 4px; color: var(--fg-strong); }
-  .pop-panel ul { padding-left: 18px; }
-  .pop-panel li { margin-bottom: 4px; }
-  .pop-panel .id { color: var(--muted); white-space: nowrap; }
-  .pop-panel .tag { font-size: 10px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); margin-left: 6px; white-space: nowrap; }
-  .pop-panel .gov { margin-top: 8px; padding: 8px 10px; background: var(--tint); border-left: 3px solid var(--accent); border-radius: 4px; color: var(--fg-strong); }
+  .rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #why-pop h3 + .lead { margin-top: 0; }
+  #why-pop .sec { font-size: 12px; font-weight: 600; margin: 10px 0 4px; color: var(--fg-strong); }
+  #why-pop .lead { margin: 8px 0 4px; color: var(--fg-strong); }
+  #why-pop ul { padding-left: 18px; }
+  #why-pop li { margin-bottom: 3px; }
+  #why-pop .id { color: var(--muted); white-space: nowrap; }
+  #why-pop .tag { font-size: 10px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); margin-left: 6px; white-space: nowrap; }
+  #why-pop .gov { margin-top: 8px; padding: 6px 8px; background: var(--tint); border-left: 3px solid var(--accent); border-radius: 4px; color: var(--fg-strong); }
 
   /* Party search: results list under the box */
   .search-wrap { position: relative; }
@@ -450,7 +441,6 @@
   <button class="btn primary" id="wiz-next" type="button"></button>
 </footer>
 
-<div id="pop-backdrop"><div class="pop-panel" id="pop" role="dialog" aria-modal="true"></div></div>
 
 <script>
 /* ═══ DATA ════════════════════════════════════════════════════════════════
@@ -1100,6 +1090,12 @@ function showWhy(anchor, node, res) {
     pop.appendChild(note);
   }
 
+  placePop(pop, anchor);
+  state.whyFor = node.id;
+}
+
+/* Put a popover just under its anchor (above it when there is no room), kept on screen */
+function placePop(pop, anchor) {
   document.body.appendChild(pop);
   var r = anchor.getBoundingClientRect();
   var left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8));
@@ -1107,7 +1103,6 @@ function showWhy(anchor, node, res) {
   if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
   pop.style.left = left + "px";
   pop.style.top = top + "px";
-  state.whyFor = node.id;
 }
 
 function closeWhy() {
@@ -1488,30 +1483,19 @@ function el(tag, cls, text) {
   return e;
 }
 
-function ruleCell(td, info, kind) {
-  if (!info) return;
-  var pill;
-  if (kind === "r") {
-    if (!info.audit || !info.existing) return;
-    pill = el("button", "rpill", info.existing);
-    pill.title = "Show engagements";
-  } else if (kind === "p") {
-    if (!info.audit || !info.entity) return;
-    pill = el("button", "rpill", info.entity);
-    pill.title = "Why this entity rule";
-  } else {
-    if (!info.audit || !info.apply) return;
-    pill = el("button", "rpill apply", info.apply);
-    pill.title = "Why this rule applies";
-  }
-  pill.type = "button";
-  pill.setAttribute("aria-haspopup", "dialog");
-  pill.addEventListener("click", function () { openPop(pill, info, kind); });
+/* Apply Audit Rule pill; hovering it explains the rule, the engagements and the entity rule (information only) */
+function ruleCell(td, info) {
+  if (!info || !info.audit || !info.apply) return;
+  var pill = el("span", "rpill apply", info.apply);
+  pill.tabIndex = 0;
+  pill.addEventListener("mouseenter", function () { showInfo(pill, info); });
+  pill.addEventListener("focus", function () { showInfo(pill, info); });
+  pill.addEventListener("mouseleave", closeWhy);
+  pill.addEventListener("blur", closeWhy);
   td.appendChild(pill);
 }
 
-/* ═══ POPUPS ══════════════════════════════════════════════════════════════ */
-var opener = null;
+/* ═══ HOVER INFORMATION ═══════════════════════════════════════════════════ */
 function li(text, node) { var x = el("li"); if (text != null) x.textContent = text; if (node) x.appendChild(node); return x; }
 function lead(parent, bold, rest) {
   var d = el("div", "lead");
@@ -1533,55 +1517,41 @@ function engList(parent, title, list) {
   parent.appendChild(ul);
 }
 
-function openPop(btn, info, kind) {
-  opener = btn;
-  var pop = $("pop");
-  pop.innerHTML = "";
-  var x = el("button", "pop-close", "×");
-  x.type = "button";
-  x.setAttribute("aria-label", "Close");
-  x.addEventListener("click", closePop);
-  pop.appendChild(x);
-  var name = btn.closest("tr").querySelector(".node-name").textContent;
-  pop.appendChild(el("h2", null, name));
+function showInfo(anchor, info) {
+  closeWhy();
+  var pop = el("div");
+  pop.id = "why-pop";
+  pop.style.pointerEvents = "none";
+  pop.appendChild(el("h3", null, anchor.closest("tr").querySelector(".node-name").textContent));
 
-  if (kind === "p") {
-    var w = info.why || {};
-    if (w.because && w.because.length) {
-      lead(pop, info.entity, "is the entity rule because");
-      var ul = el("ul");
-      w.because.forEach(function (t) { ul.appendChild(li(t)); });
-      pop.appendChild(ul);
-    }
-    if (w.also && w.also.length) {
-      pop.appendChild(el("div", "sec", "Other, less strict rules that also apply"));
-      var ul2 = el("ul");
-      w.also.forEach(function (a) {
-        var x2 = el("li");
-        x2.appendChild(el("b", null, a.jur));
-        x2.appendChild(document.createTextNode(" — " + a.because));
-        ul2.appendChild(x2);
-      });
-      pop.appendChild(ul2);
-    }
-  } else if (kind === "a") {
-    lead(pop, info.apply, "applies because");
-    pop.appendChild(el("div", null, info.applyWhy || ""));
-  } else {
-    engList(pop, "Audit engagements", info.engagements.audit);
-    engList(pop, "Non-audit engagements", info.engagements.nonAudit);
-    if (info.audit && info.existing) {
-      lead(pop, info.existing, "is the existing audit rule");
-      if (info.governs) pop.appendChild(el("div", "gov", info.governs));
-    }
+  lead(pop, info.apply, "rule applied because");
+  pop.appendChild(el("div", null, info.applyWhy || ""));
+
+  engList(pop, "Audit engagements", info.engagements.audit);
+  engList(pop, "Non-audit engagements", info.engagements.nonAudit);
+  if (info.existing && info.governs) pop.appendChild(el("div", "gov", info.governs));
+
+  var w = info.why || {};
+  if (info.entity && w.because && w.because.length) {
+    pop.appendChild(el("div", "sec", "Based on firmographic data"));
+    lead(pop, info.entity, "is the entity rule because");
+    var ul = el("ul");
+    w.because.forEach(function (t) { ul.appendChild(li(t)); });
+    pop.appendChild(ul);
   }
-  $("pop-backdrop").classList.add("open");
-  x.focus();
-}
-function closePop() {
-  $("pop-backdrop").classList.remove("open");
-  if (opener) opener.focus();
-  opener = null;
+  if (w.also && w.also.length) {
+    pop.appendChild(el("div", "sec", "Other, less strict rules that also apply"));
+    var ul2 = el("ul");
+    w.also.forEach(function (x) {
+      var l = el("li");
+      l.appendChild(el("b", null, x.jur));
+      l.appendChild(document.createTextNode(" \u2014 " + x.because));
+      ul2.appendChild(l);
+    });
+    pop.appendChild(ul2);
+  }
+  placePop(pop, anchor);
+  state.whyFor = "info";
 }
 
 /* Fold the SI entities (close-affiliate-only relationships) into the tree grid. An SI entity is added, with what sits
@@ -1757,9 +1727,7 @@ function renderEngPage() {
     renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
       pairs: [], redraw: renderEngPage,
       nameCls: function (n) { return info.get(n.id) ? "eng-party" : "anc"; },
-      cols: [["Existing Audit Rule", "r"], ["Entity Rule", "p"], ["Apply Audit Rule", "a"]].map(function (c) {
-        return { title: c[0], cls: " rule-col", cell: function (n, td) { ruleCell(td, info.get(n.id), c[1]); } };
-      })
+      cols: [{ title: "Apply Audit Rule", cls: " rule-col", cell: function (n, td) { ruleCell(td, info.get(n.id)); } }]
     });
   }
 
@@ -1949,14 +1917,13 @@ function advance() {
 /* ═══ WIRING ══════════════════════════════════════════════════════════════ */
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
-$("pop-backdrop").addEventListener("click", function (e) { if (e.target === $("pop-backdrop")) closePop(); });
 
 document.addEventListener("click", function (e) {
   if (!e.target.closest(".dd")) closeDropdowns();
   if (!e.target.closest("#why-pop, .rule-badge")) closeWhy();
 });
 document.addEventListener("keydown", function (e) {
-  if (e.key === "Escape") { closeDropdowns(); closeWhy(); closePop(); }
+  if (e.key === "Escape") { closeDropdowns(); closeWhy(); }
 });
 window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
 window.addEventListener("resize", closeWhy);
