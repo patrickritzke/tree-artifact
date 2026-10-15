@@ -1,144 +1,84 @@
 {
-  "version": 1,
-  "description": "Independence rules. Each rule (audit framework) has treatments. A treatment lists the service lines it applies to and the tree relationships, measured from an audit client, that inherit it. Where a relationship is covered by more than one rule or treatment, the treatment earliest in treatmentPrecedence wins. This file holds today's behaviour; nothing reads it yet.",
+  "version": 2,
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. This file holds today's behaviour; nothing reads it yet.",
 
-  "treatmentPrecedence": ["restricted", "materiality"],
+  "treatments": [
+    { "value": "restricted",  "label": "Restricted" },
+    { "value": "materiality", "label": "Materiality check" }
+  ],
 
   "relationships": [
-    "Ultimate Parent",
-    "Immediate Parent",
-    "Indirect Parent",
-    "Immediate Subsidiary",
-    "Indirect Subsidiary",
-    "Sibling",
-    "Cousin",
-    "Close Affiliate"
+    { "value": "ultimateParent",       "label": "Ultimate Parent" },
+    { "value": "immediateParent",      "label": "Immediate Parent" },
+    { "value": "indirectParent",       "label": "Indirect Parent" },
+    { "value": "immediateSubsidiary",  "label": "Immediate Subsidiary" },
+    { "value": "indirectSubsidiary",   "label": "Indirect Subsidiary" },
+    { "value": "sibling",              "label": "Sibling" },
+    { "value": "cousin",               "label": "Cousin" },
+    { "value": "closeAffiliate",       "label": "Close Affiliate", "description": "Any relationship found in the close-affiliates hierarchy (shown as CA - ...)." }
   ],
-  "relationshipNotes": {
-    "Close Affiliate": "Any relationship found in the close-affiliates hierarchy (shown as CA - ...)."
-  },
 
-  "serviceLinesNote": "[\"*\"] means every service line. The wizard does not ask for a service line yet, so every treatment applies to all of them.",
+  "serviceLinesNote": "[\"*\"] means every service line. The wizard does not ask for a service line yet, so every treatment applies to all of them. Real service lines will be { value, label } pairs too.",
 
   "rules": [
     {
-      "id": "SEC",
+      "value": "SEC",
       "label": "SEC",
       "framework": "SEC/PCAOB",
       "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Indirect Subsidiary", "Sibling", "Cousin", "Close Affiliate"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary", "sibling", "cousin", "closeAffiliate"] }
       ]
     },
     {
-      "id": "AICPA",
+      "value": "AICPA",
       "label": "AICPA",
       "framework": "AICPA",
       "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Sibling", "Cousin", "Close Affiliate"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["sibling", "cousin", "closeAffiliate"] }
       ]
     },
     {
-      "id": "IESBA-PIE",
+      "value": "IESBA-PIE",
       "label": "IESBA (PIE)",
       "framework": "IESBA-PIE",
       "source": "IESBA related entities, PIE. Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Indirect Subsidiary", "Sibling", "Cousin", "Close Affiliate"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "indirectSubsidiary", "sibling", "cousin", "closeAffiliate"] }
       ]
     },
     {
-      "id": "IESBA",
+      "value": "IESBA",
       "label": "IESBA",
       "framework": "IESBA",
       "source": "IESBA related entities, non-PIE. Parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Close Affiliate"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["closeAffiliate"] }
       ]
     },
     {
-      "id": "EU",
+      "value": "EU",
       "label": "EU",
       "framework": "EU-537",
       "source": "Regulation (EU) 537/2014, Art. 5. Geography not applied.",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Indirect Subsidiary"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"] }
       ]
     },
     {
-      "id": "UK",
+      "value": "UK",
       "label": "UK",
       "framework": "UK-FRC",
       "source": "FRC Ethical Standard, UK 537/2014.",
       "treatments": [
-        {
-          "id": "restricted",
-          "label": "Restricted",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Ultimate Parent", "Immediate Parent", "Indirect Parent", "Immediate Subsidiary"]
-        },
-        {
-          "id": "materiality",
-          "label": "Materiality check",
-          "serviceLines": ["*"],
-          "inheritingRelationships": ["Indirect Subsidiary"]
-        }
+        { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"] },
+        { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"] }
       ]
     }
   ]
