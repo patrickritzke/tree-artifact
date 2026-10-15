@@ -164,9 +164,10 @@
   .tb-body { padding: 7px 10px 8px; }
 
   /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
-  th.pin-col.wide, td.pin-col.wide { width: 70px; text-align: left; padding-left: 10px; }
+  th.pin-col.wide, td.pin-col.wide { width: 76px; text-align: left; padding-left: 10px; }
   .mark { display: flex; align-items: center; gap: 4px; }
-  .mark-pin { width: 14px; height: 14px; flex: none; }
+  .mark-pin { width: 20px; height: 14px; flex: none; display: flex; align-items: center; }
+  .si-tag { font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); }
   .mark-dots { width: 36px; display: flex; align-items: center; gap: 3px; flex: none; }
   /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
   .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
@@ -455,24 +456,13 @@
         <span><span data-eng="target"></span>Target company</span>
         <span><span data-eng="audit"></span>Audit client</span>
         <span><span data-eng="non"></span>Non-audit client</span>
+        <span><span class="si-tag">SI</span>Significant influence only</span>
       </span>
       <span class="count" id="tree-count"></span>
     </div>
     <div class="grid-wrap" id="tree-grid"></div>
   </div>
 
-  <div class="section">
-    <div class="section-head">
-      <h2>Close affiliates</h2>
-      <span class="eng-key" hidden>
-        <span><span data-eng="target"></span>Target company</span>
-        <span><span data-eng="audit"></span>Audit client</span>
-        <span><span data-eng="non"></span>Non-audit client</span>
-      </span>
-      <span class="count" id="aff-count"></span>
-    </div>
-    <div class="grid-wrap" id="aff-grid"></div>
-  </div>
   </section>
 
   <!-- 5. Assessment -->
@@ -854,18 +844,32 @@ function engageDots(id) {
 }
 
 /* Pin slot then icon slot, the same cell the grids use, so names line up wherever it appears */
-function markCell(isTarget, id) {
+function markCell(isTarget, id, si) {
   var mk = document.createElement("div");
   mk.className = "mark";
   var ps = document.createElement("span");
   ps.className = "mark-pin";
   if (isTarget) ps.appendChild(pinIcon());
+  else if (si) ps.appendChild(siTag());
   var ds = document.createElement("span");
   ds.className = "mark-dots";
   engageDots(id).forEach(function (d) { ds.appendChild(d); });
   mk.appendChild(ps);
   mk.appendChild(ds);
   return mk;
+}
+
+/* "SI": the entity's only relationships to the target are close-affiliate ones (significant influence) */
+function siOnly(node) {
+  var r = node.relToTarget;
+  return !!r && r.length > 0 && r.every(function (x) { return x.indexOf(AFF_PREFIX) === 0; });
+}
+function siTag() {
+  var t = document.createElement("span");
+  t.className = "si-tag";
+  t.textContent = "SI";
+  t.title = "Significant influence: related to the target only as a close affiliate";
+  return t;
 }
 
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
@@ -884,11 +888,10 @@ var state = {
   rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
   trees: [],
-  affTrees: [],
   data: null,
   target: null,
   owners: [],
-  expanded: { tree: new Set(), aff: new Set() }
+  expanded: { tree: new Set() }
 };
 
 var $ = function (id) { return document.getElementById(id); };
@@ -1144,7 +1147,7 @@ function closeWhy() {
   state.whyFor = null;
 }
 
-/* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
+/* gridKey names the expand state; roots are the placements to draw */
 function renderGrid(gridKey, containerId, countId, roots, byId) {
   var metaOf = function (pl) { return byId.get(pl.id) || pl; };
   var pairs = auditPairs();
@@ -1217,9 +1220,11 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
     var pinTd = document.createElement("td");
     pinTd.className = "pin-col" + (showEng ? " wide" : "");
     if (showEng) {
-      pinTd.appendChild(markCell(node.isTarget, node.id));
+      pinTd.appendChild(markCell(node.isTarget, node.id, siOnly(node)));
     } else if (node.isTarget) {
       pinTd.appendChild(pinIcon());
+    } else if (siOnly(node)) {
+      pinTd.appendChild(siTag());
     }
     tr.appendChild(pinTd);
 
@@ -1296,14 +1301,10 @@ function renderAll() {
   if (!state.data) return;
   document.querySelectorAll(".eng-key").forEach(function (k) { k.hidden = !showEngagement(); });
 
-  /* Tree grid: only the tree(s) that contain the target. Close affiliates: every hierarchy. */
-  var treeByid = new Map(), affById = new Map();
-  state.data.nodes.forEach(function (n) { treeByid.set(n.id, n); });
-  state.data.affiliates.forEach(function (n) { affById.set(n.id, n); });
-  var treeCount = renderGrid("tree", "tree-grid", "tree-count", state.trees, treeByid);
-  var affCount = renderGrid("aff", "aff-grid", "aff-count", state.affTrees, affById);
-
-  $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
+  /* One grid: the tree(s) that contain the target, with close-affiliate entities the tree lacks merged in */
+  var byId = new Map();
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
+  $("node-count").textContent = renderGrid("tree", "tree-grid", "tree-count", state.trees, byId) + " entities";
   renderRuleBar();
 }
 
@@ -1611,13 +1612,41 @@ function closePop() {
   opener = null;
 }
 
+/* Fold the close-affiliate hierarchies into the tree. Subsidiaries the tree lacks are inserted under the tree's own
+   row for their parent (with whatever sits below them). A close-affiliate parent the tree lacks becomes another
+   level-0 company, holding a single row for each tree entity it owns so the relationship reads. */
+function mergeAffiliates(trees, affTrees, have) {
+  var roots = trees.slice(), host = new Map();
+  function copy(p) { return { id: p.id, name: p.name, children: p.children.map(copy) }; }
+  function index(list) {
+    list.forEach(function (p) { have.add(p.id); if (!host.has(p.id)) host.set(p.id, p); index(p.children); });
+  }
+  function visit(p, at) {
+    p.children.forEach(function (c) {
+      if (!have.has(c.id)) { var k = copy(c); at.children.push(k); index([k]); }
+      else visit(c, host.get(c.id));
+    });
+  }
+  index(roots);
+  affTrees.forEach(function (r) {
+    if (have.has(r.id)) { visit(r, host.get(r.id)); return; }
+    var top = { id: r.id, name: r.name, children: [] };
+    roots.push(top);
+    r.children.forEach(function (c) {
+      top.children.push(have.has(c.id) ? { id: c.id, name: c.name, children: [] } : copy(c));
+      if (have.has(c.id)) visit(c, host.get(c.id));
+    });
+    index([top]);
+  });
+  return roots;
+}
+
 /* ═══ STEP 1: FIND THE PARTY AND ITS TREE ═════════════════════════════════ */
 function setFamily(data) {
   var target = data.nodes.filter(function (n) { return n.id === data.targetId; })[0];
   if (!target) throw new Error("This party is not in a corporate tree.");
 
   annotate(data.trees, target.id);
-  annotate(data.affTrees, target.id);
   /* Ultimate owners: the roots of the trees that contain the target */
   var shown = data.trees.filter(function (r) { return r.hasTarget; });
   if (!shown.length) shown = data.trees;
@@ -1626,8 +1655,8 @@ function setFamily(data) {
   state.data = data;
   state.target = target;
   state.owners = shown.map(function (r) { return { id: r.id, name: r.name }; });
-  state.trees = shown;
-  state.affTrees = data.affTrees;
+  state.trees = mergeAffiliates(shown, data.affTrees, new Set(data.nodes.map(function (n) { return n.id; })));
+  annotate(state.trees, target.id);
 
   /* A new party starts every later step over */
   state.engage = null;
@@ -1638,17 +1667,15 @@ function setFamily(data) {
   state.rowsTouched = false;
   state.assessment = null;
   state.auditRows = [{ client: null, rule: null, on: true }];
-  state.expanded = { tree: new Set(), aff: new Set() };
+  state.expanded = { tree: new Set() };
 
   /* Default expansion: every placement on a path down to the target, in both grids */
-  [["tree", state.trees], ["aff", state.affTrees]].forEach(function (g) {
-    (function open(list) {
-      list.forEach(function (pl) {
-        if (pl.hasTarget && pl.id !== target.id) state.expanded[g[0]].add(pl.key);
-        open(pl.children);
-      });
-    })(g[1]);
-  });
+  (function open(list) {
+    list.forEach(function (pl) {
+      if (pl.hasTarget && pl.id !== target.id) state.expanded.tree.add(pl.key);
+      open(pl.children);
+    });
+  })(state.trees);
 }
 
 /* "Part of the Name (ID) Corporate Tree" */
