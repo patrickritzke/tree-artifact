@@ -136,9 +136,7 @@
   /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
   th.pin-col.wide, td.pin-col.wide { width: 76px; text-align: left; padding-left: 10px; }
   .mark { display: flex; align-items: center; gap: 4px; }
-  .mark-pin { width: 20px; height: 14px; flex: none; display: flex; align-items: center; }
   .si-tag { font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); }
-  .mark-dots { width: 36px; display: flex; align-items: center; gap: 3px; flex: none; }
   /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
   .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
   .eng svg { display: block; }
@@ -187,7 +185,7 @@
   .dd-opt.active { color: var(--accent-fg); font-weight: 600; }
   .dd-opt:disabled { color: var(--faint); cursor: default; }
   .dd-opt > span { white-space: nowrap; }
-  .dd-opt .mark { flex: none; }
+  .dd-opt .mark { flex: none; width: 56px; }
   .dd-opt .tag { margin-left: auto; font-size: 11px; color: var(--muted); }
   .dd-sep { height: 1px; background: var(--border); margin: 4px 0; }
   .dd-empty { padding: 8px 10px; font-size: 12px; color: var(--muted); }
@@ -856,15 +854,9 @@ function engageDots(id) {
 function markCell(isTarget, id, si) {
   var mk = document.createElement("div");
   mk.className = "mark";
-  var ps = document.createElement("span");
-  ps.className = "mark-pin";
-  if (isTarget) ps.appendChild(pinIcon());
-  else if (si) ps.appendChild(siTag());
-  var ds = document.createElement("span");
-  ds.className = "mark-dots";
-  engageDots(id).forEach(function (d) { ds.appendChild(d); });
-  mk.appendChild(ps);
-  mk.appendChild(ds);
+  if (isTarget) mk.appendChild(pinIcon());
+  else if (si) mk.appendChild(siTag());
+  engageDots(id).forEach(function (d) { mk.appendChild(d); });
   return mk;
 }
 
