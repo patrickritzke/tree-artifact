@@ -579,28 +579,34 @@ var CONFIG = {
     {"value": "indirectSubsidiary", "label": "Indirect Subsidiary", "phrase": "an indirect subsidiary of"},
     {"value": "sibling", "label": "Sibling", "phrase": "a sister company of"},
     {"value": "cousin", "label": "Cousin", "phrase": "a cousin company of"},
-    {"value": "closeAffiliate", "label": "Close Affiliate"}
+    {"value": "caUltimateParent", "label": "CA - Ultimate Parent", "phrase": "a close affiliate (ultimate parent) of"},
+    {"value": "caImmediateParent", "label": "CA - Immediate Parent", "phrase": "a close affiliate (immediate parent) of"},
+    {"value": "caIndirectParent", "label": "CA - Indirect Parent", "phrase": "a close affiliate (indirect parent) of"},
+    {"value": "caImmediateSubsidiary", "label": "CA - Immediate Subsidiary", "phrase": "a close affiliate (immediate subsidiary) of"},
+    {"value": "caIndirectSubsidiary", "label": "CA - Indirect Subsidiary", "phrase": "a close affiliate (indirect subsidiary) of"},
+    {"value": "caSibling", "label": "CA - Sibling", "phrase": "a close affiliate (sibling) of"},
+    {"value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of"}
   ],
   rules: [
     { "value": "SEC", "label": "SEC", "framework": "SEC/PCAOB", "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
       {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary", "sibling", "cousin", "closeAffiliate"]}
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary", "sibling", "cousin", "caUltimateParent", "caImmediateParent", "caIndirectParent", "caImmediateSubsidiary", "caIndirectSubsidiary", "caSibling", "caCousin"]}
       ] },
     { "value": "AICPA", "label": "AICPA", "framework": "AICPA", "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
       "treatments": [
       {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["sibling", "cousin", "closeAffiliate"]}
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["sibling", "cousin", "caUltimateParent", "caImmediateParent", "caIndirectParent", "caImmediateSubsidiary", "caIndirectSubsidiary", "caSibling", "caCousin"]}
       ] },
     { "value": "IESBA-PIE", "label": "IESBA (PIE)", "framework": "IESBA-PIE", "source": "IESBA related entities, PIE. Significant influence not confirmed (shown as materiality check).",
       "treatments": [
       {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "indirectSubsidiary", "sibling", "cousin", "closeAffiliate"]}
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "indirectSubsidiary", "sibling", "cousin", "caUltimateParent", "caImmediateParent", "caIndirectParent", "caImmediateSubsidiary", "caIndirectSubsidiary", "caSibling", "caCousin"]}
       ] },
     { "value": "IESBA", "label": "IESBA", "framework": "IESBA", "source": "IESBA related entities, non-PIE. Parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check).",
       "treatments": [
       {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["closeAffiliate"]}
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["caUltimateParent", "caImmediateParent", "caIndirectParent", "caImmediateSubsidiary", "caIndirectSubsidiary", "caSibling", "caCousin"]}
       ] },
     { "value": "EU", "label": "EU", "framework": "EU-537", "source": "Regulation (EU) 537/2014, Art. 5. Geography not applied.",
       "treatments": [
@@ -616,13 +622,14 @@ var CONFIG = {
 };
 
 /* Lookups built from the config */
+var AFF_PREFIX = "CA - ";
 var LEVEL_RANK = {}, LEVEL_LABELS = {}, REL_LABEL = {}, REL_VALUE = {}, REL_PHRASE = {}, REL_ORDER = [], FRAMEWORK_RULE = {};
 CONFIG.treatments.forEach(function (t, i) { LEVEL_RANK[t.value] = CONFIG.treatments.length - i; LEVEL_LABELS[t.value] = t.label; });
 CONFIG.relationships.forEach(function (r) {
   REL_LABEL[r.value] = r.label;
   REL_VALUE[r.label] = r.value;
   REL_PHRASE[r.label] = r.phrase;
-  if (r.value !== "closeAffiliate") REL_ORDER.push(r.label); /* close affiliates are labelled "CA - " + a tree label */
+  if (r.label.indexOf(AFF_PREFIX) !== 0) REL_ORDER.push(r.label); /* tree relationships; close affiliates are "CA - " + one of them */
 });
 var RULES = CONFIG.rules.map(function (r) {
   var by = {};
@@ -638,8 +645,6 @@ function ruleTip(r) {
   }).join("");
 }
 
-/* Config value for one relationship label */
-function relValue(r) { return r.indexOf(AFF_PREFIX) === 0 ? "closeAffiliate" : REL_VALUE[r]; }
 
 /* Relationship labels of every entity relative to one audit client: id -> [labels]. Cached per client. */
 function relsFor(clientId) {
@@ -671,7 +676,7 @@ function evalNode(id, pairs) {
   pairs.forEach(function (p) {
     var best = null, why = [];
     (p.rels.get(id) || []).forEach(function (r) {
-      var l = p.rule.by[relValue(r)];
+      var l = p.rule.by[REL_VALUE[r]];
       if (!l) return;
       if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
       else if (l === best) why.push(r);
@@ -959,8 +964,6 @@ function classify(nodes, targetId) {
   });
   return result;
 }
-
-var AFF_PREFIX = "CA - ";
 
 /* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
    gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
@@ -1786,10 +1789,7 @@ function runRules() {
 }
 
 /* ═══ STEP 4: THE ASSESSMENT ══════════════════════════════════════════════ */
-function relPhrase(r) {
-  if (r.indexOf(AFF_PREFIX) === 0) return "a close affiliate (" + r.slice(AFF_PREFIX.length).toLowerCase() + ") of";
-  return REL_PHRASE[r] || "related to";
-}
+function relPhrase(r) { return REL_PHRASE[r] || "related to"; }
 
 /* The target's own result across every switched-on audit client and rule, in plain language */
 function buildAssessment() {
