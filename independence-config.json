@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. This file holds today's behaviour; nothing reads it yet.",
+  "version": 3,
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. The wizard embeds a copy of this file (without the prose fields) and reads every rule, label and relationship from it.",
 
   "treatments": [
     { "value": "restricted",  "label": "Restricted" },
@@ -8,13 +8,13 @@
   ],
 
   "relationships": [
-    { "value": "ultimateParent",       "label": "Ultimate Parent" },
-    { "value": "immediateParent",      "label": "Immediate Parent" },
-    { "value": "indirectParent",       "label": "Indirect Parent" },
-    { "value": "immediateSubsidiary",  "label": "Immediate Subsidiary" },
-    { "value": "indirectSubsidiary",   "label": "Indirect Subsidiary" },
-    { "value": "sibling",              "label": "Sibling" },
-    { "value": "cousin",               "label": "Cousin" },
+    { "value": "ultimateParent",       "label": "Ultimate Parent", "phrase": "the ultimate parent of" },
+    { "value": "immediateParent",      "label": "Immediate Parent", "phrase": "the immediate parent of" },
+    { "value": "indirectParent",       "label": "Indirect Parent", "phrase": "an indirect parent of" },
+    { "value": "immediateSubsidiary",  "label": "Immediate Subsidiary", "phrase": "an immediate subsidiary of" },
+    { "value": "indirectSubsidiary",   "label": "Indirect Subsidiary", "phrase": "an indirect subsidiary of" },
+    { "value": "sibling",              "label": "Sibling", "phrase": "a sister company of" },
+    { "value": "cousin",               "label": "Cousin", "phrase": "a cousin company of" },
     { "value": "closeAffiliate",       "label": "Close Affiliate", "description": "Any relationship found in the close-affiliates hierarchy (shown as CA - ...)." }
   ],
 

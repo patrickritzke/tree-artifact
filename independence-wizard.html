@@ -562,41 +562,84 @@ function loadFamily(partyId) {
 }
 
 /* ═══ STATE ═══════════════════════════════════════════════════════════ */
-/* Audit rules. Driven only by each entity's relToTarget metadata (the target has none, so it is not marked).
-   Each rule says what its relationship groups are: "restricted", "materiality", or null (out of scope).
-     parent  : Ultimate / Immediate / Indirect Parent
-     subImm  : Immediate Subsidiary
-     subInd  : Indirect Subsidiary
-     common  : Sibling, Cousin (common control)
-     sigInfl : any CA - label (close affiliates = significant influence)
-   Every relToTarget label is scored on its own and the strictest result wins
-   (restricted > materiality > out of scope), so an entity that is both a tree relative and a close
-   affiliate takes whichever is stricter. Source: jurisdiction screening guide;
-   the guide's "not confirmed" items are noted per rule. */
-var RULES = [
-  { key: "SEC", label: "SEC", parent: "restricted", subImm: "restricted", subInd: "materiality", common: "materiality", sigInfl: "materiality",
-    cite: "17 CFR 210.2-01(f)(4). Parents and subsidiaries restricted; siblings, cousins and significant influence (close affiliates) need a materiality test. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
-  { key: "AICPA", label: "AICPA", parent: "restricted", subImm: "restricted", subInd: null, common: "materiality", sigInfl: "materiality",
-    cite: "ET 0.400.02. Subsidiaries restricted; siblings, cousins and significant influence (close affiliates) materiality check. Parent treatment not confirmed (shown as restricted). Display setting: immediate subsidiaries restricted; indirect subsidiaries out of scope." },
-  { key: "IESBA-PIE", label: "IESBA (PIE)", parent: "materiality", subImm: "restricted", subInd: "materiality", common: "materiality", sigInfl: "materiality",
-    cite: "IESBA related entities, PIE. Subsidiaries restricted; parents, siblings and cousins materiality check. Significant influence not confirmed (shown as materiality check). Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
-  { key: "IESBA", label: "IESBA", parent: null, subImm: "restricted", subInd: null, common: null, sigInfl: "materiality",
-    cite: "IESBA related entities, non-PIE. Subsidiaries restricted; parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check). Display setting: immediate subsidiaries restricted; indirect subsidiaries out of scope." },
-  { key: "EU", label: "EU", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
-    cite: "Regulation (EU) 537/2014, Art. 5. Parent and controlled undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Geography not applied. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." },
-  { key: "UK", label: "UK", parent: "restricted", subImm: "restricted", subInd: "materiality", common: null, sigInfl: null,
-    cite: "FRC Ethical Standard, UK 537/2014. Parent and subsidiary undertakings restricted; siblings, cousins and significant influence (close affiliates) out of scope. Display setting: immediate subsidiaries restricted; indirect subsidiaries a materiality check." }
-];
-var REL_GROUP = {
-  "Ultimate Parent": "parent", "Immediate Parent": "parent", "Indirect Parent": "parent",
-  "Immediate Subsidiary": "subImm", "Indirect Subsidiary": "subInd",
-  "Sibling": "common", "Cousin": "common"
+/* ═══ RULE CONFIG ═════════════════════════════════════════════════════
+   Everything the independence rules say lives here, as { value, label } pairs: a copy of independence-config.json
+   without its prose notes. Treatments are listed strictest first, and where a relationship falls under more than one
+   treatment the first wins. Each rule lists, per treatment, the relationships (measured from an audit client) that
+   inherit it. Entities are scored on their relToTarget labels only (the target has none, so it is not marked).
+   Source: jurisdiction screening guide; "not confirmed" items are noted in each rule's source.
+   ═══════════════════════════════════════════════════════════════════ */
+var CONFIG = {
+  treatments: [{"value": "restricted", "label": "Restricted"}, {"value": "materiality", "label": "Materiality check"}],
+  relationships: [
+    {"value": "ultimateParent", "label": "Ultimate Parent", "phrase": "the ultimate parent of"},
+    {"value": "immediateParent", "label": "Immediate Parent", "phrase": "the immediate parent of"},
+    {"value": "indirectParent", "label": "Indirect Parent", "phrase": "an indirect parent of"},
+    {"value": "immediateSubsidiary", "label": "Immediate Subsidiary", "phrase": "an immediate subsidiary of"},
+    {"value": "indirectSubsidiary", "label": "Indirect Subsidiary", "phrase": "an indirect subsidiary of"},
+    {"value": "sibling", "label": "Sibling", "phrase": "a sister company of"},
+    {"value": "cousin", "label": "Cousin", "phrase": "a cousin company of"},
+    {"value": "closeAffiliate", "label": "Close Affiliate"}
+  ],
+  rules: [
+    { "value": "SEC", "label": "SEC", "framework": "SEC/PCAOB", "source": "17 CFR 210.2-01(f)(4)",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary", "sibling", "cousin", "closeAffiliate"]}
+      ] },
+    { "value": "AICPA", "label": "AICPA", "framework": "AICPA", "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["sibling", "cousin", "closeAffiliate"]}
+      ] },
+    { "value": "IESBA-PIE", "label": "IESBA (PIE)", "framework": "IESBA-PIE", "source": "IESBA related entities, PIE. Significant influence not confirmed (shown as materiality check).",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "indirectSubsidiary", "sibling", "cousin", "closeAffiliate"]}
+      ] },
+    { "value": "IESBA", "label": "IESBA", "framework": "IESBA", "source": "IESBA related entities, non-PIE. Parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check).",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["closeAffiliate"]}
+      ] },
+    { "value": "EU", "label": "EU", "framework": "EU-537", "source": "Regulation (EU) 537/2014, Art. 5. Geography not applied.",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"]}
+      ] },
+    { "value": "UK", "label": "UK", "framework": "UK-FRC", "source": "FRC Ethical Standard, UK 537/2014.",
+      "treatments": [
+      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["ultimateParent", "immediateParent", "indirectParent", "immediateSubsidiary"]},
+      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"]}
+      ] }
+  ]
 };
-var LEVEL_RANK = { restricted: 2, materiality: 1 };
-var LEVEL_LABELS = { restricted: "Restricted", materiality: "Materiality check" };
 
-/* Group for one relationship label */
-function relGroup(r) { return r.indexOf(AFF_PREFIX) === 0 ? "sigInfl" : REL_GROUP[r]; }
+/* Lookups built from the config */
+var LEVEL_RANK = {}, LEVEL_LABELS = {}, REL_LABEL = {}, REL_VALUE = {}, REL_PHRASE = {}, REL_ORDER = [], FRAMEWORK_RULE = {};
+CONFIG.treatments.forEach(function (t, i) { LEVEL_RANK[t.value] = CONFIG.treatments.length - i; LEVEL_LABELS[t.value] = t.label; });
+CONFIG.relationships.forEach(function (r) {
+  REL_LABEL[r.value] = r.label;
+  REL_VALUE[r.label] = r.value;
+  REL_PHRASE[r.label] = r.phrase;
+  if (r.value !== "closeAffiliate") REL_ORDER.push(r.label); /* close affiliates are labelled "CA - " + a tree label */
+});
+var RULES = CONFIG.rules.map(function (r) {
+  var by = {};
+  r.treatments.forEach(function (t) { t.inheritingRelationships.forEach(function (v) { if (!by[v]) by[v] = t.value; }); });
+  FRAMEWORK_RULE[r.framework] = r.value;
+  return { key: r.value, label: r.label, cfg: r, by: by };
+});
+
+/* Hover text for a rule pill: its source, then what each treatment covers */
+function ruleTip(r) {
+  return r.label + " \u2013 " + r.cfg.source + r.cfg.treatments.map(function (t) {
+    return "\n" + LEVEL_LABELS[t.value] + ": " + t.inheritingRelationships.map(function (v) { return REL_LABEL[v]; }).join(", ");
+  }).join("");
+}
+
+/* Config value for one relationship label */
+function relValue(r) { return r.indexOf(AFF_PREFIX) === 0 ? "closeAffiliate" : REL_VALUE[r]; }
 
 /* Relationship labels of every entity relative to one audit client: id -> [labels]. Cached per client. */
 function relsFor(clientId) {
@@ -628,7 +671,7 @@ function evalNode(id, pairs) {
   pairs.forEach(function (p) {
     var best = null, why = [];
     (p.rels.get(id) || []).forEach(function (r) {
-      var l = p.rule[relGroup(r)];
+      var l = p.rule.by[relValue(r)];
       if (!l) return;
       if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
       else if (l === best) why.push(r);
@@ -646,7 +689,6 @@ function evalNode(id, pairs) {
    "[Audit - X]" suffix, the entity rule from Moody's fields, and the applied rule (the strictest of the two).
    ═══════════════════════════════════════════════════════════════════ */
 var FRAMEWORK_RANK = { "SEC/PCAOB": 6, "EU-537": 5, "UK-FRC": 4, "IESBA-PIE": 3, "IESBA": 2, "AICPA": 1 };
-var FRAMEWORK_RULE = { "SEC/PCAOB": "SEC", "EU-537": "EU", "UK-FRC": "UK", "IESBA-PIE": "IESBA-PIE", "IESBA": "IESBA", "AICPA": "AICPA" };
 var US_MIC = ["XNAS", "XNYS", "ARCX", "XASE", "BATS", "IEXG"];
 /* EU/EEA/UK exchanges: the skill names the group but not the list, so this is a working list. Extend as needed. */
 var EU_MIC = ["XLON", "XPAR", "XAMS", "XBRU", "XETR", "XFRA", "XMIL", "XMAD", "XSTO", "XCSE", "XHEL", "XOSL", "XDUB",
@@ -864,9 +906,6 @@ var $ = function (id) { return document.getElementById(id); };
      idParty        Intapp party id, or null when the entity has no party record
    Classification follows entity-relationship-classification.md.
    ═══════════════════════════════════════════════════════════════════ */
-var REL_ORDER = ["Ultimate Parent", "Immediate Parent", "Indirect Parent",
-                 "Immediate Subsidiary", "Indirect Subsidiary", "Sibling", "Cousin"];
-
 /* Every upward path from id, as arrays [id, parent, ..., top]. A path stops at a repeat (cycle guard). */
 function upwardPaths(id, byId) {
   var out = [];
@@ -1306,7 +1345,7 @@ function renderRuleBar() {
       b.type = "button";
       b.className = "pill" + (row.rule === r.key ? " active" : "");
       b.textContent = r.label;
-      b.title = r.cite;
+      b.title = ruleTip(r);
       b.setAttribute("aria-pressed", row.rule === r.key ? "true" : "false");
       b.addEventListener("click", function () {
         row.rule = row.rule === r.key ? null : r.key;
@@ -1747,11 +1786,6 @@ function runRules() {
 }
 
 /* ═══ STEP 4: THE ASSESSMENT ══════════════════════════════════════════════ */
-var REL_PHRASE = {
-  "Ultimate Parent": "the ultimate parent of", "Immediate Parent": "the immediate parent of", "Indirect Parent": "an indirect parent of",
-  "Immediate Subsidiary": "an immediate subsidiary of", "Indirect Subsidiary": "an indirect subsidiary of",
-  "Sibling": "a sister company of", "Cousin": "a cousin company of"
-};
 function relPhrase(r) {
   if (r.indexOf(AFF_PREFIX) === 0) return "a close affiliate (" + r.slice(AFF_PREFIX.length).toLowerCase() + ") of";
   return REL_PHRASE[r] || "related to";
