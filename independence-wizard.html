@@ -321,12 +321,31 @@
   .verdict.materiality .verdict-head { color: var(--mat-fg); }
   .verdict.none { background: var(--ok-bg); border-color: var(--ok-fg); }
   .verdict.none .verdict-head { color: var(--ok-fg); }
-  .result-h { font-size: 13px; font-weight: 600; color: var(--fg-strong); margin-bottom: 8px; }
-  .result-p { font-size: 13px; color: var(--fg-2); line-height: 1.5; }
-  ul.reasons { list-style: none; display: flex; flex-direction: column; gap: 8px; }
-  ul.reasons li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--fg-2); }
-  ul.reasons .rule-badge { flex: none; cursor: default; margin-top: 2px; }
-  ul.reasons .rule-badge:hover { background: none; }
+  .result-h { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+  .verdict .why-item { border-top: 0; padding: 4px 0 0; }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 6px; }
+  .chart { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+  .canvas { position: relative; margin: 0 auto; }
+  .canvas > svg { position: absolute; inset: 0; pointer-events: none; }
+  .canvas > svg path { fill: none; }
+  .cedge { stroke: var(--border-2); stroke-width: 1.5; opacity: 0; transition: opacity .5s; }
+  .cedge.show { opacity: 1; }
+  .chl { stroke-width: 3; stroke-linecap: round; opacity: .85; }
+  .chl.restricted { stroke: var(--restr-fg); }
+  .chl.materiality { stroke: var(--mat-fg); }
+  .cnode { position: absolute; width: 200px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
+           opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
+  .cnode.show { opacity: 1; transform: none; }
+  .cnode.target { border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .cnode.pulse { box-shadow: 0 0 0 6px rgba(37,99,235,.28); }
+  .cnm { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
+  .cid { font-size: 10.5px; color: var(--muted); }
+  .crel { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .pop { opacity: 0; transform: scale(.6); transition: opacity .35s, transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .pop.show { opacity: 1; transform: none; }
+  .cnode .rule-badge, .crun { cursor: default; background: var(--surface); }
+  .cnode .rule-badge:hover { background: var(--surface); }
+  .crun { position: absolute; z-index: 5; transform: translate(-50%, -50%); box-shadow: 0 2px 8px var(--shadow); white-space: nowrap; }
   .result-notes { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); line-height: 1.6; }
 
   #report-title { margin: 10px 20px 4px; }
@@ -623,12 +642,11 @@ var CONFIG = {
 
 /* Lookups built from the config */
 var AFF_PREFIX = "CA - ";
-var LEVEL_RANK = {}, LEVEL_LABELS = {}, REL_LABEL = {}, REL_VALUE = {}, REL_PHRASE = {}, REL_ORDER = [], FRAMEWORK_RULE = {};
+var LEVEL_RANK = {}, LEVEL_LABELS = {}, REL_LABEL = {}, REL_VALUE = {}, REL_ORDER = [], FRAMEWORK_RULE = {};
 CONFIG.treatments.forEach(function (t, i) { LEVEL_RANK[t.value] = CONFIG.treatments.length - i; LEVEL_LABELS[t.value] = t.label; });
 CONFIG.relationships.forEach(function (r) {
   REL_LABEL[r.value] = r.label;
   REL_VALUE[r.label] = r.value;
-  REL_PHRASE[r.label] = r.phrase;
   if (r.label.indexOf(AFF_PREFIX) !== 0) REL_ORDER.push(r.label); /* tree relationships; close affiliates are "CA - " + one of them */
 });
 var RULES = CONFIG.rules.map(function (r) {
@@ -1085,6 +1103,30 @@ function ruleBadge(node, res) {
   return b;
 }
 
+/* One result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
+function resultRow(it) {
+  var row = el("div", "why-item"), l1 = el("div");
+  l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
+  l1.appendChild(document.createTextNode(" by "));
+  l1.appendChild(el("span", "rpill", it.rule.label));
+  row.appendChild(l1);
+  var sub = el("div", "why-sub"), from = el("div");
+  from.appendChild(document.createTextNode("from "));
+  from.appendChild(el("b", null, it.client.name));
+  from.appendChild(el("span", "node-id", "(" + it.client.id + ")"));
+  sub.appendChild(from);
+  var as = el("div");
+  as.appendChild(document.createTextNode("as "));
+  it.rels.forEach(function (r, i) {
+    if (i) as.appendChild(document.createTextNode(" and "));
+    as.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
+    as.appendChild(el("span", "relpill", r));
+  });
+  sub.appendChild(as);
+  row.appendChild(sub);
+  return row;
+}
+
 function showWhy(anchor, node, res) {
   closeWhy();
   var pop = document.createElement("div");
@@ -1095,30 +1137,9 @@ function showWhy(anchor, node, res) {
   h.textContent = node.name + " (" + node.id + ")";
   pop.appendChild(h);
 
-  /* Per result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
   res.items.forEach(function (it, i) {
     if (it.level !== res.level && (!i || res.items[i - 1].level === res.level)) pop.appendChild(el("div", "sec", "Other rules"));
-    var row = el("div", "why-item");
-    var l1 = el("div");
-    l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
-    l1.appendChild(document.createTextNode(" by "));
-    l1.appendChild(el("span", "rpill", it.rule.label));
-    row.appendChild(l1);
-    var sub = el("div", "why-sub"), from = el("div");
-    from.appendChild(document.createTextNode("from "));
-    from.appendChild(el("b", null, it.client.name));
-    from.appendChild(el("span", "node-id", "(" + it.client.id + ")"));
-    sub.appendChild(from);
-    var as = el("div");
-    as.appendChild(document.createTextNode("as "));
-    it.rels.forEach(function (r, i) {
-      if (i) as.appendChild(document.createTextNode(" and "));
-      as.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
-      as.appendChild(el("span", "relpill", r));
-    });
-    sub.appendChild(as);
-    row.appendChild(sub);
-    pop.appendChild(row);
+    pop.appendChild(resultRow(it));
   });
 
   if (res.items.length > 1) {
@@ -1785,21 +1806,13 @@ function runRules() {
 }
 
 /* ═══ STEP 4: THE ASSESSMENT ══════════════════════════════════════════════ */
-function relPhrase(r) { return REL_PHRASE[r] || "related to"; }
-
 /* The target's own result across every switched-on audit client and rule, in plain language */
 function buildAssessment() {
   var t = state.target, pairs = auditPairs(), res = evalNode(t.id, pairs);
   var clients = pairs.length, s = clients === 1 ? "" : "s";
-  var out = { level: res.level || "none", headline: "", summary: "", reasons: [], notes: [] };
+  var out = { level: res.level || "none", headline: "", summary: "", items: [], notes: [] };
 
-  res.items.forEach(function (it) {
-    out.reasons.push({
-      level: it.level,
-      text: t.name + " is " + relPhrase(it.rels[0]) + " " + it.client.name + " (" + it.client.id + "), an audit client under " + it.rule.label +
-            ". " + it.rule.label + " treats this as " + (it.level === "restricted" ? "a restricted relationship." : "a relationship that needs a materiality check.")
-    });
-  });
+  out.items = res.items.filter(function (i) { return i.level === res.level; }); /* only the strictest results */
 
   var switchedOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
   if (!clients && switchedOff) {
@@ -1846,25 +1859,212 @@ function renderResult() {
 
   var banner = el("div", "verdict " + A.level);
   banner.appendChild(el("div", "verdict-head", A.headline));
-  banner.appendChild(el("div", "verdict-text", A.summary));
+  if (A.items.length) A.items.forEach(function (it) { banner.appendChild(resultRow(it)); });
+  else banner.appendChild(el("div", "verdict-text", A.summary));
   host.appendChild(banner);
 
-  host.appendChild(el("h2", "result-h", "Independence assessment"));
-  if (A.reasons.length) {
-    var ul = el("ul", "reasons");
-    A.reasons.forEach(function (r) {
-      var li = el("li");
-      li.appendChild(el("span", "rule-badge " + r.level, LEVEL_LABELS[r.level]));
-      li.appendChild(el("span", null, r.text));
-      ul.appendChild(li);
-    });
-    host.appendChild(ul);
-  } else {
-    host.appendChild(el("p", "result-p", A.summary));
+  if (A.items.length) {
+    var head = el("div", "chart-head");
+    head.appendChild(el("h2", "result-h", "Where the result comes from"));
+    var rp = el("button", "btn", "\u21BB Replay");
+    rp.type = "button";
+    head.appendChild(rp);
+    host.appendChild(head);
+    var box = el("div", "chart");
+    host.appendChild(box);
+    var m = chartModel(A.items, A.level);
+    rp.addEventListener("click", function () { drawChart(box, m); playChart(m); });
+    drawChart(box, m);
+    playChart(m);
   }
   var nl = el("div", "result-notes");
   A.notes.forEach(function (n) { nl.appendChild(el("div", null, n)); });
   host.appendChild(nl);
+}
+
+/* ═══ RESULT CHART ════════════════════════════════════════════════════════
+   The target, every parent, and every entity it inherited a strictest-level rule from, laid out as a tree. Each source's
+   rule appears on it, then travels down the structure lines, turning into "Rule - Treatment" and leaving a copy on every
+   entity it reaches on the way, until it arrives at the target.
+   ═══════════════════════════════════════════════════════════════════ */
+var chart = { tok: 0, skip: false };
+function chartStop() { chart.tok++; }
+
+function chartModel(items, level) {
+  var parents = new Map(), meta = new Map(), tid = state.target.id;
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
+    if (!meta.has(n.id)) meta.set(n.id, n);
+    var ps = parents.get(n.id) || [];
+    n.parents.forEach(function (p) { if (ps.indexOf(p) === -1) ps.push(p); });
+    parents.set(n.id, ps);
+  });
+  var inc = new Set([tid]);
+  (function up(id) { (parents.get(id) || []).forEach(function (p) { if (!inc.has(p) && meta.has(p)) { inc.add(p); up(p); } }); })(tid);
+  items.forEach(function (it) { /* join each source to what is already drawn by its nearest route upward */
+    var q = [[it.client.id]], seen = {};
+    seen[it.client.id] = 1;
+    while (q.length) {
+      var p = q.shift(), last = p[p.length - 1];
+      if (inc.has(last)) { p.forEach(function (x) { inc.add(x); }); return; }
+      (parents.get(last) || []).forEach(function (n) { if (!seen[n] && meta.has(n)) { seen[n] = 1; q.push(p.concat(n)); } });
+    }
+    inc.add(it.client.id);
+  });
+  var ids = Array.from(inc), edges = [], tier = {};
+  ids.forEach(function (id) { tier[id] = 0; (parents.get(id) || []).forEach(function (p) { if (inc.has(p)) edges.push([p, id]); }); });
+  for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); });
+  var sources = items.map(function (it, i) {
+    var pair = { client: it.client, rule: it.rule, rels: relsFor(it.client.id) }, reach = {};
+    ids.forEach(function (id) { if (id !== it.client.id && evalNode(id, [pair]).level === level) reach[id] = 1; });
+    return { key: i, client: it.client, rule: it.rule, reach: reach };
+  });
+  return { ids: ids, edges: edges, tier: tier, meta: meta, sources: sources, level: level };
+}
+
+function drawChart(box, m) {
+  box.innerHTML = "";
+  var W = 200, GX = 24, GY = 46, cv = el("div", "canvas"), rows = [], x = {};
+  var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  cv.appendChild(svg);
+  box.appendChild(cv);
+  m.ids.forEach(function (id) { (rows[m.tier[id]] = rows[m.tier[id]] || []).push(id); });
+  var widest = Math.max.apply(null, rows.map(function (r) { return r.length; })), total = widest * (W + GX);
+  rows.forEach(function (r, ti) { /* order each row under the average position of its parents */
+    if (ti) r.sort(function (a, b) {
+      var bary = function (id) { var ps = m.edges.filter(function (e) { return e[1] === id; }); return ps.reduce(function (s, e) { return s + x[e[0]]; }, 0) / (ps.length || 1); };
+      return bary(a) - bary(b);
+    });
+    r.forEach(function (id, i) { x[id] = (total - r.length * (W + GX)) / 2 + i * (W + GX) + (W + GX) / 2; });
+  });
+  cv.style.width = total + "px";
+  m.card = {}; m.pill = {}; m.rule = {}; m.base = {};
+  m.ids.forEach(function (id) {
+    var n = m.meta.get(id), isT = id === state.target.id, d = el("div", "cnode" + (isT ? " target" : ""));
+    d.style.left = (x[id] - W / 2) + "px";
+    d.appendChild(markCell(isT, id, siOnly(n)));
+    d.appendChild(el("div", "cnm", n.name));
+    d.appendChild(el("div", "cid", "(" + id + ")"));
+    var rel = el("div", "crel");
+    m.sources.forEach(function (s) {
+      if (s.client.id === id) { m.rule[s.key] = el("span", "pop rpill", s.rule.label); rel.appendChild(m.rule[s.key]); }
+      if (s.reach[id]) { m.pill[s.key + "|" + id] = el("span", "pop rule-badge " + m.level, s.rule.label + " - " + LEVEL_LABELS[m.level]); rel.appendChild(m.pill[s.key + "|" + id]); }
+    });
+    if (isT) { m.final = el("span", "pop rule-badge " + m.level, LEVEL_LABELS[m.level]); rel.appendChild(m.final); }
+    d.appendChild(rel);
+    cv.appendChild(d);
+    m.card[id] = d;
+  });
+  var y = 12, bottom = 0;
+  rows.forEach(function (r) { /* stack the rows by their real heights */
+    var h = 0;
+    r.forEach(function (id) { m.card[id].style.top = y + "px"; h = Math.max(h, m.card[id].offsetHeight); });
+    y += h + GY;
+    bottom = y - GY;
+  });
+  cv.style.height = (bottom + 14) + "px";
+  svg.setAttribute("width", total);
+  svg.setAttribute("height", bottom + 14);
+  m.edges.forEach(function (e) {
+    var g = chartSeg(m, e[0], e[1], false), pa = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pa.setAttribute("d", "M" + g.s.join(" ") + g.d);
+    pa.setAttribute("class", "cedge");
+    svg.appendChild(pa);
+    m.base[e[0] + "|" + e[1]] = pa;
+  });
+  m.svg = svg;
+  m.cv = cv;
+}
+
+/* Curve from the bottom of the upper card to the top of the lower one (reversed when walked upward) */
+function chartSeg(m, from, to, rev) {
+  var a = m.card[rev ? to : from], b = m.card[rev ? from : to];
+  var x1 = a.offsetLeft + a.offsetWidth / 2, y1 = a.offsetTop + a.offsetHeight, x2 = b.offsetLeft + b.offsetWidth / 2, y2 = b.offsetTop, my = (y1 + y2) / 2;
+  return rev ? { s: [x2, y2], d: "C" + x2 + " " + my + " " + x1 + " " + my + " " + x1 + " " + y1 }
+             : { s: [x1, y1], d: "C" + x1 + " " + my + " " + x2 + " " + my + " " + x2 + " " + y2 };
+}
+
+function chartRoute(m, from, to) { /* shortest walk over the structure lines, either direction */
+  var q = [[from]], seen = {};
+  seen[from] = 1;
+  while (q.length) {
+    var p = q.shift(), last = p[p.length - 1];
+    if (last === to) return p;
+    m.edges.forEach(function (e) {
+      var nx = e[0] === last ? e[1] : e[1] === last ? e[0] : null;
+      if (nx && !seen[nx]) { seen[nx] = 1; q.push(p.concat(nx)); }
+    });
+  }
+  return [from];
+}
+
+function chartWait(ms, tok) {
+  return new Promise(function (ok, no) { setTimeout(function () { if (tok === chart.tok) ok(); else no(); }, chart.skip ? 0 : ms); });
+}
+
+/* One rule pill travelling from its source to one entity */
+function chartTravel(m, s, to, tok) {
+  return new Promise(function (ok, no) {
+    var path = chartRoute(m, s.client.id, to), d = "", start = null, edge = {};
+    m.edges.forEach(function (e) { edge[e[0] + "|" + e[1]] = 1; });
+    for (var i = 0; i < path.length - 1; i++) {
+      var fwd = edge[path[i] + "|" + path[i + 1]], g = fwd ? chartSeg(m, path[i], path[i + 1], false) : chartSeg(m, path[i], path[i + 1], true);
+      d += (i ? " " : "M" + g.s.join(" ") + " ") + g.d;
+    }
+    var hl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    hl.setAttribute("d", d);
+    hl.setAttribute("class", "chl " + m.level);
+    m.svg.appendChild(hl);
+    var len = hl.getTotalLength(), dur = 300 + len * 3, turned = false;
+    hl.style.strokeDasharray = len;
+    hl.style.strokeDashoffset = len;
+    var run = el("span", "crun rpill", s.rule.label);
+    m.cv.appendChild(run);
+    function frame(t) {
+      if (tok !== chart.tok) { run.remove(); no(); return; }
+      if (start === null) start = t;
+      var k = chart.skip ? 1 : Math.min(1, (t - start) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      if (!turned && k > .12) { turned = true; run.className = "crun rule-badge " + m.level; run.textContent = s.rule.label + " - " + LEVEL_LABELS[m.level]; }
+      var pt = hl.getPointAtLength(len * e);
+      run.style.left = pt.x + "px";
+      run.style.top = pt.y + "px";
+      hl.style.strokeDashoffset = len * (1 - e);
+      if (k < 1) requestAnimationFrame(frame); else { run.remove(); ok(); }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+function playChart(m) {
+  var tok = ++chart.tok, tid = state.target.id, show = function (e) { e.classList.add("show"); };
+  chart.skip = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  var dist = { }, q = [tid];
+  dist[tid] = 0;
+  while (q.length) {
+    var l = q.shift();
+    m.edges.forEach(function (e) { var nx = e[0] === l ? e[1] : e[1] === l ? e[0] : null; if (nx && dist[nx] == null) { dist[nx] = dist[l] + 1; q.push(nx); } });
+  }
+  var order = m.ids.filter(function (id) { return id !== tid; }).sort(function (a, b) { return (dist[a] || 0) - (dist[b] || 0); });
+  var step = function (ms, fn) { return function () { if (fn) fn(); return chartWait(ms, tok); }; };
+  var p = chartWait(200, tok).then(step(800, function () { show(m.card[tid]); }));
+  order.forEach(function (id) {
+    p = p.then(step(500, function () {
+      show(m.card[id]);
+      m.edges.forEach(function (e) { if (e.indexOf(id) > -1 && m.card[e[0]].classList.contains("show") && m.card[e[1]].classList.contains("show")) show(m.base[e[0] + "|" + e[1]]); });
+    }));
+  });
+  m.sources.forEach(function (s) { p = p.then(step(400, function () { show(m.rule[s.key]); })); });
+  p = p.then(step(300));
+  m.sources.forEach(function (s) {
+    p = p.then(function () {
+      return Promise.all(Object.keys(s.reach).map(function (to) {
+        return chartTravel(m, s, to, tok).then(function () {
+          show(m.pill[s.key + "|" + to]);
+          if (to === tid) { m.card[tid].classList.add("pulse"); setTimeout(function () { m.card[tid].classList.remove("pulse"); }, 600); }
+        });
+      }));
+    }).then(step(400));
+  });
+  p.then(function () { show(m.final); }).catch(function () {});
 }
 
 /* ═══ PROGRESS BAR ════════════════════════════════════════════════════════
@@ -1912,6 +2112,7 @@ var STEPS = [
 ];
 
 function show(n) {
+  chartStop();
   step = n;
   document.querySelectorAll(".page").forEach(function (p) { p.classList.toggle("active", p.id === STEPS[n].id); });
   document.body.setAttribute("data-step", String(n));
