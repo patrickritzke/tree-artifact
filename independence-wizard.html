@@ -280,6 +280,15 @@
   .pop-panel .tag { font-size: 10px; font-weight: 600; padding: 0 7px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); margin-left: 6px; white-space: nowrap; }
   .pop-panel .gov { margin-top: 8px; padding: 8px 10px; background: var(--tint); border-left: 3px solid var(--accent); border-radius: 4px; color: var(--fg-strong); }
 
+  /* Party search: results list under the box */
+  .search-wrap { position: relative; }
+  .results { position: absolute; top: calc(100% + 4px); left: 0; min-width: 100%; z-index: 120; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 6px; max-height: 240px; overflow: auto; box-shadow: 0 6px 20px var(--shadow); text-align: left; }
+  .results .row { padding: 6px 10px; cursor: pointer; font-size: 12px; color: var(--fg); white-space: nowrap; }
+  .results .row:hover, .results .row.sel { background: var(--hover); }
+  .results .row .id { color: var(--muted); margin-left: 6px; font-size: 11px; }
+  .results .row.none { color: var(--muted); cursor: default; }
+
   /* ── Wizard shell ── */
   body { display: flex; flex-direction: column; min-height: 100vh; }
   #pages { flex: 1; }
@@ -318,8 +327,9 @@
   .start { min-height: calc(100vh - 62px - 36px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 20px 40px; text-align: center; }
   .start .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; transform: scale(1.8); }
   .start h1 { font-size: 22px; font-weight: 400; color: var(--fg-strong); margin-bottom: 20px; }
+  .start .search-wrap { width: min(560px, 100%); }
   .start input {
-    width: min(560px, 100%); padding: 12px 22px; font: inherit; font-size: 16px; color: var(--fg); background: var(--surface);
+    width: 100%; padding: 12px 22px; font: inherit; font-size: 16px; color: var(--fg); background: var(--surface);
     border: 1px solid var(--border-2); border-radius: 999px; outline: none; box-shadow: 0 1px 6px var(--shadow); text-align: center;
   }
   .start input:focus { border-color: var(--accent); }
@@ -361,6 +371,15 @@
   .result-notes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); line-height: 1.6; }
 
   #report-title { margin: 10px 20px 4px; }
+
+  /* Party search: results list under the box */
+  .search-wrap { position: relative; }
+  .results { position: absolute; top: calc(100% + 4px); left: 0; min-width: 100%; z-index: 120; background: var(--surface);
+             border: 1px solid var(--border); border-radius: 6px; max-height: 240px; overflow: auto; box-shadow: 0 6px 20px var(--shadow); text-align: left; }
+  .results .row { padding: 9px 18px; cursor: pointer; font-size: 14px; color: var(--fg); white-space: nowrap; }
+  .results .row:hover, .results .row.sel { background: var(--hover); }
+  .results .row .id { color: var(--muted); margin-left: 6px; font-size: 12px; }
+  .results .row.none { color: var(--muted); cursor: default; }
 </style>
 </head>
 <body>
@@ -380,9 +399,12 @@
     <div class="start">
       <div class="logo" id="start-logo"></div>
       <h1>I'd like to open a new non-audit engagement for</h1>
-      <input id="start-input" type="text" list="party-list" placeholder="Party ID" autocomplete="off" aria-label="Party ID" />
-      <datalist id="party-list"></datalist>
-      <div class="hint">Enter the ID of the party the engagement is for.</div>
+      <div class="search-wrap">
+        <input id="start-input" type="text" placeholder="Search parties by name…" autocomplete="off" aria-label="Search parties by name" role="combobox" aria-expanded="false" aria-controls="party-results" />
+        <div id="party-results" class="results" role="listbox" hidden></div>
+      </div>
+      <input type="hidden" id="start-id" />
+      <div class="hint">Search by name, then pick the party the engagement is for.</div>
     </div>
   </section>
 
@@ -609,7 +631,7 @@ function loadFamily(partyId) {
 var SAMPLE_OWNER = "FR100000001";
 var SAMPLE_PARTIES = { "30001": "FR100000001", "30003": "AT100000003", "30004": "DE100000004", "30005": "US100000005",
                        "30007": "JP100000007", "30008": "HK100000008", "30009": "TW100000009" };
-var SAMPLE_PARTY_LABELS = { "30004": "Brightwater Services GmbH", "30007": "Brightwater Japan K.K.", "30009": "Brightwater Taiwan Co., Ltd.",
+var SAMPLE_PARTY_LABELS = { "30008": "Brightwater Asia Ltd", "30004": "Brightwater Services GmbH", "30007": "Brightwater Japan K.K.", "30009": "Brightwater Taiwan Co., Ltd.",
                             "30003": "Brightwater Austria GmbH", "30005": "Brightwater Capital Inc.", "30001": "Brightwater Group SA" };
 var SAMPLE_TREE = {
   externalId: "FR100000001", name: "Brightwater Group SA", subCompanies: [
@@ -661,6 +683,11 @@ function sampleNote(id, rec, modifiedOn) {
   return { modifiedOn: modifiedOn, message: '<div><div><span>"' + id + '": {</span><span>' + fields + '</span><span>}</span></div></div>' };
 }
 function MOCK(name, a) {
+  if (name === "search_entities") {
+    var kw = String(a.keyword || "").toLowerCase();
+    return { results: Object.keys(SAMPLE_PARTY_LABELS).sort().map(function (id) { return { id: id, name: SAMPLE_PARTY_LABELS[id] }; })
+      .filter(function (r) { return r.name.toLowerCase().indexOf(kw) !== -1 || r.id.indexOf(kw) !== -1; }) };
+  }
   if (name === "get_component_group") {
     if (a.componentGroupName !== SAMPLE_OWNER) return { groupId: a.componentGroupName, groupMembers: [] };
     var members = [], seen = {};
@@ -2147,8 +2174,8 @@ function updateStepper() {
 var step = 0;
 var STEPS = [
   { id: "page-start",  next: "Find Party", go: function () {
-      var id = $("start-input").value.trim().toUpperCase();
-      if (!id) throw new Error("Enter a party ID.");
+      var id = $("start-id").value.trim();
+      if (!id) throw new Error("Pick a party from the list.");
       return loadFamily(id).then(setFamily);
     } },
   { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
@@ -2199,7 +2226,6 @@ function advance() {
 /* ═══ WIRING ══════════════════════════════════════════════════════════════ */
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
-$("start-input").addEventListener("keydown", function (e) { if (e.key === "Enter") advance(); });
 $("pop-backdrop").addEventListener("click", function (e) { if (e.target === $("pop-backdrop")) closePop(); });
 
 document.addEventListener("click", function (e) {
@@ -2250,20 +2276,107 @@ $("clear-btn").addEventListener("click", function () {
   renderAll();
 });
 
-/* The start page's logo and, in sample mode, the party ids it suggests */
+/* The start page's logo, and the party search that feeds Find Party */
 $("start-logo").appendChild(engIcon("audit"));
 $("start-logo").appendChild(engIcon("non"));
-if (isLive()) {
-  $("start-input").placeholder = "Party ID, e.g. 9906";
-  $("start-input").removeAttribute("list");
-} else {
-  Object.keys(SAMPLE_PARTY_LABELS).sort().forEach(function (id) {
-    var o = document.createElement("option");
-    o.value = id;
-    o.label = SAMPLE_PARTY_LABELS[id];
-    $("party-list").appendChild(o);
-  });
+/* ═══ PARTY SEARCH ════════════════════════════════════════════════════════
+   Name lookup through intapp_compliance__search_entities (keyword + entityTypes ["Party"]). Picking a hit resolves to
+   a party id, which feeds the existing pipeline. The response envelope varies by host, so it is normalised to
+   [{ id, name }] with the same extractObj helper used everywhere else. */
+function partyHits(raw) {
+  var list = null;
+  /* a bare array of hits (not MCP content blocks) */
+  if (Array.isArray(raw) && raw.length && raw[0] && raw[0].text == null && raw[0].content == null) list = raw;
+  if (!list) {
+    var obj = extractObj(raw, "results") || extractObj(raw) || {};
+    /* a plain object can still wrap the hits one level down */
+    ["result", "data", "value", "payload"].forEach(function (k) {
+      if (obj && !Array.isArray(obj) && !obj.results && !obj.entities && !obj.parties && obj[k] && typeof obj[k] === "object") obj = obj[k];
+    });
+    list = Array.isArray(obj) ? obj : obj.results || obj.entities || obj.parties || [];
+  }
+  return list.map(function (r) {
+    return { id: String(r.id || r.partyId || r.entityId || ""), name: String(r.name || r.displayName || r.id || r.partyId || "") };
+  }).filter(function (r) { return r.id; });
 }
+
+/* Wire a search box to a results list and a hidden id field.
+   opts: { onPick(hit), onClear(), onEnter() } - onEnter runs when Enter is pressed with a party already picked. */
+function bindPartySearch(input, results, idField, opts) {
+  var timer = null, seq = 0, rows = [], sel = -1;
+
+  function close() { results.hidden = true; sel = -1; input.setAttribute("aria-expanded", "false"); }
+  function highlight(i) {
+    sel = i;
+    rows.forEach(function (r, k) { r.classList.toggle("sel", k === i); });
+    if (rows[i]) rows[i].scrollIntoView({ block: "nearest" });
+  }
+  function pick(h) {
+    input.value = h.name;
+    idField.value = h.id;
+    close();
+    if (opts.onPick) opts.onPick(h);
+  }
+  function render(hits) {
+    results.innerHTML = "";
+    rows = [];
+    sel = -1;
+    if (!hits.length) {
+      var none = document.createElement("div");
+      none.className = "row none";
+      none.textContent = "No parties found";
+      results.appendChild(none);
+    }
+    hits.slice(0, 25).forEach(function (h) {
+      var row = document.createElement("div");
+      row.className = "row";
+      row.setAttribute("role", "option");
+      row.textContent = h.name;
+      var id = document.createElement("span");
+      id.className = "id";
+      id.textContent = "(" + h.id + ")";
+      row.appendChild(id);
+      row.addEventListener("mousedown", function (e) { e.preventDefault(); }); /* keep focus in the box */
+      row.addEventListener("click", function () { pick(h); });
+      results.appendChild(row);
+      rows.push(row);
+    });
+    results.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    rows.forEach(function (r, k) { r.hit = hits[k]; });
+  }
+  function search(q) {
+    var mine = ++seq; /* a slow earlier answer must not overwrite a newer one */
+    if (q.length < 2) { close(); return; }
+    callTool("search_entities", { keyword: q, entityTypes: ["Party"] })
+      .then(function (raw) { if (mine === seq) render(partyHits(raw)); })
+      .catch(function () { if (mine === seq) close(); });
+  }
+
+  input.addEventListener("input", function () {
+    idField.value = "";
+    if (opts.onClear) opts.onClear();
+    clearTimeout(timer);
+    timer = setTimeout(function () { search(input.value.trim()); }, 200);
+  });
+  input.addEventListener("keydown", function (e) {
+    var open = !results.hidden && rows.length;
+    if (e.key === "ArrowDown" && open) { e.preventDefault(); highlight((sel + 1) % rows.length); }
+    else if (e.key === "ArrowUp" && open) { e.preventDefault(); highlight((sel - 1 + rows.length) % rows.length); }
+    else if (e.key === "Enter") {
+      if (open) { e.preventDefault(); pick(rows[sel >= 0 ? sel : 0].hit); }
+      else if (idField.value && opts.onEnter) opts.onEnter();
+    } else if (e.key === "Escape") close();
+  });
+  document.addEventListener("click", function (e) {
+    if (!results.contains(e.target) && e.target !== input) close();
+  });
+
+  /* Set the party directly (URL or host context), without searching */
+  return { setId: function (id) { input.value = id; idField.value = id; close(); } };
+}
+
+var search = bindPartySearch($("start-input"), $("party-results"), $("start-id"), { onEnter: advance });
 
 /* A party id can be passed in, so the wizard starts at the party page without typing:
      - the page URL:       ?partyId=9906   (or #partyId=9906; "party" also works)
@@ -2286,7 +2399,7 @@ var autoLoaded = false;
 function autoLoad(id) {
   if (autoLoaded || !id) return;
   autoLoaded = true;
-  $("start-input").value = id;
+  search.setId(id);
   advance();
 }
 show(0);
