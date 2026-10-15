@@ -2295,8 +2295,8 @@ function partyHits(raw) {
     });
     list = Array.isArray(obj) ? obj : obj.results || obj.entities || obj.parties || [];
   }
-  return list.map(function (r) {
-    return { id: String(r.id || r.partyId || r.entityId || ""), name: String(r.name || r.displayName || r.id || r.partyId || "") };
+  return list.filter(function (r) { return !r.entityType || r.entityType === "Party"; }).map(function (r) {
+    return { id: String(r.id || r.partyId || r.entityId || ""), name: String(r.name || r.displayName || r.id || r.partyId || r.entityId || "") };
   }).filter(function (r) { return r.id; });
 }
 
