@@ -107,8 +107,8 @@
   }
   table.grid td { padding: 0 10px; border-bottom: 1px solid var(--hover); white-space: nowrap; }
   table.grid tr:last-child td { border-bottom: none; }
-  table.grid tr.restricted td { background: var(--restr-bg); }
-  table.grid tr.materiality td { background: var(--mat-bg); }
+  table.grid tr.restricted td:not(.pin-col) { background: var(--restr-bg); }
+  table.grid tr.materiality td:not(.pin-col) { background: var(--mat-bg); }
   /* Name and any icon/status columns shrink to their content so they sit together; the filler absorbs the rest. */
   table.grid th.name-col, table.grid td.name-cell, table.grid th.icon-col, table.grid td.icon-col { width: 1%; white-space: nowrap; }
   table.grid th.fill, table.grid td.fill { width: auto; padding: 0; }
