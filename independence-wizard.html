@@ -110,7 +110,6 @@
   }
   .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
   #target-input { width: 320px; max-width: 100%; }
-  #filter-input { flex: 1; max-width: 420px; }
   .btn {
     padding: 3px 10px; border: 1px solid var(--border-2); border-radius: 6px; background: var(--surface);
     font-size: 12px; cursor: pointer; color: var(--fg-2); transition: background .15s;
@@ -163,7 +162,6 @@
   .tb-chev { width: 10px; font-size: 10px; color: var(--muted); }
   .tb-head .summary { margin-left: auto; font-weight: 400; }
   .tb-body { padding: 7px 10px 8px; }
-  #body-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
   /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
   th.pin-col.wide, td.pin-col.wide { width: 70px; text-align: left; padding-left: 10px; }
@@ -242,7 +240,6 @@
   }
   .pill:hover { background: var(--hover); }
   .pill.active { border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
-  #rule-pills, #filter-pills { display: flex; flex-wrap: wrap; gap: 6px; }
   .name-inner { display: flex; align-items: center; }
   .indent { display: inline-block; flex-shrink: 0; }
   .toggle {
@@ -450,19 +447,6 @@
       <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
     </div>
   </div>
-
-  <!-- General: filter / search -->
-  <div class="toolbar tb" id="filter-bar">
-    <button class="tb-head" id="head-filter" data-sec="filter" type="button" aria-expanded="true">
-      <span class="tb-chev">▾</span><span>Filter Display</span>
-    </button>
-    <div class="tb-body" id="body-filter">
-      <input id="filter-input" type="text" placeholder="Filter by name or ID…" autocomplete="off" />
-      <div id="filter-pills"></div>
-      <button class="btn" id="clear-btn">Clear</button>
-    </div>
-  </div>
-
 
   <div class="section">
     <div class="section-head">
@@ -991,16 +975,14 @@ var state = {
   engCollapsed: new Set(),
   rulesRun: false, /* the audit rows have been filled from the engagements */
   assessment: null,
-  collapsed: { audit: false, filter: false }, /* toolbar sections folded away */
+  collapsed: { audit: false }, /* toolbar sections folded away */
   rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
   trees: [],
   affTrees: [],
-  filterPill: null,
   data: null,
   target: null,
   owners: [],
-  filter: "",
   expanded: { tree: new Set(), aff: new Set() }
 };
 
@@ -1317,39 +1299,8 @@ function closeWhy() {
 }
 
 /* gridKey: "tree" | "aff"; roots/idx/parentsOf describe the structure */
-/* Quick filters. Exclusive with each other and with the text search. Every filter keeps the chain above each
-   match; the parents/subs filter also keeps everything below the target. */
-var FILTER_PILLS = [
-  { key: "party",      label: "Intapp Parties Only" },
-  { key: "parents",    label: "Target + Parents Only" },
-  { key: "parentsSubs", label: "Target + Parents/Subs Only" }
-];
-
 function renderGrid(gridKey, containerId, countId, roots, byId) {
   var metaOf = function (pl) { return byId.get(pl.id) || pl; };
-  var txt = state.filter.trim().toLowerCase();
-  var filtering = !!txt || !!state.filterPill;
-  var tid = state.target && state.target.id;
-
-  /* Visible placements = matches + everything above them (upward is always kept); filtering force-expands */
-  var vis = null;
-  if (filtering) {
-    vis = new Set();
-    (function mark(pl, underTarget) {
-      var isT = pl.id === tid;
-      var kidVisible = false;
-      pl.children.forEach(function (c) { if (mark(c, underTarget || isT)) kidVisible = true; });
-      var m = metaOf(pl), self;
-      if (state.filterPill === "party") self = !!m.idParty;
-      else if (state.filterPill === "parents") self = isT;
-      else if (state.filterPill === "parentsSubs") self = isT || underTarget;
-      else self = (pl.name + " " + pl.id).toLowerCase().indexOf(txt) !== -1;
-      var v = self || kidVisible;
-      if (v) vis.add(pl.key);
-      return v;
-    })({ children: roots, id: null, name: "", key: "" }, false);
-  }
-
   var pairs = auditPairs();
   var cols = extraColumns(pairs);
   var table = document.createElement("table");
@@ -1406,10 +1357,9 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
   var shown = 0;
 
   function walk(pl, depth) {
-    if (vis && !vis.has(pl.key)) return;
     var node = metaOf(pl);
-    var kids = pl.children.filter(function (c) { return !vis || vis.has(c.key); });
-    var open = filtering || state.expanded[gridKey].has(pl.key);
+    var kids = pl.children;
+    var open = state.expanded[gridKey].has(pl.key);
     shown++;
 
     var tr = document.createElement("tr");
@@ -1490,7 +1440,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId) {
   } else {
     host.appendChild(table);
   }
-  $(countId).textContent = (filtering ? "filtered · " : "") + uniq.size + " entities";
+  $(countId).textContent = uniq.size + " entities";
   return uniq.size;
 }
 
@@ -1509,27 +1459,6 @@ function renderAll() {
 
   $("node-count").textContent = treeCount + " in tree \u00B7 " + affCount + " affiliates";
   renderRuleBar();
-  renderFilterPills();
-}
-
-function renderFilterPills() {
-  var host = $("filter-pills");
-  host.innerHTML = "";
-  FILTER_PILLS.forEach(function (f) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "pill" + (state.filterPill === f.key ? " active" : "");
-    b.textContent = f.label;
-    b.setAttribute("aria-pressed", state.filterPill === f.key ? "true" : "false");
-    b.addEventListener("click", function () {
-      /* exclusive: choosing a pill clears the search text; choosing the active pill turns it off */
-      state.filterPill = state.filterPill === f.key ? null : f.key;
-      state.filter = "";
-      $("filter-input").value = "";
-      renderAll();
-    });
-    host.appendChild(b);
-  });
 }
 
 function renderRuleBar() {
@@ -1865,9 +1794,6 @@ function setFamily(data) {
   state.assessment = null;
   state.auditRows = [{ client: null, rule: null, on: true }];
   state.expanded = { tree: new Set(), aff: new Set() };
-  state.filter = "";
-  state.filterPill = null;
-  $("filter-input").value = "";
 
   /* Default expansion: every placement on a path down to the target, in both grids */
   [["tree", state.trees], ["aff", state.affTrees]].forEach(function (g) {
@@ -1910,7 +1836,7 @@ function findEngagements() {
         byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
       }
     });
-    /* Parties known to Intapp are shown in bold and drive the "Intapp Parties Only" filter */
+    /* Parties known to Intapp are shown in bold */
     data.nodes.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
     computeEntityMeta(data.nodes, data.affiliates, state.target.id);
 
@@ -2238,7 +2164,7 @@ document.addEventListener("keydown", function (e) {
 window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
 window.addEventListener("resize", closeWhy);
 function applyCollapse() {
-  ["audit", "filter"].forEach(function (k) {
+  ["audit"].forEach(function (k) {
     var c = state.collapsed[k], h = $("head-" + k);
     $("body-" + k).hidden = c;
     h.classList.toggle("closed", c);
@@ -2264,18 +2190,6 @@ $("add-audit").addEventListener("click", function () {
   state.rowsTouched = true;
   renderAll();
 });
-$("filter-input").addEventListener("input", function () {
-  state.filter = this.value;
-  state.filterPill = null; /* typing replaces any active pill */
-  renderAll();
-});
-$("clear-btn").addEventListener("click", function () {
-  state.filter = "";
-  state.filterPill = null;
-  $("filter-input").value = "";
-  renderAll();
-});
-
 /* The start page's logo, and the party search that feeds Find Party */
 $("start-logo").appendChild(engIcon("audit"));
 $("start-logo").appendChild(engIcon("non"));
