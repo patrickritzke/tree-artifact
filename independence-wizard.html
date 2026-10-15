@@ -198,10 +198,13 @@
     border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px var(--shadow); padding: 10px 12px; font-size: 12px;
   }
   #why-pop h3 { font-size: 13px; font-weight: 600; color: var(--fg-strong); margin-bottom: 6px; }
-  .why-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-top: 1px solid var(--hover); }
+  .why-item { padding: 6px 0; border-top: 1px solid var(--hover); }
   .why-item.lost { opacity: .6; }
-  .why-item .rule-badge { cursor: default; flex-shrink: 0; }
+  .why-item .rule-badge { cursor: default; }
   .why-item .rule-badge:hover { background: none; }
+  .why-sub { margin: 5px 0 0 18px; padding-left: 8px; border-left: 2px solid var(--border); }
+  .why-item .rpill { cursor: default; }
+  .relpill { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--hover); color: var(--fg-2); }
   .why-note { margin-top: 6px; color: var(--muted); }
   [hidden] { display: none !important; }
   .toolbar .summary { font-size: 11px; color: var(--muted); margin-left: auto; }
@@ -1091,10 +1094,6 @@ function ruleBadge(node, res) {
   return b;
 }
 
-function relText(r) {
-  return r.indexOf(AFF_PREFIX) === 0 ? "Close affiliate · " + r.slice(AFF_PREFIX.length) : r;
-}
-
 function showWhy(anchor, node, res) {
   closeWhy();
   var pop = document.createElement("div");
@@ -1105,23 +1104,31 @@ function showWhy(anchor, node, res) {
   h.textContent = node.name + " (" + node.id + ")";
   pop.appendChild(h);
 
+  /* Per result: "<level> by <rule> from <client>", then, indented, "This entity is a <relationship> to <client>" */
+  var who = function (parent, c) {
+    parent.appendChild(el("b", null, c.name));
+    parent.appendChild(el("span", "node-id", "(" + c.id + ")"));
+  };
   res.items.forEach(function (it) {
-    var row = document.createElement("div");
-    row.className = "why-item" + (it.level === res.level ? "" : " lost");
-    var badge = document.createElement("span");
-    badge.className = "rule-badge " + it.level;
-    badge.textContent = LEVEL_LABELS[it.level];
-    row.appendChild(badge);
-    var txt = document.createElement("div");
-    var line1 = document.createElement("div");
-    line1.textContent = it.rule.label + ": " + it.rels.map(relText).join(", ") + " of " + it.client.name;
-    var line2 = document.createElement("div");
-    line2.className = "node-id";
-    line2.style.marginLeft = "0";
-    line2.textContent = "Audit client " + it.client.id + (it.level === res.level ? "" : " · overridden by a stricter result");
-    txt.appendChild(line1);
-    txt.appendChild(line2);
-    row.appendChild(txt);
+    var row = el("div", "why-item" + (it.level === res.level ? "" : " lost"));
+    var l1 = el("div");
+    l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
+    l1.appendChild(document.createTextNode(" by "));
+    l1.appendChild(el("span", "rpill", it.rule.label));
+    l1.appendChild(document.createTextNode(" from "));
+    who(l1, it.client);
+    if (it.level !== res.level) l1.appendChild(el("span", "node-id", "overridden by a stricter result"));
+    row.appendChild(l1);
+    var l2 = el("div", "why-sub");
+    l2.appendChild(document.createTextNode("This entity is "));
+    it.rels.forEach(function (r, i) {
+      if (i) l2.appendChild(document.createTextNode(" and "));
+      l2.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
+      l2.appendChild(el("span", "relpill", r));
+    });
+    l2.appendChild(document.createTextNode(" to "));
+    who(l2, it.client);
+    row.appendChild(l2);
     pop.appendChild(row);
   });
 
