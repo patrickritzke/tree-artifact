@@ -36,8 +36,8 @@
   .hdr .sp { flex: 1; }
 
   /* ── The progress bar: this block is what would go into the wizard ── */
-  .stepper { display: flex; align-items: center; gap: 12px; padding: 7px 20px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 12px; }
-  .stepper ol { display: flex; align-items: center; list-style: none; flex: none; }
+  .stepper { padding: 7px 20px 6px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 12px; }
+  .stepper ol { display: flex; align-items: center; list-style: none; overflow: hidden; }
   .st { display: flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
   .st + .st::before { content: ""; width: 22px; height: 2px; margin: 0 8px; background: var(--border-2); border-radius: 1px; }
   .st.done + .st::before, .st.cur::before { background: var(--accent); }
@@ -46,12 +46,12 @@
   .st.done .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
   .st.cur { color: var(--fg-strong); font-weight: 600; }
   .st.cur .dot { border-color: var(--accent); color: var(--accent-fg); }
-  .st.busy .dot { border-color: var(--border-2); border-top-color: var(--accent); color: transparent; animation: spin .8s linear infinite; }
+  .st.busy .dot { background: transparent; border-color: var(--border-2); border-top-color: var(--accent); color: transparent; animation: spin .8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .status { margin-left: auto; color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .status { margin-top: 5px; padding-left: 24px; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
   .status b { color: var(--fg-strong); font-weight: 600; }
   .status .bad { color: var(--restr-fg); } .status .mid { color: var(--mat-fg); } .status .ok { color: var(--ok-fg); }
-  @media (max-width: 700px) { .st:not(.cur) .lbl { display: none; } .st + .st::before { width: 10px; margin: 0 4px; } .status { display: none; } }
+  @media (max-width: 760px) { .st:not(.cur):not(.busy) .lbl { display: none; } .st + .st::before { width: 10px; margin: 0 4px; } }
 
   /* Placeholder for the page content under the bar */
   .page { padding: 14px 20px 18px; display: grid; gap: 7px; }
@@ -65,49 +65,52 @@
 </head>
 <body>
 
-<h1>Progress bar: one sample per step</h1>
-<p class="intro">A slim bar under the header. Numbered circles fill in as steps finish, the current step is bold, and the line on the right says in plain words what has just been found or what is being worked on. A spinner replaces the number while a step is loading. The party's name stays in the header from step 2 on, so you always know what is being assessed.</p>
+<h1>Wizard steps along the top: one sample per page</h1>
+<p class="intro">Four named steps under the header. The five pages map onto them: entering the party and confirming its tree are both <b>Find Tree</b>. The highlighted step is the one whose result is on screen; finished steps get a tick. While a button is working, the spinner sits on the step that is being worked out. The line under the steps says in plain words what was just found. The party's name stays in the header from the tree page on.</p>
 <div id="samples"></div>
 
 <script>
-/* The whole feature: labels, one render function and a status line per step. Written to drop into the wizard,
-   where STEPS, state and the page enter/advance hooks already exist. */
-var LABELS = ["Party", "Corporate tree", "Audit clients", "Inherited rules", "Assessment"];
+/* The whole feature: four labels, a page-to-step map, one render function and a status line per page.
+   Written to drop into the wizard, where STEPS, state and the enter/advance hooks already exist. */
+var LABELS = ["Find Tree", "Identify Audit Relationships", "Apply Inheritance Rules", "Independence Decision"];
+var PAGE_STEP = [0, 0, 1, 2, 3];   /* start, party, audit relationships, inheritance rules, decision */
 
-function stepper(n, busy, statusHtml) {
+function stepper(cur, busyStep, allDone, statusHtml) {
+  var eff = busyStep > cur ? busyStep : cur;   /* the step being worked on counts as current, so earlier ones tick */
   var items = LABELS.map(function (t, i) {
-    var cls = i < n ? "done" : i === n ? "cur" + (busy ? " busy" : "") : "";
-    return '<li class="st ' + cls + '"><span class="dot">' + (i < n ? "✓" : i + 1) + '</span><span class="lbl">' + t + "</span></li>";
+    var cls = allDone || i < eff ? "done" : i === eff ? "cur" : "";
+    if (i === busyStep) cls += " busy";
+    return '<li class="st ' + cls + '"><span class="dot">' + (allDone || i < eff ? "\u2713" : i + 1) + '</span><span class="lbl">' + t + "</span></li>";
   }).join("");
   return '<div class="stepper"><ol>' + items + '</ol><span class="status">' + statusHtml + "</span></div>";
 }
 
-/* What each step says, in plain words. In the wizard these come from state (counts, names, verdict). */
+/* One sample per page, plus the two "working" moments. In the wizard the status comes from state (names, counts, verdict). */
+var CHIP = "Brightwater Services GmbH (DE100000004)";
 var SAMPLES = [
-  { n: 0, chip: "", status: "Enter the party the engagement is for",
-    cap: "Step 1 · Start", note: "Waiting for a party ID", btn: "Find Party" },
-  { n: 0, busy: true, chip: "", status: "Finding the party and its corporate tree…",
-    cap: "Step 1 · while loading", note: "Spinner on the current step, plain-words status", btn: "Working…" },
-  { n: 1, chip: "Brightwater Services GmbH (DE100000004)", status: "<b>Found</b> · part of Brightwater Group SA tree",
-    cap: "Step 2 · Party found", note: "The party chip appears in the header and stays", btn: "Find audit relationships and rules" },
-  { n: 2, chip: "Brightwater Services GmbH (DE100000004)", status: "<b>7 audit clients</b> · 2 non-audit only",
-    cap: "Step 3 · Audit clients and rules", note: "Counts from what was just read", btn: "Run inheritance rules" },
-  { n: 3, chip: "Brightwater Services GmbH (DE100000004)", status: '<b class="bad">9 restricted</b> · <span class="mid">3 materiality check</span>',
-    cap: "Step 4 · Inherited rules", note: "Result tally, colour-coded like the tree", btn: "Determine independence" },
-  { n: 4, chip: "Brightwater Services GmbH (DE100000004)", status: '<b class="bad">Restricted</b> · 1 restricted relationship, 3 to check',
-    cap: "Step 5 · Assessment", note: "The verdict repeats in the bar; every step is complete", btn: "Start over", last: true }
+  { page: 0, chip: "", status: "Enter the party the engagement is for",
+    cap: "Page 1 \u00B7 Start", note: "Find Tree is the current step", btn: "Find Party" },
+  { page: 0, busy: 0, chip: "", status: "Finding the party and its corporate tree\u2026",
+    cap: "Page 1 \u00B7 after Find Party", note: "Spinner on Find Tree", btn: "Working\u2026" },
+  { page: 1, chip: CHIP, status: "<b>Found</b> \u00B7 part of Brightwater Group SA tree",
+    cap: "Page 2 \u00B7 Party and tree found", note: "Still Find Tree: this is its result", btn: "Find audit relationships and rules" },
+  { page: 1, busy: 1, chip: CHIP, status: "Reading engagements and Orbis notes\u2026",
+    cap: "Page 2 \u00B7 after the button", note: "Find Tree is ticked, spinner moves to Identify Audit Relationships", btn: "Working\u2026" },
+  { page: 2, chip: CHIP, status: "<b>7 audit clients</b> \u00B7 2 non-audit only",
+    cap: "Page 3 \u00B7 Identify Audit Relationships", note: "Counts from what was just read", btn: "Run inheritance rules" },
+  { page: 3, chip: CHIP, status: '<b class="bad">9 restricted</b> \u00B7 <span class="mid">3 materiality check</span>',
+    cap: "Page 4 \u00B7 Apply Inheritance Rules", note: "Result tally, colour-coded like the tree", btn: "Determine independence" },
+  { page: 4, chip: CHIP, status: '<b class="bad">Restricted</b> \u00B7 1 restricted relationship, 3 to check', last: true,
+    cap: "Page 5 \u00B7 Independence Decision", note: "Every step ticked; the verdict repeats in the bar", btn: "Start over" }
 ];
 
 document.getElementById("samples").innerHTML = SAMPLES.map(function (s) {
-  var done = s.last ? 5 : s.n; /* on the last page every step reads as done */
-  var bar = s.last
-    ? stepper(5, false, s.status).replace(/<li class="st (done|cur)/g, '<li class="st done')
-    : stepper(s.n, s.busy, s.status);
-  return '<div class="sample"><div class="cap">' + s.cap + ' <span>— ' + s.note + "</span></div>" +
+  var bar = stepper(PAGE_STEP[s.page], s.busy == null ? -1 : s.busy, !!s.last, s.status);
+  return '<div class="sample"><div class="cap">' + s.cap + ' <span>\u2014 ' + s.note + "</span></div>" +
     '<div class="frame"><div class="hdr"><span class="title">Non-Audit Engagement</span>' +
     (s.chip ? '<span class="chip">' + s.chip + "</span>" : "") + '<span class="sp"></span></div>' + bar +
     '<div class="page"><div class="sk w1"></div><div class="sk w2"></div><div class="sk w3"></div></div>' +
-    '<div class="btnrow">' + (s.n || s.last ? '<span class="b">Back</span>' : "<span></span>") + '<span class="b p">' + s.btn + "</span></div></div></div>";
+    '<div class="btnrow">' + (s.page ? '<span class="b">Back</span>' : "<span></span>") + '<span class="b p">' + s.btn + "</span></div></div></div>";
 }).join("");
 </script>
 </body>
