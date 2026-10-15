@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wizard progress bar preview</title>
+<style>
+  /* Same tokens as the wizard */
+  :root {
+    --bg: #f5f6f8; --surface: #ffffff; --hover: #f3f4f6; --fg: #1a1a2e; --fg-strong: #111827; --fg-2: #374151;
+    --muted: #6b7280; --border: #e5e7eb; --border-2: #d1d5db; --accent: #6366f1; --accent-fg: #4338ca;
+    --hdr-bg: #1a1a2e; --hdr-fg: #ffffff; --hdr-muted: #9ca3af; --shadow: rgba(0,0,0,.18);
+    --restr-bg: #fee2e2; --restr-fg: #b91c1c; --mat-bg: #ffedd5; --mat-fg: #c2410c; --ok-fg: #15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12131a; --surface: #1b1d27; --hover: #262936; --fg: #e6e7ee; --fg-strong: #f3f4f6; --fg-2: #c5c8d4;
+      --muted: #9aa0b0; --border: #2d303d; --border-2: #3a3e4e; --accent: #8b8ff5; --accent-fg: #a5a8ff;
+      --hdr-bg: #0b0c12; --shadow: rgba(0,0,0,.6); --restr-fg: #f87171; --mat-fg: #fb923c; --ok-fg: #4ade80;
+      color-scheme: dark;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 13px; background: var(--bg); color: var(--fg); padding: 20px; }
+  h1 { font-size: 16px; margin-bottom: 4px; color: var(--fg-strong); }
+  .intro { color: var(--muted); margin-bottom: 18px; max-width: 760px; line-height: 1.5; }
+  .sample { margin-bottom: 18px; }
+  .cap { font-size: 12px; font-weight: 600; color: var(--fg-strong); margin-bottom: 6px; }
+  .cap span { font-weight: 400; color: var(--muted); }
+  .frame { border: 1px solid var(--border-2); border-radius: 8px; overflow: hidden; background: var(--bg); box-shadow: 0 1px 4px var(--shadow); }
+
+  /* Header, as in the wizard, plus the party chip */
+  .hdr { background: var(--hdr-bg); color: var(--hdr-fg); padding: 8px 20px; display: flex; align-items: center; gap: 12px; }
+  .hdr .title { font-size: 14px; font-weight: 600; }
+  .hdr .chip { font-size: 12px; color: var(--hdr-muted); border: 1px solid #4b4b7a; border-radius: 999px; padding: 1px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hdr .sp { flex: 1; }
+
+  /* ── The progress bar: this block is what would go into the wizard ── */
+  .stepper { display: flex; align-items: center; gap: 12px; padding: 7px 20px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 12px; }
+  .stepper ol { display: flex; align-items: center; list-style: none; flex: none; }
+  .st { display: flex; align-items: center; gap: 6px; color: var(--muted); white-space: nowrap; }
+  .st + .st::before { content: ""; width: 22px; height: 2px; margin: 0 8px; background: var(--border-2); border-radius: 1px; }
+  .st.done + .st::before, .st.cur::before { background: var(--accent); }
+  .dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border-2); display: grid; place-items: center; font-size: 10px; font-weight: 700; flex: none; }
+  .st.done { color: var(--fg-2); }
+  .st.done .dot { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .st.cur { color: var(--fg-strong); font-weight: 600; }
+  .st.cur .dot { border-color: var(--accent); color: var(--accent-fg); }
+  .st.busy .dot { border-color: var(--border-2); border-top-color: var(--accent); color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status { margin-left: auto; color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .status b { color: var(--fg-strong); font-weight: 600; }
+  .status .bad { color: var(--restr-fg); } .status .mid { color: var(--mat-fg); } .status .ok { color: var(--ok-fg); }
+  @media (max-width: 700px) { .st:not(.cur) .lbl { display: none; } .st + .st::before { width: 10px; margin: 0 4px; } .status { display: none; } }
+
+  /* Placeholder for the page content under the bar */
+  .page { padding: 14px 20px 18px; display: grid; gap: 7px; }
+  .sk { height: 9px; border-radius: 5px; background: var(--hover); }
+  .sk.w1 { width: 42%; } .sk.w2 { width: 70%; } .sk.w3 { width: 55%; }
+  .btnrow { display: flex; justify-content: space-between; padding: 8px 20px; background: var(--surface); border-top: 1px solid var(--border); }
+  .b { padding: 3px 14px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border-2); color: var(--fg-2); background: var(--surface); }
+  .b.p { background: var(--hdr-bg); color: #fff; border-color: var(--hdr-bg); font-weight: 600; }
+  @media (prefers-color-scheme: dark) { .b.p { background: #e6e7ee; color: #12131a; border-color: #e6e7ee; } }
+</style>
+</head>
+<body>
+
+<h1>Progress bar: one sample per step</h1>
+<p class="intro">A slim bar under the header. Numbered circles fill in as steps finish, the current step is bold, and the line on the right says in plain words what has just been found or what is being worked on. A spinner replaces the number while a step is loading. The party's name stays in the header from step 2 on, so you always know what is being assessed.</p>
+<div id="samples"></div>
+
+<script>
+/* The whole feature: labels, one render function and a status line per step. Written to drop into the wizard,
+   where STEPS, state and the page enter/advance hooks already exist. */
+var LABELS = ["Party", "Corporate tree", "Audit clients", "Inherited rules", "Assessment"];
+
+function stepper(n, busy, statusHtml) {
+  var items = LABELS.map(function (t, i) {
+    var cls = i < n ? "done" : i === n ? "cur" + (busy ? " busy" : "") : "";
+    return '<li class="st ' + cls + '"><span class="dot">' + (i < n ? "✓" : i + 1) + '</span><span class="lbl">' + t + "</span></li>";
+  }).join("");
+  return '<div class="stepper"><ol>' + items + '</ol><span class="status">' + statusHtml + "</span></div>";
+}
+
+/* What each step says, in plain words. In the wizard these come from state (counts, names, verdict). */
+var SAMPLES = [
+  { n: 0, chip: "", status: "Enter the party the engagement is for",
+    cap: "Step 1 · Start", note: "Waiting for a party ID", btn: "Find Party" },
+  { n: 0, busy: true, chip: "", status: "Finding the party and its corporate tree…",
+    cap: "Step 1 · while loading", note: "Spinner on the current step, plain-words status", btn: "Working…" },
+  { n: 1, chip: "Brightwater Services GmbH (DE100000004)", status: "<b>Found</b> · part of Brightwater Group SA tree",
+    cap: "Step 2 · Party found", note: "The party chip appears in the header and stays", btn: "Find audit relationships and rules" },
+  { n: 2, chip: "Brightwater Services GmbH (DE100000004)", status: "<b>7 audit clients</b> · 2 non-audit only",
+    cap: "Step 3 · Audit clients and rules", note: "Counts from what was just read", btn: "Run inheritance rules" },
+  { n: 3, chip: "Brightwater Services GmbH (DE100000004)", status: '<b class="bad">9 restricted</b> · <span class="mid">3 materiality check</span>',
+    cap: "Step 4 · Inherited rules", note: "Result tally, colour-coded like the tree", btn: "Determine independence" },
+  { n: 4, chip: "Brightwater Services GmbH (DE100000004)", status: '<b class="bad">Restricted</b> · 1 restricted relationship, 3 to check',
+    cap: "Step 5 · Assessment", note: "The verdict repeats in the bar; every step is complete", btn: "Start over", last: true }
+];
+
+document.getElementById("samples").innerHTML = SAMPLES.map(function (s) {
+  var done = s.last ? 5 : s.n; /* on the last page every step reads as done */
+  var bar = s.last
+    ? stepper(5, false, s.status).replace(/<li class="st (done|cur)/g, '<li class="st done')
+    : stepper(s.n, s.busy, s.status);
+  return '<div class="sample"><div class="cap">' + s.cap + ' <span>— ' + s.note + "</span></div>" +
+    '<div class="frame"><div class="hdr"><span class="title">Non-Audit Engagement</span>' +
+    (s.chip ? '<span class="chip">' + s.chip + "</span>" : "") + '<span class="sp"></span></div>' + bar +
+    '<div class="page"><div class="sk w1"></div><div class="sk w2"></div><div class="sk w3"></div></div>' +
+    '<div class="btnrow">' + (s.n || s.last ? '<span class="b">Back</span>' : "<span></span>") + '<span class="b p">' + s.btn + "</span></div></div></div>";
+}).join("");
+</script>
+</body>
+</html>
