@@ -1584,31 +1584,42 @@ function closePop() {
   opener = null;
 }
 
-/* Fold the close-affiliate hierarchies into the tree. Subsidiaries the tree lacks are inserted under the tree's own
-   row for their parent (with whatever sits below them). A close-affiliate parent the tree lacks becomes another
-   level-0 company, holding a single row for each tree entity it owns so the relationship reads. */
-function mergeAffiliates(trees, affTrees, have) {
-  var roots = trees.slice(), host = new Map();
+/* Fold the SI entities (close-affiliate-only relationships) into the tree grid. An SI entity is added, with what sits
+   below it in the close-affiliate hierarchy, wherever its parent/id pair is not already in the grid. An SI ultimate
+   owner above the tree's own ultimate owner goes on top of that tree; any other SI ultimate owner becomes its own
+   level-0 company with everything underneath it. */
+function mergeAffiliates(trees, affTrees, si) {
+  var roots = trees.slice(), host = new Map(), pairs = new Set();
   function copy(p) { return { id: p.id, name: p.name, children: p.children.map(copy) }; }
-  function index(list) {
-    list.forEach(function (p) { have.add(p.id); if (!host.has(p.id)) host.set(p.id, p); index(p.children); });
+  function index(list, pid) {
+    list.forEach(function (p) {
+      pairs.add(pid + "|" + p.id);
+      if (!host.has(p.id)) host.set(p.id, p);
+      index(p.children, p.id);
+    });
   }
-  function visit(p, at) {
+  function visit(p) {
     p.children.forEach(function (c) {
-      if (!have.has(c.id)) { var k = copy(c); at.children.push(k); index([k]); }
-      else visit(c, host.get(c.id));
+      if (si.has(c.id) && !pairs.has(p.id + "|" + c.id) && host.has(p.id)) {
+        var k = copy(c);
+        host.get(p.id).children.push(k);
+        index([k], p.id);
+      } else visit(c);
     });
   }
-  index(roots);
+  index(roots, "");
   affTrees.forEach(function (r) {
-    if (have.has(r.id)) { visit(r, host.get(r.id)); return; }
-    var top = { id: r.id, name: r.name, children: [] };
-    roots.push(top);
+    if (!si.has(r.id) || host.has(r.id)) { visit(r); return; }
+    var top = { id: r.id, name: r.name, children: [] }, first = -1;
     r.children.forEach(function (c) {
-      top.children.push(have.has(c.id) ? { id: c.id, name: c.name, children: [] } : copy(c));
-      if (have.has(c.id)) visit(c, host.get(c.id));
+      var at = roots.map(function (x) { return x.id; }).indexOf(c.id);
+      if (at !== -1) { top.children.push(roots[at]); roots.splice(at, 1, null); if (first === -1) first = at; }
+      else top.children.push(copy(c));
     });
-    index([top]);
+    if (first === -1) roots.push(top); else roots[first] = top;
+    roots = roots.filter(Boolean);
+    pairs = new Set(); host = new Map(); index(roots, "");
+    visit(r);
   });
   return roots;
 }
@@ -1627,7 +1638,7 @@ function setFamily(data) {
   state.data = data;
   state.target = target;
   state.owners = shown.map(function (r) { return { id: r.id, name: r.name }; });
-  state.trees = mergeAffiliates(shown, data.affTrees, new Set(data.nodes.map(function (n) { return n.id; })));
+  state.trees = mergeAffiliates(shown, data.affTrees, new Set(data.nodes.concat(data.affiliates).filter(siOnly).map(function (n) { return n.id; })));
   annotate(state.trees, target.id);
 
   /* A new party starts every later step over */
