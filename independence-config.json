@@ -1,12 +1,13 @@
 {
-  "version": 12,
-  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists entries; each entry is one treatment, the relationships (measured from an audit client) it applies to, and exemptServiceLines: the service lines exempt from that treatment for those relationships (it can be empty). A relationship appears in at most one entry per rule, so use separate entries of the same treatment to give relationships different exemptions. This file starts from the config embedded in the wizard. The wizard does not use service lines yet, so exemptServiceLines is not read and its embedded copy has not been updated.",
+  "version": 13,
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists entries; each entry is one treatment, the relationships (measured from an audit client) it applies to, and exemptServiceLines: the service lines exempt from that treatment for those relationships (it can be empty). A relationship appears in at most one entry per rule, so use separate entries of the same treatment to give relationships different exemptions. The wizard embeds a copy of this file (without the prose fields). The target has a service line, chosen on the first page. When it is in an entry's exemptServiceLines, the result for that relationship becomes Exempt, the lowest priority treatment, so a restricted or materiality result from another audit client or rule still wins. Every other entity has no service line, which counts as not exempt.",
 
-  "serviceLinesNote": "Values in exemptServiceLines are service line values such as TAX-101; a value ending in * is a prefix match, so TAX* is every TAX- service line. Nothing reads them yet.",
+  "serviceLinesNote": "Service lines are { value, label } pairs. Values in exemptServiceLines are service line values such as TAX-101; a value ending in * is a prefix match, so TAX* is every TAX- service line. The treatments list is ordered strictest first, so exempt is last.",
 
   "treatments": [
     {"value": "restricted", "label": "Restricted"},
-    {"value": "materiality", "label": "Materiality check"}
+    {"value": "materiality", "label": "Materiality check"},
+    {"value": "exempt", "label": "Exempt"}
   ],
 
   "relationships": [
@@ -24,6 +25,40 @@
     {"value": "caIndirectSubsidiary", "label": "CA - Indirect Subsidiary", "phrase": "a close affiliate (indirect subsidiary) of"},
     {"value": "caSibling", "label": "CA - Sibling", "phrase": "a close affiliate (sibling) of"},
     {"value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of"}
+  ],
+
+  "serviceLines": [
+    {"value": "AUD-financial-statement-audit", "label": "Audit - Financial Statement Audit"},
+    {"value": "AUD-financial-statement-reviews-compilations", "label": "Audit - Financial Statement Reviews, Compilations"},
+    {"value": "AUD-agreed-upon-procedures", "label": "Audit - Agreed Upon Procedures"},
+    {"value": "AUD-soc-exams", "label": "Audit - Service Organization Control Exams"},
+    {"value": "TAX-101", "label": "Tax - Corporate Return Preparation"},
+    {"value": "TAX-102", "label": "Tax - Partnership Return Preparation"},
+    {"value": "TAX-103", "label": "Tax - State and Local Return Preparation"},
+    {"value": "TAX-104", "label": "Tax - Expatriate Return Programs"},
+    {"value": "TAX-110", "label": "Tax - Corporate Planning"},
+    {"value": "TAX-111", "label": "Tax - Opinions"},
+    {"value": "TAX-112", "label": "Tax - Accounting Methods"},
+    {"value": "TAX-113", "label": "Tax - Examination defense"},
+    {"value": "TAX-120", "label": "Tax - Tax Return Preparation"},
+    {"value": "TAX-121", "label": "Tax - Gift and Estate Tax Return"},
+    {"value": "TAX-122", "label": "Tax - Tax Return Preparation - Key Execs"},
+    {"value": "TAX-140", "label": "Tax - Credits and Incentives"},
+    {"value": "TAX-141", "label": "Tax - Corporate planning & structuring"},
+    {"value": "TAX-142", "label": "Tax - Examination defense"},
+    {"value": "TAX-150", "label": "Tax - Credits and Incentives"},
+    {"value": "TAX-151", "label": "Tax - Reverse sales tax"},
+    {"value": "TAX-152", "label": "Tax - Examination defense"},
+    {"value": "TAX-160", "label": "Tax - Corporate planning & structuring"},
+    {"value": "ADV-200", "label": "Advisory - Internal Audit Outsourcing"},
+    {"value": "ADV-201", "label": "Advisory - Internal Audit Cosourcing"},
+    {"value": "ADV-202", "label": "Advisory - Security & Privacy"},
+    {"value": "ADV-300", "label": "Advisory - Buy Side Due Diligence"},
+    {"value": "ADV-301", "label": "Advisory - Sell Side Due Diligence"},
+    {"value": "ADV-400", "label": "Advisory - Closing Assistance"},
+    {"value": "ADV-401", "label": "Advisory - Outsourced Accounting"},
+    {"value": "ADV-402", "label": "Advisory - Temporary Staffing"},
+    {"value": "ADV-403", "label": "Advisory - Tax Accounting"}
   ],
 
   "rules": [

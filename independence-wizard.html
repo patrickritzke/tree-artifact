@@ -118,6 +118,7 @@
   .rule-badge:hover { background: var(--hover); }
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
+  .rule-badge.exempt { color: var(--ok-fg); border: 1px solid var(--ok-fg); }
 
   /* Collapsible toolbar sections: shaded header strip + body */
   .toolbar.tb { display: block; padding: 0; margin: 8px 20px 0; background: var(--bar-bg); border: 1px solid var(--bar-border); border-radius: 8px; }
@@ -292,6 +293,9 @@
     border: 1px solid var(--border-2); border-radius: 999px; outline: none; box-shadow: 0 1px 6px var(--shadow); text-align: center;
   }
   .start input:focus { border-color: var(--accent); }
+  .start .svc { width: min(560px, 100%); margin-top: 12px; display: flex; align-items: center; gap: 10px; text-align: left; }
+  .start .svc label { font-size: 12px; color: var(--muted); flex: none; }
+  .start .svc select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
   .start .hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
 
   /* ── Party page ── */
@@ -323,8 +327,9 @@
   .verdict.restricted .verdict-head { color: var(--restr-fg); }
   .verdict.materiality { background: var(--mat-bg); border-color: var(--mat-fg); }
   .verdict.materiality .verdict-head { color: var(--mat-fg); }
-  .verdict.none { background: var(--ok-bg); border-color: var(--ok-fg); }
-  .verdict.none .verdict-head { color: var(--ok-fg); }
+  .verdict.exempt, .verdict.none { background: var(--ok-bg); border-color: var(--ok-fg); }
+  .verdict.exempt .verdict-head, .verdict.none .verdict-head { color: var(--ok-fg); }
+  .result-sub { margin: -10px 0 14px; font-size: 12px; color: var(--muted); }
   .result-h { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
   .verdict .why-item { border-top: 0; padding: 4px 0 0; }
   .chart-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 6px; }
@@ -337,6 +342,7 @@
   .chl { stroke-width: 3; stroke-linecap: round; opacity: .85; }
   .chl.restricted { stroke: var(--restr-fg); }
   .chl.materiality { stroke: var(--mat-fg); }
+  .chl.exempt { stroke: var(--ok-fg); }
   .cnode { position: absolute; width: 200px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
@@ -385,8 +391,9 @@
         <input id="start-input" type="text" placeholder="Search parties by name…" autocomplete="off" aria-label="Search parties by name" role="combobox" aria-expanded="false" aria-controls="party-results" />
         <div id="party-results" class="results" role="listbox" hidden></div>
       </div>
+      <div class="svc"><label for="start-service">Service line</label><select id="start-service"></select></div>
       <input type="hidden" id="start-id" />
-      <div class="hint">Search by name, then pick the party the engagement is for.</div>
+      <div class="hint">Search by name, then pick the party and, if you know it, the service line for the engagement.</div>
     </div>
   </section>
 
@@ -593,7 +600,7 @@ function loadFamily(partyId) {
    Source: jurisdiction screening guide; "not confirmed" items are noted in each rule's source.
    ═══════════════════════════════════════════════════════════════════ */
 var CONFIG = {
-  treatments: [{"value": "restricted", "label": "Restricted"}, {"value": "materiality", "label": "Materiality check"}],
+  treatments: [{"value": "restricted", "label": "Restricted"}, {"value": "materiality", "label": "Materiality check"}, {"value": "exempt", "label": "Exempt"}],
   relationships: [
     {"value": "ultimateParent", "label": "Ultimate Parent", "phrase": "the ultimate parent of"},
     {"value": "immediateParent", "label": "Immediate Parent", "phrase": "the immediate parent of"},
@@ -610,36 +617,70 @@ var CONFIG = {
     {"value": "caSibling", "label": "CA - Sibling", "phrase": "a close affiliate (sibling) of"},
     {"value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of"}
   ],
+  serviceLines: [
+    {"value": "AUD-financial-statement-audit", "label": "Audit - Financial Statement Audit"},
+    {"value": "AUD-financial-statement-reviews-compilations", "label": "Audit - Financial Statement Reviews, Compilations"},
+    {"value": "AUD-agreed-upon-procedures", "label": "Audit - Agreed Upon Procedures"},
+    {"value": "AUD-soc-exams", "label": "Audit - Service Organization Control Exams"},
+    {"value": "TAX-101", "label": "Tax - Corporate Return Preparation"},
+    {"value": "TAX-102", "label": "Tax - Partnership Return Preparation"},
+    {"value": "TAX-103", "label": "Tax - State and Local Return Preparation"},
+    {"value": "TAX-104", "label": "Tax - Expatriate Return Programs"},
+    {"value": "TAX-110", "label": "Tax - Corporate Planning"},
+    {"value": "TAX-111", "label": "Tax - Opinions"},
+    {"value": "TAX-112", "label": "Tax - Accounting Methods"},
+    {"value": "TAX-113", "label": "Tax - Examination defense"},
+    {"value": "TAX-120", "label": "Tax - Tax Return Preparation"},
+    {"value": "TAX-121", "label": "Tax - Gift and Estate Tax Return"},
+    {"value": "TAX-122", "label": "Tax - Tax Return Preparation - Key Execs"},
+    {"value": "TAX-140", "label": "Tax - Credits and Incentives"},
+    {"value": "TAX-141", "label": "Tax - Corporate planning & structuring"},
+    {"value": "TAX-142", "label": "Tax - Examination defense"},
+    {"value": "TAX-150", "label": "Tax - Credits and Incentives"},
+    {"value": "TAX-151", "label": "Tax - Reverse sales tax"},
+    {"value": "TAX-152", "label": "Tax - Examination defense"},
+    {"value": "TAX-160", "label": "Tax - Corporate planning & structuring"},
+    {"value": "ADV-200", "label": "Advisory - Internal Audit Outsourcing"},
+    {"value": "ADV-201", "label": "Advisory - Internal Audit Cosourcing"},
+    {"value": "ADV-202", "label": "Advisory - Security & Privacy"},
+    {"value": "ADV-300", "label": "Advisory - Buy Side Due Diligence"},
+    {"value": "ADV-301", "label": "Advisory - Sell Side Due Diligence"},
+    {"value": "ADV-400", "label": "Advisory - Closing Assistance"},
+    {"value": "ADV-401", "label": "Advisory - Outsourced Accounting"},
+    {"value": "ADV-402", "label": "Advisory - Temporary Staffing"},
+    {"value": "ADV-403", "label": "Advisory - Tax Accounting"}
+  ],
   rules: [
     { "value": "SEC", "label": "SEC", "framework": "SEC/PCAOB", "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["immediateParent", "indirectSubsidiary", "sibling", "caImmediateSubsidiary"]}
+      {"value": "restricted", "exemptServiceLines": ["TAX*"], "inheritingRelationships": ["indirectSubsidiary"]},
+      {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["immediateParent", "sibling", "caImmediateSubsidiary"]}
       ] },
     { "value": "AICPA", "label": "AICPA", "framework": "AICPA", "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"]}
+      {"value": "restricted", "exemptServiceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["indirectSubsidiary"]}
       ] },
     { "value": "IESBA-PIE", "label": "IESBA (PIE)", "framework": "IESBA-PIE", "source": "IESBA related entities, PIE. Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary", "indirectSubsidiary", "caImmediateSubsidiary", "caIndirectSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["sibling", "caSibling"]}
+      {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary", "indirectSubsidiary", "caImmediateSubsidiary", "caIndirectSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["sibling", "caSibling"]}
       ] },
     { "value": "IESBA", "label": "IESBA", "framework": "IESBA", "source": "IESBA related entities, non-PIE. Parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary", "caImmediateSubsidiary"]}
+      {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["indirectSubsidiary", "caImmediateSubsidiary"]}
       ] },
     { "value": "EU", "label": "EU", "framework": "EU-537", "source": "Regulation (EU) 537/2014, Art. 5. Geography not applied.",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"]}
+      {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["indirectSubsidiary"]}
       ] },
     { "value": "UK", "label": "UK", "framework": "UK-FRC", "source": "FRC Ethical Standard, UK 537/2014.",
       "treatments": [
-      {"value": "restricted", "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"]},
-      {"value": "materiality", "serviceLines": ["*"], "inheritingRelationships": []}
+      {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
+      {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": []}
       ] }
   ]
 };
@@ -655,15 +696,26 @@ CONFIG.relationships.forEach(function (r) {
 });
 var RULES = CONFIG.rules.map(function (r) {
   var by = {};
-  r.treatments.forEach(function (t) { t.inheritingRelationships.forEach(function (v) { if (!by[v]) by[v] = t.value; }); });
+  r.treatments.forEach(function (t) { t.inheritingRelationships.forEach(function (v) { if (!by[v]) by[v] = { t: t.value, ex: t.exemptServiceLines || [] }; }); });
   FRAMEWORK_RULE[r.framework] = r.value;
   return { key: r.value, label: r.label, cfg: r, by: by };
 });
 
+function serviceLabel(v) {
+  var s = CONFIG.serviceLines.filter(function (x) { return x.value === v; })[0];
+  return s ? s.label : v;
+}
+
+/* Is a service line in an exempt list? A value ending in * matches by prefix. No service line is never exempt. */
+function exemptFor(list, svc) {
+  return !!svc && list.some(function (x) { return x === svc || (x.slice(-1) === "*" && svc.indexOf(x.slice(0, -1)) === 0); });
+}
+
 /* Hover text for a rule pill: its source, then what each treatment covers */
 function ruleTip(r) {
   return r.label + " \u2013 " + r.cfg.source + r.cfg.treatments.map(function (t) {
-    return "\n" + LEVEL_LABELS[t.value] + ": " + t.inheritingRelationships.map(function (v) { return REL_LABEL[v]; }).join(", ");
+    return "\n" + LEVEL_LABELS[t.value] + ": " + t.inheritingRelationships.map(function (v) { return REL_LABEL[v]; }).join(", ") +
+      (t.exemptServiceLines && t.exemptServiceLines.length ? " (exempt: " + t.exemptServiceLines.join(", ") + ")" : "");
   }).join("");
 }
 
@@ -693,13 +745,14 @@ function auditPairs() {
 /* Result for one entity across every client/rule pair. Each pair is scored on the entity's relationship to
    that pair's client; the strictest result wins (restricted > materiality > out of scope).
    items: one { client, rule, level, rels } per pair that applies, so the badge can show where it came from. */
-function evalNode(id, pairs) {
+function evalNode(id, pairs, svc) {
   var items = [], level = null;
   pairs.forEach(function (p) {
     var best = null, why = [];
     (p.rels.get(id) || []).forEach(function (r) {
-      var l = p.rule.by[REL_VALUE[r]];
-      if (!l) return;
+      var e = p.rule.by[REL_VALUE[r]];
+      if (!e) return;
+      var l = exemptFor(e.ex, svc) ? "exempt" : e.t; /* exempt ranks last, so any other result still wins */
       if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
       else if (l === best) why.push(r);
     });
@@ -905,6 +958,7 @@ function siTag() {
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
 
 var state = {
+  serviceLine: null, /* the target's service line, chosen on the first page; every other entity has none */
   mode: "independence", /* the wizard always works in the independence view */
   auditRows: [{ client: null, rule: null, on: true }], /* one audit client + rule per row; on = the row is applied */
   relCache: new Map(),
@@ -1878,7 +1932,7 @@ function runRules() {
 /* ═══ STEP 4: THE ASSESSMENT ══════════════════════════════════════════════ */
 /* The target's own result across every switched-on audit client and rule, in plain language */
 function buildAssessment() {
-  var t = state.target, pairs = auditPairs(), res = evalNode(t.id, pairs);
+  var t = state.target, pairs = auditPairs(), res = evalNode(t.id, pairs, state.serviceLine);
   var clients = pairs.length, s = clients === 1 ? "" : "s";
   var out = { level: res.level || "none", headline: "", summary: "", items: [], notes: [] };
 
@@ -1895,6 +1949,9 @@ function buildAssessment() {
     out.headline = "Restricted";
     out.summary = "Under the rules applied, this non-audit engagement is restricted. " + t.name + " has a restricted relationship to " +
       res.items.filter(function (i) { return i.level === "restricted"; }).length + " of the " + clients + " audit client" + s + " considered.";
+  } else if (res.level === "exempt") {
+    out.headline = "Exempt";
+    out.summary = "Under the rules applied, this service line is exempt, so no restriction or materiality check arises.";
   } else if (res.level === "materiality") {
     out.headline = "Materiality check needed";
     out.summary = "Under the rules applied, no restriction arises, but this non-audit engagement needs a materiality check before it can be accepted.";
@@ -1926,6 +1983,7 @@ function renderResult() {
   $("result-title").textContent = "Non-Audit Engagement Request for " + t.name + " (" + t.id + ")";
   var host = $("result-body");
   host.innerHTML = "";
+  if (state.serviceLine) host.appendChild(el("div", "result-sub", "Service line: " + serviceLabel(state.serviceLine)));
 
   var banner = el("div", "verdict " + A.level);
   banner.appendChild(el("div", "verdict-head", A.headline));
@@ -1985,7 +2043,7 @@ function chartModel(items, level) {
   for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); });
   var sources = items.map(function (it, i) {
     var pair = { client: it.client, rule: it.rule, rels: relsFor(it.client.id) }, reach = {};
-    ids.forEach(function (id) { if (id !== it.client.id && evalNode(id, [pair]).level === level) reach[id] = 1; });
+    ids.forEach(function (id) { if (id !== it.client.id && evalNode(id, [pair], id === tid ? state.serviceLine : null).level === level) reach[id] = 1; });
     return { key: i, client: it.client, rule: it.rule, reach: reach };
   });
   return { ids: ids, edges: edges, tier: tier, meta: meta, sources: sources, level: level };
@@ -2167,6 +2225,7 @@ var STEPS = [
   { id: "page-start",  next: "Find Party", go: function () {
       var id = $("start-id").value.trim();
       if (!id) throw new Error("Pick a party from the list.");
+      state.serviceLine = $("start-service").value || null;
       return loadFamily(id).then(setFamily).then(loadMatters);
     } },
   { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
@@ -2216,6 +2275,16 @@ function advance() {
 }
 
 /* ═══ WIRING ══════════════════════════════════════════════════════════════ */
+(function () { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
+  var sel = $("start-service"), groups = {}, count = {};
+  CONFIG.serviceLines.forEach(function (s) { count[s.label] = (count[s.label] || 0) + 1; });
+  sel.appendChild(new Option("Not chosen", ""));
+  CONFIG.serviceLines.forEach(function (s) {
+    var g = s.label.split(" - ")[0], txt = s.label.slice(g.length + 3);
+    if (!groups[g]) { groups[g] = document.createElement("optgroup"); groups[g].label = g; sel.appendChild(groups[g]); }
+    groups[g].appendChild(new Option(count[s.label] > 1 ? txt + " (" + s.value + ")" : txt, s.value));
+  });
+})();
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
 
