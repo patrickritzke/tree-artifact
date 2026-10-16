@@ -300,7 +300,11 @@
   #party-name { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
   #party-name .pin { width: 24px; height: 24px; flex-shrink: 0; }
   #party-name .node-id { font-size: 14px; font-weight: 400; margin-left: 0; }
-  .party-sub { margin-top: 6px; font-size: 13px; color: var(--fg-2); }
+  .facts { margin-top: 24px; display: grid; gap: 14px; }
+  .fact { display: flex; align-items: center; gap: 12px; }
+  .fact-ic { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; color: var(--accent-fg); }
+  .fact-t { font-size: 14px; font-weight: 600; color: var(--fg-strong); }
+  .fact-s { font-size: 12px; color: var(--muted); }
 
   /* ── Engagement page ── */
   #page-eng .grid-wrap { max-height: none; }
@@ -391,7 +395,7 @@
     <div class="card-page">
       <div class="party-kicker">Party found</div>
       <h1 id="party-name"></h1>
-      <div class="party-sub" id="party-tree"></div>
+      <div class="facts" id="party-facts"></div>
     </div>
   </section>
 
@@ -1670,7 +1674,13 @@ function setFamily(data) {
   state.trees = mergeAffiliates(shown, data.affTrees, new Set(data.nodes.concat(data.affiliates).filter(siOnly).map(function (n) { return n.id; })));
   annotate(state.trees, target.id);
 
+  var seen = new Set();
+  (function count(list) { list.forEach(function (pl) { seen.add(pl.id); count(pl.children); }); })(shown);
+  state.treeCount = seen.size;
+
   /* A new party starts every later step over */
+  state.byParty = null;
+  state.matters = null;
   state.engage = null;
   state.engInfo = null;
   state.engNotes = [];
@@ -1690,17 +1700,36 @@ function setFamily(data) {
 }
 
 /* "Part of the Name (ID) Corporate Tree" */
-function treeLine() {
-  var t = state.target;
-  var names = state.owners.map(function (o) { return o.name + " (" + o.id + ")"; });
-  var many = names.length > 1;
-  var isOwner = state.owners.some(function (o) { return o.id === t.id; });
-  return (isOwner ? "Ultimate owner of the " : "Part of the ") + names.join(" and ") + " Corporate Tree" + (many ? "s" : "");
+var TREE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5V12M12 12H5v4.5M12 12h7v4.5"/></svg>';
+function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
+
+/* The title page: the party, its tree, and how many audit and non-audit relationships it and the rest of the tree have */
+function renderFacts() {
+  var t = state.target, host = $("party-facts"), m = state.matters;
+  host.innerHTML = "";
+  var add = function (icon, title, sub) {
+    var row = el("div", "fact"), ic = el("span", "fact-ic"), tx = el("div");
+    if (typeof icon === "string") ic.innerHTML = icon; else ic.appendChild(icon);
+    tx.appendChild(el("div", "fact-t", title));
+    tx.appendChild(el("div", "fact-s", sub));
+    row.appendChild(ic);
+    row.appendChild(tx);
+    host.appendChild(row);
+  };
+  var many = state.owners.length > 1, isOwner = state.owners.some(function (o) { return o.id === t.id; });
+  add(TREE_ICON, state.owners.map(function (o) { return o.name + " (" + o.id + ")"; }).join(" and "),
+      (isOwner ? "Ultimate owner of a" : "Part of a") + " corporate tree" + (many ? "s" : "") + " with " + plural(state.treeCount, "entity", "entities"));
+  [["audit", "audit", "Audit"], ["non", "non-audit", "Non-audit"]].forEach(function (k) {
+    var mine = m && m[k[0]], others = m && m[k[0] + "Others"];
+    add(engIcon(k[0]), m ? plural(mine, k[1] + " relationship") : k[2] + " relationships",
+        m ? (others ? plural(others, "other tree entity", "other tree entities") + " with " + k[1] + " relationships" : "No other tree entities with " + k[1] + " relationships")
+          : "Could not be loaded yet; the next step tries again");
+  });
 }
 
 /* ═══ STEP 2: AUDIT RELATIONSHIPS AND RULES ═══════════════════════════════
    The tree is master: matters for anyone who is not in it are ignored. Notes are read only for engaged parties. */
-function findEngagements() {
+function loadMatters() {
   var data = state.data, inTree = new Set(data.nodes.map(function (n) { return n.id; }));
   return Promise.all(state.owners.map(function (o) {
     return callTool("get_component_group", { componentGroupName: o.id })
@@ -1708,7 +1737,7 @@ function findEngagements() {
       .catch(function () { return []; });
   })).then(function (lists) {
     var members = [].concat.apply([], lists);
-    if (!members.length) throw new Error("The engagement group for this corporate tree did not resolve.");
+    if (!members.length) return;
 
     var byParty = new Map(), partyIds = new Set();
     members.forEach(function (m) {
@@ -1722,6 +1751,22 @@ function findEngagements() {
     /* Parties known to Intapp are shown in bold */
     data.nodes.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
     computeEntityMeta(data.nodes, data.affiliates, state.target.id);
+    state.byParty = byParty;
+
+    var c = { audit: 0, non: 0, auditOthers: 0, nonOthers: 0 };
+    byParty.forEach(function (ms, id) {
+      var a = ms.filter(function (x) { return isAuditMatter(x.name); }).length, n = ms.length - a;
+      if (id === state.target.id) { c.audit = a; c.non = n; } else { if (a) c.auditOthers++; if (n) c.nonOthers++; }
+    });
+    state.matters = c;
+  });
+}
+
+function findEngagements() {
+  var data = state.data;
+  return (state.byParty ? Promise.resolve() : loadMatters()).then(function () {
+    var byParty = state.byParty;
+    if (!byParty) throw new Error("The engagement group for this corporate tree did not resolve.");
 
     /* Notes only for audit clients: non-audit parties carry no audit rule */
     var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
@@ -2097,14 +2142,14 @@ var STEPS = [
   { id: "page-start",  next: "Find Party", go: function () {
       var id = $("start-id").value.trim();
       if (!id) throw new Error("Pick a party from the list.");
-      return loadFamily(id).then(setFamily);
+      return loadFamily(id).then(setFamily).then(loadMatters);
     } },
   { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
       $("party-name").textContent = "";
       $("party-name").appendChild(pinIcon());
       $("party-name").appendChild(document.createTextNode(state.target.name));
       $("party-name").appendChild(el("span", "node-id", "(" + state.target.id + ")"));
-      $("party-tree").textContent = treeLine();
+      renderFacts();
     }, go: function () { return findEngagements(); } },
   { id: "page-eng",    next: "Run inheritance rules", enter: renderEngPage, go: runRules },
   { id: "page-tree",   next: "Determine independence", enter: function () { renderTitle(); renderAll(); }, go: function () {} },
