@@ -293,9 +293,9 @@
     border: 1px solid var(--border-2); border-radius: 999px; outline: none; box-shadow: 0 1px 6px var(--shadow); text-align: center;
   }
   .start input:focus { border-color: var(--accent); }
-  .start .svc { width: min(560px, 100%); margin-top: 12px; display: flex; align-items: center; gap: 10px; text-align: left; }
-  .start .svc label { font-size: 12px; color: var(--muted); flex: none; }
-  .start .svc select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
+  .svc { width: min(560px, 100%); margin-top: 12px; display: flex; align-items: center; gap: 10px; text-align: left; }
+  .svc label { font-size: 12px; color: var(--muted); flex: none; }
+  .svc select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
   .start .hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
 
   /* ── Party page ── */
@@ -403,6 +403,7 @@
       <div class="party-kicker">Party found</div>
       <h1 id="party-name"></h1>
       <div class="facts" id="party-facts"></div>
+      <div class="svc"><label for="party-service">Service line</label><select id="party-service"></select></div>
     </div>
   </section>
 
@@ -2234,6 +2235,7 @@ var STEPS = [
       $("party-name").appendChild(document.createTextNode(state.target.name));
       $("party-name").appendChild(el("span", "node-id", "(" + state.target.id + ")"));
       renderFacts();
+      $("party-service").value = state.serviceLine || "";
     }, go: function () { return findEngagements(); } },
   { id: "page-eng",    next: "Run inheritance rules", enter: renderEngPage, go: runRules },
   { id: "page-tree",   next: "Determine independence", enter: function () { renderTitle(); renderAll(); }, go: function () {} },
@@ -2275,8 +2277,8 @@ function advance() {
 }
 
 /* ═══ WIRING ══════════════════════════════════════════════════════════════ */
-(function () { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
-  var sel = $("start-service"), groups = {}, count = {};
+["start-service", "party-service"].forEach(function (id) { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
+  var sel = $(id), groups = {}, count = {};
   CONFIG.serviceLines.forEach(function (s) { count[s.label] = (count[s.label] || 0) + 1; });
   sel.appendChild(new Option("Not chosen", ""));
   CONFIG.serviceLines.forEach(function (s) {
@@ -2284,7 +2286,8 @@ function advance() {
     if (!groups[g]) { groups[g] = document.createElement("optgroup"); groups[g].label = g; sel.appendChild(groups[g]); }
     groups[g].appendChild(new Option(count[s.label] > 1 ? txt + " (" + s.value + ")" : txt, s.value));
   });
-})();
+});
+$("party-service").addEventListener("change", function () { state.serviceLine = this.value || null; }); /* changeable after the lookup too */
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
 
@@ -2430,7 +2433,8 @@ var search = bindPartySearch($("start-input"), $("party-results"), $("start-id")
      - the page URL:       ?partyId=9906   (or #partyId=9906; "party" also works)
      - the host context:   celeste.getContext(), read now and again when the host's init message arrives
    Context keys are checked defensively (partyId, party_id, party.partyId, party.id, params.partyId, input.partyId).
-   The first id found wins: it fills the box and runs Find Party. */
+   The first id found wins: it fills the box and runs Find Party. A service line can come the same way
+   (?serviceLine=TAX-110 or serviceLine in the host context); otherwise it is chosen on the party page. */
 function partyFromUrl() {
   try {
     var q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -2443,21 +2447,28 @@ function partyFromContext(ctx) {
           (ctx.params && ctx.params.partyId) || (ctx.input && ctx.input.partyId);
   return v != null && String(v).trim() ? String(v).trim() : null;
 }
+function serviceFromUrl() {
+  try { var q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, "")); return q.get("serviceLine") || h.get("serviceLine"); } catch (e) { return null; }
+}
+function serviceFromContext(ctx) {
+  return ctx && typeof ctx === "object" ? ctx.serviceLine || (ctx.params && ctx.params.serviceLine) || (ctx.input && ctx.input.serviceLine) || null : null;
+}
 var autoLoaded = false;
-function autoLoad(id) {
+function autoLoad(id, svc) {
   if (autoLoaded || !id) return;
   autoLoaded = true;
+  if (svc && Array.prototype.some.call($("start-service").options, function (o) { return o.value === svc; })) $("start-service").value = svc;
   search.setId(id);
   advance();
 }
 show(0);
-autoLoad(partyFromUrl());
+autoLoad(partyFromUrl(), serviceFromUrl());
 if (typeof window.celeste !== "undefined") {
-  try { autoLoad(partyFromContext(window.celeste.getContext())); } catch (e) { /* no context yet */ }
+  try { var c0 = window.celeste.getContext(); autoLoad(partyFromContext(c0), serviceFromContext(c0)); } catch (e) { /* no context yet */ }
 }
 window.addEventListener("message", function (ev) {
   var m = ev.data;
-  if (ev.source === window.parent && m && m.type === "celeste.rpc.init") autoLoad(partyFromContext(m.context));
+  if (ev.source === window.parent && m && m.type === "celeste.rpc.init") autoLoad(partyFromContext(m.context), serviceFromContext(m.context));
 });
 </script>
 </body>
