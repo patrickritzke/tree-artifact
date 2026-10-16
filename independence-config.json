@@ -1,11 +1,10 @@
 {
-  "version": 10,
-  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Close affiliates carry one relationship per tree relationship (CA - Ultimate Parent and so on), so each can be treated differently. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. The wizard embeds a copy of this file (without the prose fields) and reads every rule, label and relationship from it. Service line scoping and the Exempt treatment are defined here but not yet read by the wizard, so its embedded copy has not been updated for them.",
+  "version": 11,
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Close affiliates carry one relationship per tree relationship (CA - Ultimate Parent and so on), so each can be treated differently. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists entries; each entry is one treatment, the relationships (measured from an audit client) it applies to, and exemptServiceLines: the service lines that are exempt from that treatment for those relationships (it can be empty). A relationship appears in at most one entry per rule. The wizard embeds a copy of this file (without the prose fields) and reads rules, labels and relationships from it; exemptServiceLines is defined here but not yet read by the wizard, so its embedded copy has not been updated for it.",
 
   "treatments": [
     { "value": "restricted",  "label": "Restricted" },
-    { "value": "materiality", "label": "Materiality check" },
-    { "value": "exempt",      "label": "Exempt" }
+    { "value": "materiality", "label": "Materiality check" }
   ],
 
   "relationships": [
@@ -25,7 +24,7 @@
     { "value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of" }
   ],
 
-  "serviceLinesNote": "A rule is a list of entries. Each entry is one treatment with the service lines it applies to and the relationships it applies to (measured from an audit client). Relationships are always listed explicitly. Service lines are either listed explicitly, by value from the serviceLines catalog below, or set to [\"default\"]. A default entry applies to its relationships for any service line that no explicit entry in the same rule names for that relationship, so it means anything not mentioned. Each combination of relationship and service line must resolve to exactly one treatment in a rule: an explicit entry beats a default entry, the same relationship and service line cannot appear in two explicit entries, and a relationship can appear in at most one default entry. A treatment may appear in as many entries as needed. A relationship with no matching entry is out of scope. The wizard does not ask for a service line yet.",
+  "serviceLinesNote": "exemptServiceLines lists, by value from the serviceLines catalog below, the service lines that the treatment does not apply to for that entry. It can be empty, which means no service line is exempt. A value ending in * is a prefix match, so \"TAX*\" is every TAX- service line. For a relationship and service line, the entry that lists the relationship decides: an exempt service line gets no treatment (it is not restricted and needs no materiality check), and any other service line gets the entry's treatment. A relationship with no entry is out of scope. Because a relationship appears in only one entry per rule, use separate entries of the same treatment to give different relationships different exemptions. The wizard does not ask for a service line yet.",
 
   "serviceLines": [
     { "value": "AUD-financial-statement-audit",                "label": "Audit - Financial Statement Audit" },
@@ -70,9 +69,9 @@
       "framework": "SEC/PCAOB",
       "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
-        { "value": "exempt",      "serviceLines": ["TAX-101", "TAX-160", "ADV-300"], "inheritingRelationships": ["immediateSubsidiary", "immediateParent", "indirectSubsidiary", "sibling", "caImmediateSubsidiary"] },
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": ["immediateParent","indirectSubsidiary", "sibling", "caImmediateSubsidiary"] }
+        { "value": "restricted", "exemptServiceLines": ["TAX*"], "inheritingRelationships": ["indirectSubsidiary"] },
+        { "value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["immediateParent", "sibling", "caImmediateSubsidiary"] }
       ]
     },
     {
@@ -81,9 +80,8 @@
       "framework": "AICPA",
       "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
       "treatments": [
-        { "value": "exempt",      "serviceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["immediateSubsidiary", "indirectSubsidiary"] },
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": ["indirectSubsidiary"] }
+        { "value": "restricted", "exemptServiceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "exemptServiceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["indirectSubsidiary"] }
       ]
     },
     {
@@ -92,8 +90,8 @@
       "framework": "IESBA-PIE",
       "source": "IESBA related entities, PIE. Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary","indirectSubsidiary","caImmediateSubsidiary", "caIndirectSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": ["sibling","caSibling"] }
+        { "value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary", "indirectSubsidiary", "caImmediateSubsidiary", "caIndirectSubsidiary"] },
+        { "value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["sibling", "caSibling"] }
       ]
     },
     {
@@ -102,8 +100,8 @@
       "framework": "IESBA",
       "source": "IESBA related entities, non-PIE. Parents, siblings and cousins out of scope (likely). Significant influence not confirmed (shown as materiality check).",
       "treatments": [
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": ["indirectSubsidiary","caImmediateSubsidiary"] }
+        { "value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["indirectSubsidiary", "caImmediateSubsidiary"] }
       ]
     },
     {
@@ -112,8 +110,8 @@
       "framework": "EU-537",
       "source": "Regulation (EU) 537/2014, Art. 5. Geography not applied.",
       "treatments": [
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": ["indirectSubsidiary"] }
+        { "value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"] },
+        { "value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["indirectSubsidiary"] }
       ]
     },
     {
@@ -122,8 +120,7 @@
       "framework": "UK-FRC",
       "source": "FRC Ethical Standard, UK 537/2014.",
       "treatments": [
-        { "value": "restricted",  "serviceLines": ["default"], "inheritingRelationships": ["immediateSubsidiary"] },
-        { "value": "materiality", "serviceLines": ["default"], "inheritingRelationships": [] }
+        { "value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"] }
       ]
     }
   ]
