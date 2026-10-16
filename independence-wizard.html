@@ -680,7 +680,7 @@ function relsFor(clientId) {
 function auditPairs() {
   if (state.mode !== "independence" || !state.data) return [];
   var byId = new Map();
-  state.data.nodes.forEach(function (n) { byId.set(n.id, n); });
+  everyNode().forEach(function (n) { byId.set(n.id, n); });
   var pairs = [];
   state.auditRows.forEach(function (row) {
     var rule = RULES.filter(function (r) { return r.key === row.rule; })[0];
@@ -827,9 +827,16 @@ function buildParty(matters, orbis) {
 
 /* One row per audit client in the tree, in tree order, each carrying its applied rule and switched on.
    With no engagement data, one empty row. */
+/* Every entity once, tree entities first, then close affiliates the tree lacks */
+function everyNode() {
+  var seen = new Set(), out = [];
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!seen.has(n.id)) { seen.add(n.id); out.push(n); } });
+  return out;
+}
+
 function autoAuditRows(data) {
   var seen = new Set(), rows = [];
-  data.nodes.forEach(function (n) {
+  everyNode().forEach(function (n) {
     var e = state.engage.get(n.id);
     if (e && e.audit && !seen.has(n.id)) { seen.add(n.id); rows.push({ client: n.id, rule: e.apply, on: true }); }
   });
@@ -1436,7 +1443,7 @@ function clientDropdown(row) {
   }
 
   var tid = state.target.id;
-  var sel = row.client && state.data.nodes.filter(function (n) { return n.id === row.client; })[0];
+  var sel = row.client && everyNode().filter(function (n) { return n.id === row.client; })[0];
   if (sel) {
     if (showEngagement()) btn.appendChild(markCell(sel.id === tid, sel.id));
     else if (sel.id === tid) btn.appendChild(pinIcon());
@@ -1466,8 +1473,8 @@ function clientDropdown(row) {
 
   var usedElsewhere = new Set();
   state.auditRows.forEach(function (r) { if (r !== row && r.client) usedElsewhere.add(r.client); });
-  var target = state.data.nodes.filter(function (n) { return n.id === tid; })[0] || state.target;
-  var all = [target].concat(state.data.nodes.filter(function (n) { return n.id !== tid; }));
+  var target = everyNode().filter(function (n) { return n.id === tid; })[0] || state.target;
+  var all = [target].concat(everyNode().filter(function (n) { return n.id !== tid; }));
 
   function fill(q) {
     q = q.trim().toLowerCase();
@@ -1730,9 +1737,12 @@ function renderFacts() {
 /* ═══ STEP 2: AUDIT RELATIONSHIPS AND RULES ═══════════════════════════════
    The tree is master: matters for anyone who is not in it are ignored. Notes are read only for engaged parties. */
 function loadMatters() {
-  var data = state.data, inTree = new Set(data.nodes.map(function (n) { return n.id; }));
-  return Promise.all(state.owners.map(function (o) {
-    return callTool("get_component_group", { componentGroupName: o.id })
+  /* The grid shows the tree and the close-affiliate entities folded into it, so both count. Engagement groups are
+     named for an ultimate owner: the tree's owners, and the top of each close-affiliate hierarchy. */
+  var data = state.data, inTree = new Set(everyNode().map(function (n) { return n.id; })), groups = [];
+  state.owners.concat(data.affTrees).forEach(function (o) { if (groups.indexOf(o.id) === -1) groups.push(o.id); });
+  return Promise.all(groups.map(function (id) {
+    return callTool("get_component_group", { componentGroupName: id })
       .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
       .catch(function () { return []; });
   })).then(function (lists) {
@@ -1749,7 +1759,7 @@ function loadMatters() {
       }
     });
     /* Parties known to Intapp are shown in bold */
-    data.nodes.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
+    data.nodes.concat(data.affiliates).forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
     computeEntityMeta(data.nodes, data.affiliates, state.target.id);
     state.byParty = byParty;
 
@@ -1777,7 +1787,7 @@ function findEngagements() {
     })).then(function (pairs) {
       var orbis = new Map(), info = new Map(), names = new Map();
       pairs.forEach(function (pr) { orbis.set(pr[0], pr[1]); });
-      data.nodes.forEach(function (n) { names.set(n.id, n.name); });
+      everyNode().forEach(function (n) { names.set(n.id, n.name); });
       byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
 
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
@@ -1892,7 +1902,7 @@ function buildAssessment() {
 }
 
 function nameOfNode(id) {
-  var n = state.data.nodes.filter(function (x) { return x.id === id; })[0];
+  var n = everyNode().filter(function (x) { return x.id === id; })[0];
   return n ? n.name + " (" + n.id + ")" : id;
 }
 
