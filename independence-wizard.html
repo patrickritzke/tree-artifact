@@ -1814,7 +1814,7 @@ function filterTree(list, engaged) {
 
 function renderEngPage() {
   var info = state.engInfo, host = $("eng-grid");
-  var roots = filterTree(state.trees, new Set(Array.from(info.keys())));
+  var roots = filterTree(state.trees, new Set(Array.from(info.keys()).concat(state.target.id))); /* engaged parties and the target, with their ancestors */
   host.innerHTML = "";
   document.querySelectorAll("#page-eng .eng-key").forEach(function (k) { k.hidden = !info.size; });
   $("eng-count").textContent = "";
@@ -1830,7 +1830,7 @@ function renderEngPage() {
     state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
     renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
       pairs: [], redraw: renderEngPage,
-      nameCls: function (n) { return info.get(n.id) ? "eng-party" : "anc"; },
+      nameCls: function (n) { return info.get(n.id) || n.id === state.target.id ? "eng-party" : "anc"; },
       cols: [{ title: "Apply Audit Rule", cls: " rule-col", cell: function (n, td) { ruleCell(td, info.get(n.id)); } }]
     });
   }
