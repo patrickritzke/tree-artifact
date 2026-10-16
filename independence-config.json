@@ -1,10 +1,11 @@
 {
-  "version": 4,
-  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Close affiliates carry one relationship per tree relationship (CA - Ultimate Parent and so on), so each can be treated differently. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. The wizard embeds a copy of this file (without the prose fields) and reads every rule, label and relationship from it.",
+  "version": 5,
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. Close affiliates carry one relationship per tree relationship (CA - Ultimate Parent and so on), so each can be treated differently. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists, per treatment, the service lines it applies to and the tree relationships (measured from an audit client) that inherit it. Where a relationship falls under more than one treatment, the treatment listed first in 'treatments' wins, so keep it ordered strictest first. The wizard embeds a copy of this file (without the prose fields) and reads every rule, label and relationship from it. Service line scoping and the Exempt treatment are defined here but not yet read by the wizard, so its embedded copy has not been updated for them.",
 
   "treatments": [
     { "value": "restricted",  "label": "Restricted" },
-    { "value": "materiality", "label": "Materiality check" }
+    { "value": "materiality", "label": "Materiality check" },
+    { "value": "exempt",      "label": "Exempt" }
   ],
 
   "relationships": [
@@ -24,7 +25,43 @@
     { "value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of" }
   ],
 
-  "serviceLinesNote": "[\"*\"] means every service line. The wizard does not ask for a service line yet, so every treatment applies to all of them. Real service lines will be { value, label } pairs too.",
+  "serviceLinesNote": "A treatment's serviceLines lists the service lines it applies to, by value from the 'serviceLines' catalog below. Three forms: [\"*\"] is every service line; a value ending in * is a prefix match, so \"AUD*\" is every AUD- service line and \"TAX*\" is every TAX- service line; anything else is one specific value, for example \"ADV-200\". They can be mixed in one list. Exempt is the least strict treatment but wins for its own service lines, so within a rule it is listed first: a relationship that would be restricted or need a materiality check is exempt for those services. The wizard does not ask for a service line yet.",
+
+  "serviceLines": [
+    { "value": "AUD-financial-statement-audit",                "label": "Audit - Financial Statement Audit" },
+    { "value": "AUD-financial-statement-reviews-compilations", "label": "Audit - Financial Statement Reviews, Compilations" },
+    { "value": "AUD-agreed-upon-procedures",                   "label": "Audit - Agreed Upon Procedures" },
+    { "value": "AUD-soc-exams",                                "label": "Audit - Service Organization Control Exams" },
+
+    { "value": "TAX-101", "label": "Tax - Corporate Return Preparation" },
+    { "value": "TAX-102", "label": "Tax - Partnership Return Preparation" },
+    { "value": "TAX-103", "label": "Tax - State and Local Return Preparation" },
+    { "value": "TAX-104", "label": "Tax - Expatriate Return Programs" },
+    { "value": "TAX-110", "label": "Tax - Corporate Planning" },
+    { "value": "TAX-111", "label": "Tax - Opinions" },
+    { "value": "TAX-112", "label": "Tax - Accounting Methods" },
+    { "value": "TAX-113", "label": "Tax - Examination defense" },
+    { "value": "TAX-120", "label": "Tax - Tax Return Preparation" },
+    { "value": "TAX-121", "label": "Tax - Gift and Estate Tax Return" },
+    { "value": "TAX-122", "label": "Tax - Tax Return Preparation - Key Execs" },
+    { "value": "TAX-140", "label": "Tax - Credits and Incentives" },
+    { "value": "TAX-141", "label": "Tax - Corporate planning & structuring" },
+    { "value": "TAX-142", "label": "Tax - Examination defense" },
+    { "value": "TAX-150", "label": "Tax - Credits and Incentives" },
+    { "value": "TAX-151", "label": "Tax - Reverse sales tax" },
+    { "value": "TAX-152", "label": "Tax - Examination defense" },
+    { "value": "TAX-160", "label": "Tax - Corporate planning & structuring" },
+
+    { "value": "ADV-200", "label": "Advisory - Internal Audit Outsourcing" },
+    { "value": "ADV-201", "label": "Advisory - Internal Audit Cosourcing" },
+    { "value": "ADV-202", "label": "Advisory - Security & Privacy" },
+    { "value": "ADV-300", "label": "Advisory - Buy Side Due Diligence" },
+    { "value": "ADV-301", "label": "Advisory - Sell Side Due Diligence" },
+    { "value": "ADV-400", "label": "Advisory - Closing Assistance" },
+    { "value": "ADV-401", "label": "Advisory - Outsourced Accounting" },
+    { "value": "ADV-402", "label": "Advisory - Temporary Staffing" },
+    { "value": "ADV-403", "label": "Advisory - Tax Accounting" }
+  ],
 
   "rules": [
     {
@@ -33,6 +70,7 @@
       "framework": "SEC/PCAOB",
       "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
+        { "value": "exempt",      "serviceLines": ["TAX-101", "TAX-160", "ADV-300"], "inheritingRelationships": ["immediateSubsidiary", "immediateParent", "indirectSubsidiary", "sibling", "caImmediateSubsidiary"] },
         { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"] },
         { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["immediateParent","indirectSubsidiary", "sibling", "caImmediateSubsidiary"] }
       ]
@@ -43,6 +81,7 @@
       "framework": "AICPA",
       "source": "ET 0.400.02. Parent treatment not confirmed (shown as restricted).",
       "treatments": [
+        { "value": "exempt",      "serviceLines": ["TAX-110", "ADV-202"], "inheritingRelationships": ["immediateSubsidiary", "indirectSubsidiary"] },
         { "value": "restricted",  "serviceLines": ["*"], "inheritingRelationships": ["immediateSubsidiary"] },
         { "value": "materiality", "serviceLines": ["*"], "inheritingRelationships": ["indirectSubsidiary"] }
       ]
