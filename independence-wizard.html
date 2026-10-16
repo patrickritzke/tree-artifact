@@ -1688,6 +1688,7 @@ function setFamily(data) {
   /* A new party starts every later step over */
   state.byParty = null;
   state.matters = null;
+  state.unmatched = [];
   state.engage = null;
   state.engInfo = null;
   state.engNotes = [];
@@ -1736,32 +1737,45 @@ function renderFacts() {
 
 /* ═══ STEP 2: AUDIT RELATIONSHIPS AND RULES ═══════════════════════════════
    The tree is master: matters for anyone who is not in it are ignored. Notes are read only for engaged parties. */
+/* The engagement group is named for the tree's ultimate owner and holds the Party, Client and Matter records for the
+   whole family, close affiliates included. Each is matched to an entity in the grid (tree and close affiliates) by its
+   id, or failing that by its name. Anything that matches nothing is listed on the engagement step. */
 function loadMatters() {
-  /* The grid shows the tree and the close-affiliate entities folded into it, so both count. Engagement groups are
-     named for an ultimate owner: the tree's owners, and the top of each close-affiliate hierarchy. */
-  var data = state.data, inTree = new Set(everyNode().map(function (n) { return n.id; })), groups = [];
-  state.owners.concat(data.affTrees).forEach(function (o) { if (groups.indexOf(o.id) === -1) groups.push(o.id); });
-  return Promise.all(groups.map(function (id) {
-    return callTool("get_component_group", { componentGroupName: id })
+  var data = state.data, ents = everyNode(), inTree = new Set(ents.map(function (n) { return n.id; }));
+  var norm = function (t) { return String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); };
+  var byName = new Map();
+  ents.forEach(function (n) { if (!byName.has(norm(n.name))) byName.set(norm(n.name), n.id); });
+  return Promise.all(state.owners.map(function (o) {
+    return callTool("get_component_group", { componentGroupName: o.id })
       .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
       .catch(function () { return []; });
   })).then(function (lists) {
-    var members = [].concat.apply([], lists);
+    var members = [].concat.apply([], lists).filter(Boolean);
     if (!members.length) return;
 
-    var byParty = new Map(), partyIds = new Set();
+    var entity = new Map(), names = new Map(), partyIds = new Set(), partyOf = new Map(); /* group id -> grid entity id */
     members.forEach(function (m) {
-      if (!m) return;
-      if (m.type === "Party" && m.partyId && inTree.has(m.partyId)) partyIds.add(m.partyId);
-      if (m.type === "Matter" && m.clientId && m.name && inTree.has(m.clientId)) {
-        if (!byParty.has(m.clientId)) byParty.set(m.clientId, []);
-        byParty.get(m.clientId).push({ id: m.matterId, name: m.name });
-      }
+      var gid = m.type === "Party" ? m.partyId : m.type === "Client" ? m.clientId : null;
+      if (!gid) return;
+      names.set(gid, m.name);
+      var eid = inTree.has(gid) ? gid : byName.get(norm(m.name));
+      if (eid) entity.set(gid, eid);
+      if (eid && m.type === "Party") { partyIds.add(eid); partyOf.set(eid, gid); }
+    });
+    var byParty = new Map(), lost = new Map();
+    members.forEach(function (m) {
+      if (m.type !== "Matter" || !m.clientId || !m.name) return;
+      var eid = inTree.has(m.clientId) ? m.clientId : entity.get(m.clientId);
+      if (!eid) { lost.set(m.clientId, names.get(m.clientId) || m.clientId); return; }
+      if (!byParty.has(eid)) byParty.set(eid, []);
+      byParty.get(eid).push({ id: m.matterId, name: m.name });
     });
     /* Parties known to Intapp are shown in bold */
-    data.nodes.concat(data.affiliates).forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
+    ents.forEach(function (n) { if (partyIds.has(n.id)) n.idParty = n.id; });
     computeEntityMeta(data.nodes, data.affiliates, state.target.id);
     state.byParty = byParty;
+    state.partyOf = partyOf;
+    state.unmatched = Array.from(lost.keys()).map(function (k) { return lost.get(k) + (lost.get(k) === k ? "" : " (" + k + ")"); });
 
     var c = { audit: 0, non: 0, auditOthers: 0, nonOthers: 0 };
     byParty.forEach(function (ms, id) {
@@ -1781,7 +1795,7 @@ function findEngagements() {
     /* Notes only for audit clients: non-audit parties carry no audit rule */
     var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
     return Promise.all(auditIds.map(function (id) {
-      return callTool("get_party", { partyId: id, propertiesToLoad: ["Notes"] })
+      return callTool("get_party", { partyId: state.partyOf.get(id) || id, propertiesToLoad: ["Notes"] })
         .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
         .catch(function () { return [id, null]; });
     })).then(function (pairs) {
@@ -1791,6 +1805,7 @@ function findEngagements() {
       byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
 
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
+      if (state.unmatched && state.unmatched.length) notes.push("Engagements for parties that match nothing in this tree or its close affiliates were not applied: " + state.unmatched.join(", ") + ".");
       var noNote = [], noCountry = [];
       info.forEach(function (v, id) {
         if (!v.audit || v.entity) return;
