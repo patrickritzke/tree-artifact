@@ -1962,6 +1962,54 @@ function buildAssessment() {
   return out;
 }
 
+/* The record of this check as JSON: who, what engagement, the decision, the tree and its engagements, how the rules were applied */
+function recordJson() {
+  var t = state.target, A = state.assessment, pairs = auditPairs(), now = new Date(), who = function (c) { return { id: c.id, name: c.name }; };
+  var all = evalNode(t.id, pairs, state.serviceLine);
+  var result = function (it) { return { level: it.level, rule: { value: it.rule.key, label: it.rule.label }, client: who(it.client), relationships: it.rels }; };
+  var mark = new Map(everyNode().map(function (n) { return [n.id, n]; }));
+  var tree = function (list) {
+    return list.map(function (pl) {
+      var n = mark.get(pl.id) || pl, e = state.engage && state.engage.get(pl.id), o = { id: pl.id, name: pl.name };
+      if (n.relToTarget && n.relToTarget.length) o.relationshipToTarget = n.relToTarget;
+      if (pl.id === t.id) o.target = true;
+      if (e && e.audit) o.auditClient = true;
+      if (e && e.nonAudit) o.nonAuditClient = true;
+      if (siOnly(n)) o.significantInfluenceOnly = true;
+      if (pl.children.length) o.children = tree(pl.children);
+      return o;
+    });
+  };
+  var engaged = [];
+  (state.engInfo || new Map()).forEach(function (v, id) {
+    var n = mark.get(id);
+    engaged.push({ id: id, name: n ? n.name : id, auditEngagements: v.engagements.audit, nonAuditEngagements: v.engagements.nonAudit,
+                   existingRule: v.existing, entityRule: v.entity, appliedRule: v.apply });
+  });
+  return {
+    record: "Independence Check", version: 1, generatedAt: now.toISOString(), asOf: now.toISOString().slice(0, 10), build: BUILD,
+    client: who(t),
+    engagement: { type: "Non-audit", serviceLine: state.serviceLine ? { value: state.serviceLine, label: serviceLabel(state.serviceLine) } : null },
+    decision: { level: A.level, headline: A.headline, results: A.items.map(result), allResults: all.items.map(result) },
+    tree: { owners: state.owners, entities: everyNode().length, engagements: engaged },
+    inheritance: {
+      auditRows: state.auditRows.filter(function (r) { return r.client; }).map(function (r) { return { client: nameOfNode(r.client), clientId: r.client, rule: r.rule, applied: !!r.on }; }),
+      rulesUsed: CONFIG.rules.filter(function (r) { return pairs.some(function (p) { return p.rule.key === r.value; }); }),
+      evaluation: A.notes
+    },
+    appendix: { tree: tree(state.trees) }
+  };
+}
+
+function downloadRecord() {
+  var r = recordJson(), a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: "application/json" }));
+  a.download = "independence-check-" + state.target.id.replace(/[^\w-]/g, "_") + "-" + r.asOf + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function nameOfNode(id) {
   var n = everyNode().filter(function (x) { return x.id === id; })[0];
   return n ? n.name + " (" + n.id + ")" : id;
@@ -1971,6 +2019,13 @@ function renderResult() {
   var A = state.assessment = buildAssessment(), t = state.target;
   var host = $("result-body");
   host.innerHTML = "";
+
+  var act = el("div", "chart-head"), dl = el("button", "btn", "\u2193 Download record");
+  dl.type = "button";
+  dl.addEventListener("click", downloadRecord);
+  act.style.marginTop = "0";
+  act.appendChild(dl);
+  host.appendChild(act);
 
   var banner = el("div", "verdict " + A.level);
   banner.appendChild(el("div", "verdict-head", A.headline));
