@@ -373,6 +373,8 @@
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
   .cnode.target { border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .cnode.engnode { width: 200px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
+  .cnode.engnode .crel { justify-content: center; }
   .cnode.pulse { box-shadow: 0 0 0 6px rgba(37,99,235,.28); }
   .cnm { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
   .cid { font-size: 10.5px; color: var(--muted); }
@@ -2292,7 +2294,7 @@ function drawChart(box, m) {
     r.forEach(function (id, i) { x[id] = (total - r.length * (W + GX)) / 2 + i * (W + GX) + (W + GX) / 2; });
   });
   cv.style.width = total + "px";
-  m.card = {}; m.pill = {}; m.xpill = {}; m.rule = {}; m.base = {};
+  m.card = {}; m.pill = {}; m.rule = {}; m.base = {}; m.engId = "\u0000engagement";
   m.ids.forEach(function (id) {
     var n = m.meta.get(id), isT = id === state.target.id, d = el("div", "cnode" + (isT ? " target" : ""));
     d.style.left = (x[id] - W / 2) + "px";
@@ -2303,13 +2305,25 @@ function drawChart(box, m) {
     m.sources.forEach(function (s) {
       if (s.client.id === id) { m.rule[s.key] = el("span", "pop rpill", s.rule.label); rel.appendChild(m.rule[s.key]); }
       if (s.reach[id]) { m.pill[s.key + "|" + id] = el("span", "pop rule-badge " + s.lvl, s.rule.label + " - " + LEVEL_LABELS[s.lvl]); rel.appendChild(m.pill[s.key + "|" + id]); }
-      if (isT && s.exempt) { m.xpill[s.key] = el("span", "pop rule-badge exempt", "Exempt Service Line"); rel.appendChild(m.xpill[s.key]); }
     });
-    if (isT) { m.final = el("span", "pop rule-badge " + m.level, LEVEL_LABELS[m.level]); rel.appendChild(m.final); }
+    if (isT && m.level !== "exempt") { m.final = el("span", "pop rule-badge " + m.level, LEVEL_LABELS[m.level]); rel.appendChild(m.final); }
     d.appendChild(rel);
     cv.appendChild(d);
     m.card[id] = d;
   });
+  if (m.level === "exempt") { /* an exempt service line: the engagement hangs below the target, joined by a green line */
+    var ed = el("div", "cnode engnode");
+    ed.style.left = (x[state.target.id] - W / 2) + "px";
+    ed.appendChild(el("div", "cnm", "New engagement"));
+    ed.appendChild(el("div", "cid", state.serviceLine ? serviceLabel(state.serviceLine) + " (" + state.serviceLine + ")" : "No service line"));
+    var er = el("div", "crel");
+    m.final = el("span", "pop rule-badge exempt", LEVEL_LABELS.exempt);
+    er.appendChild(m.final);
+    ed.appendChild(er);
+    cv.appendChild(ed);
+    m.card[m.engId] = ed;
+    rows.push([m.engId]);
+  }
   var y = 12, bottom = 0;
   rows.forEach(function (r) { /* stack the rows by their real heights */
     var h = 0;
@@ -2390,6 +2404,27 @@ function chartTravel(m, s, to, tok) {
   });
 }
 
+/* The green line off the target to the engagement */
+function chartBranch(m, tok) {
+  return new Promise(function (ok, no) {
+    var g = chartSeg(m, state.target.id, m.engId, false), hl = document.createElementNS("http://www.w3.org/2000/svg", "path"), start = null;
+    hl.setAttribute("d", "M" + g.s.join(" ") + g.d);
+    hl.setAttribute("class", "chl exempt");
+    m.svg.appendChild(hl);
+    var len = hl.getTotalLength(), dur = 500 + len * 2;
+    hl.style.strokeDasharray = len;
+    hl.style.strokeDashoffset = len;
+    function frame(t) {
+      if (tok !== chart.tok) { no(); return; }
+      if (start === null) start = t;
+      var k = chart.skip ? 1 : Math.min(1, (t - start) / dur);
+      hl.style.strokeDashoffset = len * (1 - (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(frame); else ok();
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
 function playChart(m) {
   var tok = ++chart.tok, tid = state.target.id, show = function (e) { e.classList.add("show"); };
   chart.skip = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -2418,11 +2453,13 @@ function playChart(m) {
           if (to !== tid) return;
           m.card[tid].classList.add("pulse");
           setTimeout(function () { m.card[tid].classList.remove("pulse"); }, 600);
-          if (s.exempt) return chartWait(500, tok).then(function () { show(m.xpill[s.key]); }); /* then the service line exemption */
         });
       }));
     }).then(step(400));
   });
+  if (m.level === "exempt") { /* the treatment above has landed; now the exemption comes off the target as its own branch */
+    p = p.then(step(300)).then(function () { return chartBranch(m, tok); }).then(step(250, function () { show(m.card[m.engId]); })).then(step(500));
+  }
   p.then(function () { show(m.final); }).catch(function () {});
 }
 
