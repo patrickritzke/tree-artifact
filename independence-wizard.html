@@ -1984,7 +1984,7 @@ function renderResult() {
   $("result-title").textContent = "Non-Audit Engagement Request for " + t.name + " (" + t.id + ")";
   var host = $("result-body");
   host.innerHTML = "";
-  if (state.serviceLine) host.appendChild(el("div", "result-sub", "Service line: " + serviceLabel(state.serviceLine)));
+  host.appendChild(el("div", "result-sub", state.serviceLine ? "Service line: " + serviceLabel(state.serviceLine) : "Service line: not chosen, so nothing is exempt"));
 
   var banner = el("div", "verdict " + A.level);
   banner.appendChild(el("div", "verdict-head", A.headline));
@@ -2287,7 +2287,12 @@ function advance() {
     groups[g].appendChild(new Option(count[s.label] > 1 ? txt + " (" + s.value + ")" : txt, s.value));
   });
 });
-$("party-service").addEventListener("change", function () { state.serviceLine = this.value || null; }); /* changeable after the lookup too */
+["start-service", "party-service"].forEach(function (id) { /* either one sets the service line and mirrors the other, so going back never loses it */
+  $(id).addEventListener("change", function () {
+    state.serviceLine = this.value || null;
+    $("start-service").value = $("party-service").value = this.value;
+  });
+});
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
 
