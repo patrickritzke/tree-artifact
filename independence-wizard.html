@@ -382,8 +382,9 @@
   .cnode { position: absolute; width: 250px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
-  .cnode.target { border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-  .cnode.engnode { width: 250px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
+  .cnode.target { z-index: 1; border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+  .cnode.engnode:not(.show) { transform: translateX(-90px) scale(.92); }
+  .cnode.engnode { z-index: 0; transition: opacity .4s, transform .65s cubic-bezier(.2,.8,.2,1); width: 250px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
   .cnode.engnode .crel { justify-content: center; }
   .cnode.pulse { box-shadow: 0 0 0 6px rgba(37,99,235,.28); }
   .cnm { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
@@ -2317,7 +2318,13 @@ function drawChart(box, m) {
     });
     r.forEach(function (id, i) { x[id] = (total - r.length * (W + GX)) / 2 + i * (W + GX) + (W + GX) / 2; });
   });
-  cv.style.width = total + "px";
+  var cw = total;
+  if (m.level === "exempt") { /* room for the engagement beside the target: whatever sits to its right in the row moves over */
+    var tr = rows[m.tier[state.target.id]], E = W + 14;
+    tr.forEach(function (id) { if (x[id] > x[state.target.id]) x[id] += E; });
+    cw = Math.max(total, x[state.target.id] + W / 2 + E + 8, Math.max.apply(null, tr.map(function (id) { return x[id] + W / 2 + 8; })));
+  }
+  cv.style.width = cw + "px";
   m.card = {}; m.pill = {}; m.rule = {}; m.base = {}; m.engId = "\u0000engagement";
   m.ids.forEach(function (id) {
     var n = m.meta.get(id), isT = id === state.target.id, d = el("div", "cnode" + (isT ? " target" : ""));
@@ -2354,7 +2361,6 @@ function drawChart(box, m) {
     ed.appendChild(er);
     cv.appendChild(ed);
     m.card[m.engId] = ed;
-    rows.push([m.engId]);
   }
   var y = 12, bottom = 0;
   rows.forEach(function (r) { /* stack the rows by their real heights */
@@ -2363,8 +2369,13 @@ function drawChart(box, m) {
     y += h + GY;
     bottom = y - GY;
   });
+  if (m.level === "exempt") { /* it slides out from behind the target's right edge, at the target's height */
+    var tc = m.card[state.target.id];
+    m.card[m.engId].style.top = tc.style.top;
+    m.card[m.engId].style.left = (x[state.target.id] + W / 2 + 14) + "px";
+  }
   cv.style.height = (bottom + 14) + "px";
-  svg.setAttribute("width", total);
+  svg.setAttribute("width", cw);
   svg.setAttribute("height", bottom + 14);
   m.edges.forEach(function (e) {
     var g = chartSeg(m, e[0], e[1], false), pa = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -2436,27 +2447,6 @@ function chartTravel(m, s, to, tok) {
   });
 }
 
-/* The green line off the target to the engagement */
-function chartBranch(m, tok) {
-  return new Promise(function (ok, no) {
-    var g = chartSeg(m, state.target.id, m.engId, false), hl = document.createElementNS("http://www.w3.org/2000/svg", "path"), start = null;
-    hl.setAttribute("d", "M" + g.s.join(" ") + g.d);
-    hl.setAttribute("class", "chl exempt");
-    m.svg.appendChild(hl);
-    var len = hl.getTotalLength(), dur = 500 + len * 2;
-    hl.style.strokeDasharray = len;
-    hl.style.strokeDashoffset = len;
-    function frame(t) {
-      if (tok !== chart.tok) { no(); return; }
-      if (start === null) start = t;
-      var k = chart.skip ? 1 : Math.min(1, (t - start) / dur);
-      hl.style.strokeDashoffset = len * (1 - (1 - Math.pow(1 - k, 3)));
-      if (k < 1) requestAnimationFrame(frame); else ok();
-    }
-    requestAnimationFrame(frame);
-  });
-}
-
 /* The topmost card on show sits at the top of the chart, so the target starts there and glides down as parents are added above it */
 function chartShift(m) {
   var top = Infinity;
@@ -2501,8 +2491,8 @@ function playChart(m) {
       }));
     }).then(step(400));
   });
-  if (m.level === "exempt") { /* the treatment above has landed; now the exemption comes off the target as its own branch */
-    p = p.then(step(300)).then(function () { return chartBranch(m, tok); }).then(step(250, function () { show(m.card[m.engId]); })).then(step(500));
+  if (m.level === "exempt") { /* the treatment has landed; now the engagement slides out beside the target */
+    p = p.then(step(300, function () { show(m.card[m.engId]); })).then(step(700));
   }
   p.then(function () { show(m.final); }).catch(function () {});
 }
