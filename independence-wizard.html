@@ -362,10 +362,11 @@
   .verdict.materiality .verdict-head { color: var(--mat-fg); }
   .verdict.exempt, .verdict.none { background: var(--ok-bg); border-color: var(--ok-fg); }
   .verdict.exempt .verdict-head, .verdict.none .verdict-head { color: var(--ok-fg); }
-  .reason { padding: 8px 0 0; }
-  .reason-head { display: flex; align-items: center; gap: 8px; }
+  .reason + .reason { margin-top: 12px; }
+  .reason-head { display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700; }
+  .reason-head .rule-badge { font-size: 12px; }
   .reason .rule-badge { cursor: default; }
-  .reason-text { margin-top: 3px; font-size: 12.5px; color: var(--fg-2); line-height: 1.45; }
+  .reason-text { margin-top: 5px; font-size: 12.5px; color: var(--fg-2); line-height: 1.45; }
   .chart-head { display: flex; align-items: center; justify-content: flex-end; margin: 18px 0 6px; }
   .chart { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
   .canvas { position: relative; margin: 0 auto; }
@@ -2211,14 +2212,19 @@ function nameOfNode(id) {
 /* One jurisdiction's result in plain words: the relationship to the audit client, the treatment it gives, and any exemption */
 function reasonRow(it) {
   var rel = it.rels[0], cfg = CONFIG.relationships.filter(function (r) { return r.label === rel; })[0], by = it.rule.by[REL_VALUE[rel]];
-  var row = el("div", "reason"), head = el("div", "reason-head");
+  var row = el("div", "reason"), head = el("div", "reason-head"), txt = el("div", "reason-text");
   head.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
+  head.appendChild(document.createTextNode("by "));
   head.appendChild(el("b", null, it.rule.label));
   row.appendChild(head);
   var how = by.t === "restricted" ? "restricted" : "a " + LEVEL_LABELS[by.t].toLowerCase();
   var svc = serviceLabel(state.serviceLine || "").split(" - ").pop();
-  row.appendChild(el("div", "reason-text", "The target is " + (cfg ? cfg.phrase : "related to") + " " + it.client.name + ", an audit client. " + it.rule.label +
+  txt.appendChild(el("b", null, state.target.name));
+  txt.appendChild(document.createTextNode(" is " + (cfg ? cfg.phrase : "related to") + " "));
+  txt.appendChild(el("b", null, it.client.name));
+  txt.appendChild(document.createTextNode(", an audit client. " + it.rule.label +
     (it.level === "exempt" ? " would treat that as " + how + ", but the " + svc + " service line is exempt." : " treats that as " + how + ".")));
+  row.appendChild(txt);
   return row;
 }
 
@@ -2233,9 +2239,11 @@ function renderResult() {
 
   /* downloadRecord() stays available; its button is off the page for now */
   var banner = el("div", "verdict " + A.level);
-  banner.appendChild(el("div", "verdict-head", A.headline));
   if (A.items.length) A.items.forEach(function (it) { banner.appendChild(reasonRow(it)); });
-  else banner.appendChild(el("div", "verdict-text", A.summary));
+  else {
+    banner.appendChild(el("div", "verdict-head", A.headline));
+    banner.appendChild(el("div", "verdict-text", A.summary));
+  }
   left.appendChild(banner);
 
   if (A.items.length) {
