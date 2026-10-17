@@ -245,8 +245,9 @@
     display: inline-block; font-size: 10.5px; font-weight: 500; padding: 0 8px; border-radius: 999px; background: var(--tint);
     color: var(--accent-fg); border: 1px solid var(--accent); cursor: help;
   }
-  .rpill.off { opacity: .45; }
-  .rpill.apply { display: inline-flex; align-items: center; gap: 4px; padding-left: 5px; }
+  .lead-rule { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--eng); cursor: help; }
+  .lead-rule.off { opacity: .45; }
+  .lead-rule:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   th.rule-col, td.rule-col { text-align: right; padding-left: 4px; padding-right: 2px; }
   .lead { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; vertical-align: middle; }
   .rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1693,7 +1694,7 @@ function engLead(td, n, label, off, hover) {
   if (e.nonAudit) box.appendChild(engIcon("non"));
   if (e.audit && !label) box.appendChild(engIcon("audit"));
   else if (e.audit) {
-    var pill = el("span", "rpill apply" + (off ? " off" : ""));
+    var pill = el("span", "lead-rule" + (off ? " off" : ""));
     pill.appendChild(engIcon("audit"));
     pill.appendChild(document.createTextNode(label));
     pill.tabIndex = 0;
