@@ -2554,7 +2554,7 @@ function bindPartySearch(input, results, idField, opts) {
   });
 
   /* Set the party directly (URL or host context), without searching */
-  return { setId: function (id) { input.value = id; idField.value = id; close(); } };
+  return { setId: function (id, label) { input.value = label || id; idField.value = id; close(); } };
 }
 
 var search = bindPartySearch($("start-input"), $("party-results"), $("start-id"), { onEnter: advance });
@@ -2583,15 +2583,20 @@ function serviceFromUrl() {
 function serviceFromContext(ctx) {
   return ctx && typeof ctx === "object" ? ctx.serviceLine || (ctx.params && ctx.params.serviceLine) || (ctx.input && ctx.input.serviceLine) || null : null;
 }
+/* What the first page starts with when no party is passed in */
+var DEFAULT_START = { id: "AU108110032", name: "COFACE SERVICES (AUSTRALIA) PTY LIMITED", serviceLine: "TAX-110" };
 var autoLoaded = false;
 function autoLoad(id, svc) {
   if (autoLoaded || !id) return;
   autoLoaded = true;
   if (svc && Array.prototype.some.call($("start-service").options, function (o) { return o.value === svc; })) $("start-service").value = svc;
+  else if ($("start-service").value === DEFAULT_START.serviceLine) $("start-service").value = ""; /* a passed-in party does not take the default service line */
   search.setId(id);
   advance();
 }
 show(0);
+search.setId(DEFAULT_START.id, DEFAULT_START.name);
+$("start-service").value = DEFAULT_START.serviceLine;
 autoLoad(partyFromUrl(), serviceFromUrl());
 if (typeof window.celeste !== "undefined") {
   try { var c0 = window.celeste.getContext(); autoLoad(partyFromContext(c0), serviceFromContext(c0)); } catch (e) { /* no context yet */ }
