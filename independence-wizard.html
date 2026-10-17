@@ -1304,14 +1304,14 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     });
     nameTh.appendChild(all);
   }
-  hr.appendChild(nameTh);
-
-  cols.forEach(function (c) {
+  cols.forEach(function (c) { /* the rule column sits left of the name and has no header */
     var th = document.createElement("th");
     th.className = "icon-col" + (c.cls || "");
-    th.textContent = c.title;
+    th.setAttribute("aria-label", c.title);
     hr.appendChild(th);
   });
+  hr.appendChild(nameTh);
+
   var fillTh = document.createElement("th");
   fillTh.className = "fill";
   hr.appendChild(fillTh);
@@ -1337,8 +1337,9 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       nm.textContent = pl.name;
       si.appendChild(nm);
       sn.appendChild(si);
-      sr.appendChild(sp); sr.appendChild(sn);
+      sr.appendChild(sp);
       cols.forEach(function () { sr.appendChild(document.createElement("td")); });
+      sr.appendChild(sn);
       var sf = document.createElement("td");
       sf.className = "fill";
       sr.appendChild(sf);
@@ -1366,6 +1367,13 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       pinTd.appendChild(siTag());
     }
     tr.appendChild(pinTd);
+
+    cols.forEach(function (c) {
+      var td = document.createElement("td");
+      td.className = "icon-col" + (c.cls || "");
+      c.cell(node, td);
+      tr.appendChild(td);
+    });
 
     var nameTd = document.createElement("td");
     nameTd.className = "name-cell";
@@ -1400,14 +1408,6 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     idSp.textContent = "(" + pl.id + ")";
     inner.appendChild(idSp);
     tr.appendChild(nameTd);
-
-
-    cols.forEach(function (c) {
-      var td = document.createElement("td");
-      td.className = "icon-col" + (c.cls || "");
-      c.cell(node, td);
-      tr.appendChild(td);
-    });
     var fillTd = document.createElement("td");
     fillTd.className = "fill";
     tr.appendChild(fillTd);
