@@ -333,7 +333,6 @@
   .f3 .k { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
   .f3 .v { font-size: 13.5px; font-weight: 600; margin-top: 3px; color: var(--fg-strong); }
   .f3 .v.none { font-weight: 400; color: var(--faint); }
-  .find .svc { margin-top: 14px; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .stat { background: var(--head); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
   .stat .n { font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--fg-strong); }
@@ -435,7 +434,6 @@
         <h1 id="find-name"></h1>
         <div class="ids" id="find-ids"></div>
         <div class="f3" id="find-facts"></div>
-        <div class="svc"><label for="party-service">Service line</label><select id="party-service"></select></div>
       </div>
       <div class="card" id="find-tree"></div>
       <div class="card" id="find-audit"></div>
@@ -1941,7 +1939,6 @@ function renderFind() {
     d.appendChild(v);
     fx.appendChild(d);
   });
-  $("party-service").value = state.serviceLine || "";
 
   var tf = treeFacts(), host = $("find-tree"), many = state.owners.length > 1;
   host.innerHTML = "";
@@ -2560,7 +2557,7 @@ $("gear-btn").addEventListener("click", function (e) {
 });
 $("fw-open").addEventListener("click", showFramework);
 $("fw-back").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("open"); });
-["start-service", "party-service"].forEach(function (id) { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
+["start-service"].forEach(function (id) { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
   var sel = $(id), groups = {}, count = {};
   CONFIG.serviceLines.forEach(function (s) { count[s.label] = (count[s.label] || 0) + 1; });
   sel.appendChild(new Option("Not chosen", ""));
@@ -2574,12 +2571,9 @@ $("tree-view").addEventListener("click", function (e) {
   var v = e.target.getAttribute("data-v");
   if (v) { state.view = v; renderAll(); }
 });
-["start-service", "party-service"].forEach(function (id) { /* either one sets the service line and mirrors the other, so going back never loses it */
-  $(id).addEventListener("change", function () {
-    state.serviceLine = this.value || null;
-    $("start-service").value = $("party-service").value = this.value;
-    updateHeader();
-  });
+$("start-service").addEventListener("change", function () {
+  state.serviceLine = this.value || null;
+  updateHeader();
 });
 $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
