@@ -702,6 +702,11 @@ var RULES = CONFIG.rules.map(function (r) {
   return { key: r.value, label: r.label, cfg: r, by: by };
 });
 
+/* The header names the engagement: the target's service line as "Label (CODE)", or the plain title when none is chosen */
+function updateHeader() {
+  $("header-title").textContent = state.serviceLine ? serviceLabel(state.serviceLine) + " (" + state.serviceLine + ")" : "Non-Audit Engagement (no service line)";
+}
+
 function serviceLabel(v) {
   var s = CONFIG.serviceLines.filter(function (x) { return x.value === v; })[0];
   return s ? s.label : v;
@@ -2227,6 +2232,7 @@ var STEPS = [
       var id = $("start-id").value.trim();
       if (!id) throw new Error("Pick a party from the list.");
       state.serviceLine = $("start-service").value || null;
+      updateHeader();
       return loadFamily(id).then(setFamily).then(loadMatters);
     } },
   { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
@@ -2244,6 +2250,7 @@ var STEPS = [
 
 function show(n) {
   chartStop();
+  updateHeader();
   step = n;
   document.querySelectorAll(".page").forEach(function (p) { p.classList.toggle("active", p.id === STEPS[n].id); });
   document.body.setAttribute("data-step", String(n));
@@ -2291,6 +2298,7 @@ function advance() {
   $(id).addEventListener("change", function () {
     state.serviceLine = this.value || null;
     $("start-service").value = $("party-service").value = this.value;
+    updateHeader();
   });
 });
 $("wiz-next").addEventListener("click", advance);
