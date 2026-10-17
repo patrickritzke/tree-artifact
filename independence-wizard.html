@@ -2648,8 +2648,8 @@ function serviceFromUrl() {
 function serviceFromContext(ctx) {
   return ctx && typeof ctx === "object" ? ctx.serviceLine || (ctx.params && ctx.params.serviceLine) || (ctx.input && ctx.input.serviceLine) || null : null;
 }
-/* What the first page starts with when no party is passed in */
-var DEFAULT_START = { id: "AU108110032", name: "COFACE SERVICES (AUSTRALIA) PTY LIMITED", serviceLine: "TAX-110" };
+/* The service line the first page starts with (no party is preselected) */
+var DEFAULT_START = { serviceLine: "TAX-110" };
 var autoLoaded = false;
 function autoLoad(id, svc) {
   if (autoLoaded || !id) return;
@@ -2660,7 +2660,6 @@ function autoLoad(id, svc) {
   advance();
 }
 show(0);
-search.setId(DEFAULT_START.id, DEFAULT_START.name);
 $("start-service").value = DEFAULT_START.serviceLine;
 autoLoad(partyFromUrl(), serviceFromUrl());
 if (typeof window.celeste !== "undefined") {
