@@ -316,23 +316,36 @@
   .svc select { flex: 1; min-width: 0; padding: 6px 10px; border: 1px solid var(--border-2); border-radius: 8px; background: var(--surface); color: var(--fg); font: inherit; }
   .start .hint { margin-top: 14px; font-size: 12px; color: var(--muted); }
 
-  /* ── Party page ── */
   .card-page { max-width: 720px; margin: 90px auto 0; padding: 0 20px 40px; }
-  .party-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
-  #party-name { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; flex-wrap: wrap; }
-  #party-name .pin { width: 24px; height: 24px; flex-shrink: 0; }
-  #party-name .node-id { font-size: 14px; font-weight: 400; margin-left: 0; }
-  .facts { margin-top: 24px; display: grid; gap: 14px; }
-  .fact { display: flex; align-items: center; gap: 12px; }
-  .fact-ic { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; color: var(--accent-fg); }
-  .fact-t { font-size: 14px; font-weight: 600; color: var(--fg-strong); }
-  .fact-s { font-size: 12px; color: var(--muted); }
 
-  /* ── Engagement page ── */
-  #page-eng .grid-wrap { max-height: none; }
-  .node-name.eng-party { font-weight: 600; }
-  .node-name.anc { color: var(--muted); }
-  #eng-foot { margin: 8px 20px 0; font-size: 10.5px; color: var(--muted); line-height: 1.5; }
+  /* ── Find entity and tree ── */
+  .find { max-width: 760px; margin: 22px auto 0; padding: 0 20px 40px; display: flex; flex-direction: column; gap: 14px; }
+  .find .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .find .kicker { font-size: 10px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .find h1 { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
+  .find h1 .pin { width: 22px; height: 22px; flex: none; }
+  .find h2 { font-size: 13.5px; font-weight: 600; color: var(--fg-strong); margin-bottom: 12px; }
+  .find h2 span { color: var(--muted); font-weight: 400; }
+  .find .ids { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+  .find .ids span { margin-right: 14px; }
+  .find .ids b { color: var(--fg-2); font-weight: 600; }
+  .f3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+  .f3 .k { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 600; }
+  .f3 .v { font-size: 13.5px; font-weight: 600; margin-top: 3px; color: var(--fg-strong); }
+  .f3 .v.none { font-weight: 400; color: var(--faint); }
+  .find .svc { margin-top: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat { background: var(--head); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .n { font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--fg-strong); }
+  .stat .l { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .rel-row { display: grid; grid-template-columns: 104px 1fr auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--hover); }
+  .rel-row.first { border-top: none; }
+  .rel-row .node-name { font-weight: 600; color: var(--fg-strong); }
+  .rel-row .node-id { margin-left: 4px; }
+  .rel-pills { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  .rel-pill { font-size: 10.5px; padding: 1px 9px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); border: 1px solid var(--accent); white-space: nowrap; }
+  .find .none-msg { color: var(--muted); }
+  #find-foot { font-size: 10.5px; color: var(--muted); line-height: 1.5; }
 
   /* ── Assessment page ── */
   .card-page.wide { max-width: 820px; margin-top: 40px; }
@@ -414,33 +427,24 @@
     </div>
   </section>
 
-  <!-- 2. Party and its corporate tree -->
-  <section class="page" id="page-party">
-    <div class="card-page">
-      <div class="party-kicker">Party found</div>
-      <h1 id="party-name"></h1>
-      <div class="facts" id="party-facts"></div>
-      <div class="svc"><label for="party-service">Service line</label><select id="party-service"></select></div>
-    </div>
-  </section>
-
-  <!-- 3. Audit relationships and rules (the engagement tree) -->
-  <section class="page" id="page-eng">
-    <div class="section">
-      <div class="section-head">
-        <span class="eng-key">
-          <span><span data-eng="target"></span>Target company</span>
-          <span><span data-eng="audit"></span>Audit client</span>
-          <span><span data-eng="non"></span>Non-audit client</span>
-        </span>
-        <span class="count" id="eng-count"></span>
+  <!-- 2. Find the entity and its tree -->
+  <section class="page" id="page-find">
+    <div class="find">
+      <div class="card">
+        <div class="kicker">Found party</div>
+        <h1 id="find-name"></h1>
+        <div class="ids" id="find-ids"></div>
+        <div class="f3" id="find-facts"></div>
+        <div class="svc"><label for="party-service">Service line</label><select id="party-service"></select></div>
       </div>
-      <div class="grid-wrap" id="eng-grid"></div>
+      <div class="card" id="find-tree"></div>
+      <div class="card" id="find-audit"></div>
+      <div class="card" id="find-non"></div>
+      <div id="find-foot"></div>
     </div>
-    <div id="eng-foot"></div>
   </section>
 
-  <!-- 4. Independence tree: inheritance rules applied across the family -->
+  <!-- 3. Rule inheritance: the rules applied across the family -->
   <section class="page" id="page-tree">
   <!-- Independence (gear) -->
   <div class="toolbar tb" id="bar-independence">
@@ -469,7 +473,7 @@
 
   </section>
 
-  <!-- 5. Assessment -->
+  <!-- 4. Independence assessment -->
   <section class="page" id="page-result">
     <div class="card-page wide">
       <div id="result-body"></div>
@@ -599,7 +603,7 @@ function loadFamily(partyId) {
     });
 
     if (!map.size) throw new Error("No corporate tree found for " + (party.name || partyId) + ".");
-    return { nodes: Array.from(map.values()), affiliates: Array.from(aff.values()), targetId: targetId,
+    return { nodes: Array.from(map.values()), affiliates: Array.from(aff.values()), targetId: targetId, partyId: party.partyId || null,
              trees: treeRoots, affTrees: affRoots };
   });
 }
@@ -994,6 +998,7 @@ var state = {
   engage: null, /* id -> { audit, nonAudit, apply } built from matters + orbis */
   engInfo: null, /* id -> everything the engagement page shows for a party */
   engNotes: [],
+  profile: null, /* the target's country, listing and industry, read from its Orbis note */
   rulesRun: false, /* the audit rows have been filled from the engagements */
   assessment: null,
   collapsed: { audit: false }, /* toolbar sections folded away */
@@ -1686,12 +1691,13 @@ function ruleLabel(key) {
 
 /* The column left of the name: non-audit ring, then the audit shield. The shield is a pill carrying the audit client's rule
    (label) when it has one; hover(pill) explains it. Aligned right so it sits against the name. */
-function engLead(td, n, label, hideAudit, hover) {
+function engLead(td, n, label, hideAudit, hover, kind) { /* kind limits it to "audit" or "non"; unset shows both */
   var e = state.engage && state.engage.get(n.id);
   if (!e || !(e.audit || e.nonAudit)) return;
   var box = el("span", "lead");
-  if (e.nonAudit) box.appendChild(engIcon("non"));
-  if (e.audit && !hideAudit && !label) box.appendChild(engIcon("audit")); /* an unchecked audit client drops its shield and rule */
+  if (e.nonAudit && kind !== "audit") box.appendChild(engIcon("non"));
+  if (kind === "non") { /* ring only */ }
+  else if (e.audit && !hideAudit && !label) box.appendChild(engIcon("audit")); /* an unchecked audit client drops its shield and rule */
   else if (e.audit && !hideAudit) {
     var pill = el("span", "lead-rule");
     pill.appendChild(engIcon("audit"));
@@ -1705,12 +1711,6 @@ function engLead(td, n, label, hideAudit, hover) {
     box.appendChild(pill);
   }
   if (box.firstChild) td.appendChild(box);
-}
-
-/* Step 2: the rule detected for the audit client */
-function ruleCell(td, n, info) {
-  var has = info && info.audit && info.apply;
-  engLead(td, n, has ? ruleLabel(FRAMEWORK_RULE[info.apply] || info.apply) : null, false, function (pill) { showInfo(pill, info); });
 }
 
 /* Step 3: the rule each audit client is running (it follows the toolbar). Hover explains it, or says it was changed by hand. */
@@ -1757,7 +1757,7 @@ function showInfo(anchor, info) {
   var pop = el("div");
   pop.id = "why-pop";
   pop.style.pointerEvents = "none";
-  pop.appendChild(el("h3", null, anchor.closest("tr").querySelector(".node-name").textContent));
+  pop.appendChild(el("h3", null, anchor.closest("tr, .rel-row").querySelector(".node-name").textContent));
 
   lead(pop, info.apply, "rule applied because");
   pop.appendChild(el("div", null, info.applyWhy || ""));
@@ -1857,6 +1857,7 @@ function setFamily(data) {
   state.engage = null;
   state.engInfo = null;
   state.engNotes = [];
+  state.profile = null;
   state.rulesRun = false;
   state.rowsTouched = false;
   state.assessment = null;
@@ -1876,28 +1877,118 @@ function setFamily(data) {
 var TREE_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M12 7.5V12M12 12H5v4.5M12 12h7v4.5"/></svg>';
 function plural(n, one, many) { return n + " " + (n === 1 ? one : many || one + "s"); }
 
-/* The title page: the party, its tree, and how many audit and non-audit relationships it and the rest of the tree have */
-function renderFacts() {
-  var t = state.target, host = $("party-facts"), m = state.matters;
-  host.innerHTML = "";
-  var add = function (icon, title, sub) {
-    var row = el("div", "fact"), ic = el("span", "fact-ic"), tx = el("div");
-    if (typeof icon === "string") ic.innerHTML = icon; else ic.appendChild(icon);
-    tx.appendChild(el("div", "fact-t", title));
-    tx.appendChild(el("div", "fact-s", sub));
-    row.appendChild(ic);
-    row.appendChild(tx);
-    host.appendChild(row);
+/* Plain-language profile of the target from its Orbis note: country, listing, industry (NACE division) */
+var EXCHANGES = { XNYS: "NYSE", XNAS: "Nasdaq", ARCX: "NYSE Arca", XASE: "NYSE American", XLON: "London Stock Exchange", XPAR: "Euronext Paris",
+  XAMS: "Euronext Amsterdam", XBRU: "Euronext Brussels", XLIS: "Euronext Lisbon", XETR: "Xetra", XFRA: "Frankfurt Stock Exchange", XMIL: "Borsa Italiana",
+  XMAD: "Bolsa de Madrid", XSTO: "Nasdaq Stockholm", XCSE: "Nasdaq Copenhagen", XHEL: "Nasdaq Helsinki", XOSL: "Oslo Børs", XSWX: "SIX Swiss Exchange",
+  XWBO: "Vienna Stock Exchange", XWAR: "Warsaw Stock Exchange", XASX: "ASX", XTSE: "Toronto Stock Exchange", XHKG: "Hong Kong Stock Exchange",
+  XTKS: "Tokyo Stock Exchange", XSES: "Singapore Exchange" };
+var NACE_DIV = { "01": "Crop and animal production", "02": "Forestry", "03": "Fishing", "05": "Coal mining", "06": "Oil and gas extraction", "07": "Metal ore mining",
+  "08": "Mining and quarrying", "09": "Mining support services", "10": "Food products", "11": "Beverages", "12": "Tobacco", "13": "Textiles", "14": "Apparel",
+  "15": "Leather products", "16": "Wood products", "17": "Paper products", "18": "Printing", "19": "Refined petroleum", "20": "Chemicals", "21": "Pharmaceuticals",
+  "22": "Rubber and plastics", "23": "Non-metallic minerals", "24": "Basic metals", "25": "Fabricated metal products", "26": "Electronics and optical products",
+  "27": "Electrical equipment", "28": "Machinery", "29": "Motor vehicles", "30": "Other transport equipment", "31": "Furniture", "32": "Other manufacturing",
+  "33": "Machinery repair and installation", "35": "Electricity, gas and steam", "36": "Water supply", "37": "Sewerage", "38": "Waste management", "39": "Remediation services",
+  "41": "Building construction", "42": "Civil engineering", "43": "Specialised construction", "45": "Motor vehicle trade and repair", "46": "Wholesale trade",
+  "47": "Retail trade", "49": "Land transport", "50": "Water transport", "51": "Air transport", "52": "Warehousing and transport support", "53": "Postal and courier services",
+  "55": "Accommodation", "56": "Food and beverage services", "58": "Publishing", "59": "Film, video and music", "60": "Broadcasting", "61": "Telecommunications",
+  "62": "Computer programming and consultancy", "63": "Information services", "64": "Financial services", "65": "Insurance and pensions",
+  "66": "Financial and insurance support", "68": "Real estate", "69": "Legal and accounting", "70": "Management consultancy", "71": "Architecture and engineering",
+  "72": "Scientific research", "73": "Advertising and market research", "74": "Other professional services", "75": "Veterinary services", "77": "Rental and leasing",
+  "78": "Employment services", "79": "Travel agencies", "80": "Security and investigation", "81": "Building and landscape services", "82": "Business support services",
+  "84": "Public administration", "85": "Education", "86": "Health care", "87": "Residential care", "88": "Social work", "90": "Arts and entertainment",
+  "91": "Libraries and museums", "92": "Gambling and betting", "93": "Sports and recreation", "94": "Membership organisations", "95": "Repair of household goods",
+  "96": "Personal services" };
+function profileOf(o) {
+  if (!o) return null;
+  var ex = String(o.exchange || "").toUpperCase(), nace = [].concat(o.nace == null ? [] : o.nace).map(String)[0];
+  return {
+    country: o.countryIso ? countryName(String(o.countryIso).toUpperCase()) : null,
+    listing: o.listed == null ? null : o.listed === "Listed" ? "Listed" + (ex ? " on " + (EXCHANGES[ex] || ex) : "") : "Not listed",
+    industry: nace && NACE_DIV[nace.slice(0, 2)] || null
   };
-  var many = state.owners.length > 1, isOwner = state.owners.some(function (o) { return o.id === t.id; });
-  add(TREE_ICON, state.owners.map(function (o) { return o.name + " (" + o.id + ")"; }).join(" and "),
-      (isOwner ? "Ultimate owner of a" : "Part of a") + " corporate tree" + (many ? "s" : "") + " with " + plural(state.treeCount, "entity", "entities"));
-  [["audit", "audit", "Audit"], ["non", "non-audit", "Non-audit"]].forEach(function (k) {
-    var mine = m && m[k[0]], others = m && m[k[0] + "Others"];
-    add(engIcon(k[0]), m ? plural(mine, k[1] + " relationship") : k[2] + " relationships",
-        m ? (others ? plural(others, "other tree entity", "other tree entities") + " with " + k[1] + " relationships" : "No other tree entities with " + k[1] + " relationships")
-          : "Could not be loaded yet; the next step tries again");
+}
+
+/* The target's placement in the tree: how deep it sits and how many entities sit under it */
+function treeFacts() {
+  var tid = state.target.id, found = null;
+  (function walk(list, depth) {
+    list.forEach(function (pl) {
+      if (!found && pl.id === tid) found = { depth: depth, pl: pl };
+      else if (!found) walk(pl.children, depth + 1);
+    });
+  })(state.trees, 0);
+  var subs = new Set();
+  (function down(list) { list.forEach(function (pl) { subs.add(pl.id); down(pl.children); }); })(found ? found.pl.children : []);
+  return { depth: found ? found.depth : 0, subs: subs.size };
+}
+
+/* The combined step 2 page: the party, its tree, and its audit and non-audit relationships as plain lists */
+function renderFind() {
+  var t = state.target, pr = state.profile || {}, nm = $("find-name"), ids = $("find-ids"), fx = $("find-facts");
+  nm.textContent = "";
+  nm.appendChild(pinIcon());
+  nm.appendChild(document.createTextNode(t.name));
+  ids.innerHTML = "";
+  if (state.data.partyId) { var a = el("span", null, "Intapp Party ID "); a.appendChild(el("b", null, state.data.partyId)); ids.appendChild(a); }
+  var b = el("span", null, "Moody's BvD ID ");
+  b.appendChild(el("b", null, t.id));
+  ids.appendChild(b);
+  fx.innerHTML = "";
+  [["Country", pr.country], ["Listings", pr.listing], ["Industry", pr.industry]].forEach(function (f) {
+    var d = el("div"), v = el("div", "v" + (f[1] ? "" : " none"), f[1] || "Not available");
+    d.appendChild(el("div", "k", f[0]));
+    d.appendChild(v);
+    fx.appendChild(d);
   });
+  $("party-service").value = state.serviceLine || "";
+
+  var tf = treeFacts(), host = $("find-tree"), many = state.owners.length > 1;
+  host.innerHTML = "";
+  var h = el("h2", null, "Ultimately owned in the ");
+  state.owners.forEach(function (o, i) {
+    if (i) h.appendChild(document.createTextNode(" and "));
+    h.appendChild(document.createTextNode(o.name + " "));
+    h.appendChild(el("span", null, "(" + o.id + ")"));
+  });
+  h.appendChild(document.createTextNode(many ? " trees" : " tree"));
+  host.appendChild(h);
+  var stats = el("div", "stats");
+  [[String(state.treeCount), state.treeCount === 1 ? "entity in tree" : "entities in tree"],
+   tf.depth ? [String(tf.depth), (tf.depth === 1 ? "level" : "levels") + " below the ultimate owner"] : ["\u2013", "is the ultimate owner"],
+   [String(tf.subs), tf.subs === 1 ? "subsidiary" : "subsidiaries"]].forEach(function (x) {
+    var c = el("div", "stat");
+    c.appendChild(el("div", "n", x[0]));
+    c.appendChild(el("div", "l", x[1]));
+    stats.appendChild(c);
+  });
+  host.appendChild(stats);
+
+  var byId = new Map();
+  everyNode().forEach(function (n) { byId.set(n.id, n); });
+  var list = function (hostId, title, kind, none) {
+    var box = $(hostId), n0 = 0, seen = new Set();
+    box.innerHTML = "";
+    box.appendChild(el("h2", null, title));
+    (state.engage ? Array.from(state.engage.keys()) : []).forEach(function (id) {
+      var e = state.engage.get(id), n = byId.get(id), info = state.engInfo && state.engInfo.get(id);
+      if (!n || seen.has(id) || !(kind === "audit" ? e.audit : e.nonAudit)) return;
+      seen.add(id);
+      var row = el("div", "rel-row" + (n0++ ? "" : " first")), lead = el("span"), nameEl = el("span", "node-name", n.name), pills = el("span", "rel-pills");
+      engLead(lead, n, kind === "audit" && e.apply ? ruleLabel(e.apply) : null, false, function (pill) { showInfo(pill, info); }, kind);
+      nameEl.appendChild(el("span", "node-id", "(" + id + ")"));
+      (n.isTarget ? ["This entity"] : n.relToTarget || []).forEach(function (r) { pills.appendChild(el("span", "rel-pill", r)); });
+      row.appendChild(lead); row.appendChild(nameEl); row.appendChild(pills);
+      box.appendChild(row);
+    });
+    if (!n0) box.appendChild(el("div", "none-msg", none));
+  };
+  list("find-audit", "Audit relationships in the tree", "audit", "No audit relationships were found in this tree.");
+  list("find-non", "Non-audit relationships in the tree", "non", "No non-audit relationships were found in this tree.");
+
+  var foot = $("find-foot");
+  foot.innerHTML = "";
+  state.engNotes.forEach(function (x) { foot.appendChild(el("div", null, x)); });
 }
 
 /* ═══ STEP 2: AUDIT RELATIONSHIPS AND RULES ═══════════════════════════════
@@ -1959,7 +2050,8 @@ function findEngagements() {
 
     /* Notes only for audit clients: non-audit parties carry no audit rule */
     var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
-    return Promise.all(auditIds.map(function (id) {
+    var noteIds = auditIds.indexOf(state.target.id) < 0 ? auditIds.concat(state.target.id) : auditIds; /* the target's note feeds the profile */
+    return Promise.all(noteIds.map(function (id) {
       return callTool("get_party", { partyId: state.partyOf.get(id) || id, propertiesToLoad: ["Notes"] })
         .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
         .catch(function () { return [id, null]; });
@@ -1979,6 +2071,7 @@ function findEngagements() {
       if (noNote.length) notes.push("No Orbis note on the party, so its entity rule is unknown: " + noNote.join(", ") + ".");
       if (noCountry.length) notes.push("No country recorded, so its entity rule is unknown: " + noCountry.join(", ") + ".");
 
+      state.profile = profileOf(orbis.get(state.target.id));
       state.engInfo = info;
       state.engNotes = notes;
       state.engage = new Map();
@@ -1990,44 +2083,6 @@ function findEngagements() {
       delete state.expanded.eng;
     });
   });
-}
-
-/* Keep a placement when it is engaged or has an engaged descendant */
-function filterTree(list, engaged) {
-  var out = [];
-  list.forEach(function (p) {
-    var kids = filterTree(p.children, engaged);
-    if (engaged.has(p.id) || kids.length) out.push({ id: p.id, name: p.name, key: p.key, children: kids });
-  });
-  return out;
-}
-
-function renderEngPage() {
-  var info = state.engInfo, host = $("eng-grid");
-  var roots = filterTree(state.trees, new Set(Array.from(info.keys()).concat(state.target.id))); /* engaged parties and the target, with their ancestors */
-  host.innerHTML = "";
-  document.querySelectorAll("#page-eng .eng-key").forEach(function (k) { k.hidden = !info.size; });
-  $("eng-count").textContent = "";
-
-  if (!info.size) {
-    host.appendChild(el("div", "empty", "No engagements were found for this corporate tree, so there are no audit relationships to apply."));
-  } else {
-    if (!state.expanded.eng) {
-      state.expanded.eng = new Set();
-      (function open(list) { list.forEach(function (p) { state.expanded.eng.add(p.key); open(p.children); }); })(roots);
-    }
-    var byId = new Map();
-    state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
-    renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
-      pairs: [], redraw: renderEngPage,
-      nameCls: function (n) { return info.get(n.id) || n.id === state.target.id ? "eng-party" : "anc"; },
-      cols: [], lead: function (n, td) { ruleCell(td, n, info.get(n.id)); }
-    });
-  }
-
-  var foot = $("eng-foot");
-  foot.innerHTML = "";
-  state.engNotes.forEach(function (t) { foot.appendChild(el("div", null, t)); });
 }
 
 /* ═══ STEP 3: INHERITANCE RULES (the independence tree) ═══════════════════ */
@@ -2375,11 +2430,11 @@ function playChart(m) {
 }
 
 /* ═══ PROGRESS BAR ════════════════════════════════════════════════════════
-   Four named steps always at the top. The five pages map onto them: entering the party and confirming its tree are both
-   Find Tree. The highlighted step is the one whose result is on screen; finished steps are ticked. While a button works,
-   the spinner sits on the step being worked out. */
-var STEP_LABELS = ["Find Tree", "Identify Audit Relationships", "Apply Inheritance Rules", "Independence Decision"];
-var PAGE_STEP = [0, 0, 1, 2, 3];
+   Four named steps always at the top, one per page: entering the engagement, finding the entity and its tree, rule
+   inheritance, and the independence assessment. The highlighted step is the one on screen; finished steps are ticked.
+   While a button works, the spinner sits on the step it leads to. */
+var STEP_LABELS = ["Enter New Engagement", "Find Entity & Tree", "Rule Inheritance", "Independence Assessment"];
+var PAGE_STEP = [0, 1, 2, 3];
 var busyStep = -1;
 
 function updateStepper() {
@@ -2405,18 +2460,10 @@ var STEPS = [
       var id = $("start-id").value.trim();
       if (!id) throw new Error("Pick a party from the list.");
       state.serviceLine = $("start-service").value || null;
-      return loadFamily(id).then(setFamily).then(loadMatters);
+      return loadFamily(id).then(setFamily).then(loadMatters).then(findEngagements);
     } },
-  { id: "page-party",  next: "Find audit relationships and rules", enter: function () {
-      $("party-name").textContent = "";
-      $("party-name").appendChild(pinIcon());
-      $("party-name").appendChild(document.createTextNode(state.target.name));
-      $("party-name").appendChild(el("span", "node-id", "(" + state.target.id + ")"));
-      renderFacts();
-      $("party-service").value = state.serviceLine || "";
-    }, go: function () { return findEngagements(); } },
-  { id: "page-eng",    next: "Run inheritance rules", enter: renderEngPage, go: runRules },
-  { id: "page-tree",   next: "Determine independence", enter: renderAll, go: function () {} },
+  { id: "page-find",   next: "Run rule inheritance", enter: renderFind, go: runRules },
+  { id: "page-tree",   next: "Assess independence", enter: renderAll, go: function () {} },
   { id: "page-result", next: "Start over", enter: renderResult, go: function () { return 0; } }
 ];
 
@@ -2425,7 +2472,7 @@ function show(n) {
   step = n;
   document.querySelectorAll(".page").forEach(function (p) { p.classList.toggle("active", p.id === STEPS[n].id); });
   document.body.setAttribute("data-step", String(n));
-  $("node-count").hidden = n !== 3;
+  $("node-count").hidden = n !== 2;
   $("wiz-back").hidden = n === 0;
   $("wiz-next").textContent = STEPS[n].next;
   $("wiz-err").textContent = "";
@@ -2443,8 +2490,8 @@ function advance() {
   $("wiz-err").textContent = "";
   btn.disabled = true;
   btn.textContent = "Working…";
-  /* The spinner goes on the step being worked out: the first button works on Find Tree, the rest on the next step */
-  busyStep = from === 0 ? 0 : from + 1 < STEPS.length ? PAGE_STEP[from + 1] : -1;
+  /* The spinner goes on the step being worked out: the one the button leads to */
+  busyStep = from + 1 < STEPS.length ? PAGE_STEP[from + 1] : -1;
   updateStepper();
   new Promise(function (resolve) { resolve(STEPS[from].go()); })
     .then(function (to) { show(typeof to === "number" ? to : from + 1); })
