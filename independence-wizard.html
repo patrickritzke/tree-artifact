@@ -246,7 +246,6 @@
     color: var(--accent-fg); border: 1px solid var(--accent); cursor: help;
   }
   .lead-rule { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--eng); cursor: help; }
-  .lead-rule.off { opacity: .45; }
   .lead-rule:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   th.rule-col, td.rule-col { text-align: left; padding-left: 4px; padding-right: 4px; }
   .lead { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; vertical-align: middle; }
@@ -1687,14 +1686,14 @@ function ruleLabel(key) {
 
 /* The column left of the name: non-audit ring, then the audit shield. The shield is a pill carrying the audit client's rule
    (label) when it has one; hover(pill) explains it. Aligned right so it sits against the name. */
-function engLead(td, n, label, off, hover) {
+function engLead(td, n, label, hideAudit, hover) {
   var e = state.engage && state.engage.get(n.id);
   if (!e || !(e.audit || e.nonAudit)) return;
   var box = el("span", "lead");
   if (e.nonAudit) box.appendChild(engIcon("non"));
-  if (e.audit && !label) box.appendChild(engIcon("audit"));
-  else if (e.audit) {
-    var pill = el("span", "lead-rule" + (off ? " off" : ""));
+  if (e.audit && !hideAudit && !label) box.appendChild(engIcon("audit")); /* an unchecked audit client drops its shield and rule */
+  else if (e.audit && !hideAudit) {
+    var pill = el("span", "lead-rule");
     pill.appendChild(engIcon("audit"));
     pill.appendChild(document.createTextNode(label));
     pill.tabIndex = 0;
@@ -1705,7 +1704,7 @@ function engLead(td, n, label, off, hover) {
     pill.addEventListener("blur", closeWhy);
     box.appendChild(pill);
   }
-  td.appendChild(box);
+  if (box.firstChild) td.appendChild(box);
 }
 
 /* Step 2: the rule detected for the audit client */
