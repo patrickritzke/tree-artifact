@@ -351,6 +351,8 @@
   .res-cols { display: flex; flex-direction: row-reverse; gap: 24px; align-items: flex-start; } /* the assessment comes first in the page, the animation sits to its left */
   .res-left { flex: 0 0 380px; min-width: 0; }
   .res-right { flex: 1; min-width: 0; }
+  .chart-wrap { position: relative; }
+  .chart-wrap > .btn { position: absolute; top: 8px; right: 8px; z-index: 6; }
   .res-left .verdict { margin-bottom: 0; }
   @media (max-width: 860px) { .res-cols { flex-direction: column; } .res-left { flex: none; width: 100%; } .res-right { width: 100%; } }
   .verdict { border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; padding: 14px 18px; background: var(--surface); margin-bottom: 20px; }
@@ -378,11 +380,11 @@
   .chl.restricted { stroke: var(--restr-fg); }
   .chl.materiality { stroke: var(--mat-fg); }
   .chl.exempt { stroke: var(--ok-fg); }
-  .cnode { position: absolute; width: 200px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
+  .cnode { position: absolute; width: 250px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
   .cnode.target { border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-  .cnode.engnode { width: 200px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
+  .cnode.engnode { width: 250px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
   .cnode.engnode .crel { justify-content: center; }
   .cnode.pulse { box-shadow: 0 0 0 6px rgba(37,99,235,.28); }
   .cnm { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
@@ -2231,13 +2233,7 @@ function renderResult() {
   cols.appendChild(right);
   host.appendChild(cols);
 
-  var act = el("div", "chart-head"), dl = el("button", "btn", "\u2193 Download record");
-  dl.type = "button";
-  dl.addEventListener("click", downloadRecord);
-  act.style.marginTop = "0";
-  act.appendChild(dl);
-  left.appendChild(act);
-
+  /* downloadRecord() stays available; its button is off the page for now */
   var banner = el("div", "verdict " + A.level);
   banner.appendChild(el("div", "verdict-head", A.headline));
   if (A.items.length) A.items.forEach(function (it) { banner.appendChild(reasonRow(it)); });
@@ -2245,14 +2241,11 @@ function renderResult() {
   left.appendChild(banner);
 
   if (A.items.length) {
-    var head = el("div", "chart-head");
-    var rp = el("button", "btn", "\u21BB Replay");
+    var wrap = el("div", "chart-wrap"), rp = el("button", "btn", "\u21BB Replay"), box = el("div", "chart");
     rp.type = "button";
-    head.style.marginTop = "0";
-    head.appendChild(rp);
-    right.appendChild(head);
-    var box = el("div", "chart");
-    right.appendChild(box);
+    wrap.appendChild(box);
+    wrap.appendChild(rp);
+    right.appendChild(wrap);
     var m = chartModel(A.items, A.level);
     rp.addEventListener("click", function () { drawChart(box, m); playChart(m); });
     drawChart(box, m);
@@ -2305,7 +2298,7 @@ function chartModel(items, level) {
 
 function drawChart(box, m) {
   box.innerHTML = "";
-  var W = 200, GX = 24, GY = 46, cv = el("div", "canvas"), rows = [], x = {};
+  var W = 250, GX = 24, GY = 46, cv = el("div", "canvas"), rows = [], x = {};
   var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   cv.appendChild(svg);
   box.appendChild(cv);
@@ -2323,12 +2316,20 @@ function drawChart(box, m) {
   m.ids.forEach(function (id) {
     var n = m.meta.get(id), isT = id === state.target.id, d = el("div", "cnode" + (isT ? " target" : ""));
     d.style.left = (x[id] - W / 2) + "px";
-    d.appendChild(markCell(isT, id, siOnly(n)));
+    var mk = el("div", "mark"), srcs = m.sources.filter(function (sc) { return sc.client.id === id; });
+    if (isT) mk.appendChild(pinIcon()); else if (siOnly(n)) mk.appendChild(siTag());
+    engageDots(id).forEach(function (ic) { if (!(srcs.length && ic.classList.contains("audit"))) mk.appendChild(ic); }); /* an audit client's shield comes with its rule */
+    srcs.forEach(function (sc) {
+      m.rule[sc.key] = el("span", "pop lead-rule");
+      m.rule[sc.key].appendChild(engIcon("audit"));
+      m.rule[sc.key].appendChild(document.createTextNode(sc.rule.label));
+      mk.appendChild(m.rule[sc.key]);
+    });
+    d.appendChild(mk);
     d.appendChild(el("div", "cnm", n.name));
     d.appendChild(el("div", "cid", "(" + id + ")"));
     var rel = el("div", "crel");
     m.sources.forEach(function (s) {
-      if (s.client.id === id) { m.rule[s.key] = el("span", "pop rpill", s.rule.label); rel.appendChild(m.rule[s.key]); }
       if (s.reach[id]) { m.pill[s.key + "|" + id] = el("span", "pop rule-badge " + s.lvl, s.rule.label + " - " + LEVEL_LABELS[s.lvl]); rel.appendChild(m.pill[s.key + "|" + id]); }
     });
     if (isT && m.level !== "exempt") { m.final = el("span", "pop rule-badge " + m.level, LEVEL_LABELS[m.level]); rel.appendChild(m.final); }
