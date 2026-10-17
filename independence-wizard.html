@@ -46,6 +46,7 @@
   }
   #mode-badge.show { display: inline-block; }
   #node-count { font-size: 11px; color: var(--hdr-muted); white-space: nowrap; }
+  #build { font-size: 10px; color: var(--hdr-muted); opacity: .6; white-space: nowrap; }
 
   /* ── Gear ── */
   #gear-wrap { position: relative; }
@@ -372,6 +373,7 @@
   <div id="header">
     <div id="header-title"></div>
     <span id="node-count" hidden></span>
+    <span id="build"></span>
   </div>
   <nav id="stepper" class="stepper" aria-label="Progress"></nav>
 </div>
@@ -692,6 +694,7 @@ var RULES = CONFIG.rules.map(function (r) {
 
 /* The dark header: pin, target name (ID); under it the engagement, as the service line "Label (CODE)" */
 function updateHeader() {
+  $("build").textContent = "build " + BUILD;
   var t = state.target, h = $("header-title");
   h.innerHTML = "";
   if (!t) return;
@@ -703,6 +706,7 @@ function updateHeader() {
   h.appendChild(el("div", "hdr-sub", "New Engagement: " + (state.serviceLine ? serviceLabel(state.serviceLine) + " (" + state.serviceLine + ")" : "Non-Audit Engagement, no service line")));
 }
 
+var BUILD = "dev"; /* the release script stamps the date and time here, so a published copy can be told apart */
 function serviceLabel(v) {
   var s = CONFIG.serviceLines.filter(function (x) { return x.value === v; })[0];
   return s ? s.label : v;
