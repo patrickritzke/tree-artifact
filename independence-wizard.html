@@ -119,8 +119,6 @@
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
   .rule-badge.exempt { color: var(--ok-fg); border: 1px solid var(--ok-fg); }
-  td .rule-badge.exempt { margin-left: 4px; cursor: default; }
-  td .rule-badge.exempt:hover { background: none; }
 
   /* Collapsible toolbar sections: shaded header strip + body */
   .toolbar.tb { display: block; padding: 0; margin: 8px 20px 0; background: var(--bar-bg); border: 1px solid var(--bar-border); border-radius: 8px; }
@@ -1130,14 +1128,8 @@ function extraColumns(pairs) {
   return [{
     title: pairs.length === 1 ? pairs[0].rule.label : "Audit rule",
     cell: function (n, td) {
-      var res = evalNode(n.id, pairs);
+      var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
       if (res.level) td.appendChild(ruleBadge(n, res));
-      /* The target row keeps its inherited badge; when its service line makes the result Exempt, a pill says so */
-      if (n.isTarget && state.serviceLine && evalNode(n.id, pairs, state.serviceLine).level === "exempt") {
-        var x = el("span", "rule-badge exempt", "Exempt");
-        x.title = "Exempt for " + serviceLabel(state.serviceLine);
-        td.appendChild(x);
-      }
     }
   }];
 }
@@ -1195,10 +1187,11 @@ function showWhy(anchor, node, res) {
     pop.appendChild(resultRow(it));
   });
 
-  if (res.items.length > 1) {
+  if (res.level === "exempt") pop.appendChild(el("div", "why-note", "Service Line is Exempt"));
+  else if (res.items.length > 1) {
     var note = document.createElement("div");
     note.className = "why-note";
-    note.textContent = "Strictest result applies: Restricted over Materiality check.";
+    note.textContent = "Strictest result applies: Restricted, then Materiality check, then Exempt.";
     pop.appendChild(note);
   }
 
@@ -1290,7 +1283,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
 
     var tr = document.createElement("tr");
     if (pairs.length) {
-      var lvl = evalNode(node.id, pairs).level;
+      var lvl = evalNode(node.id, pairs, node.isTarget ? state.serviceLine : null).level; /* only the target has a service line */
       if (lvl) tr.className = lvl;
     }
 
