@@ -348,7 +348,7 @@
 
   /* ── Assessment page ── */
   .card-page.wide { max-width: 1240px; margin-top: 40px; }
-  .res-cols { display: flex; gap: 24px; align-items: flex-start; }
+  .res-cols { display: flex; flex-direction: row-reverse; gap: 24px; align-items: flex-start; } /* the assessment comes first in the page, the animation sits to its left */
   .res-left { flex: 0 0 380px; min-width: 0; }
   .res-right { flex: 1; min-width: 0; }
   .res-left .verdict { margin-bottom: 0; }
@@ -369,6 +369,7 @@
   .chart-head { display: flex; align-items: center; justify-content: flex-end; margin: 18px 0 6px; }
   .chart { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
   .canvas { position: relative; margin: 0 auto; }
+  .canvas.glide { transition: transform .6s ease; }
   .canvas > svg { position: absolute; inset: 0; pointer-events: none; }
   .canvas > svg path { fill: none; }
   .cedge { stroke: var(--border-2); stroke-width: 1.5; opacity: 0; transition: opacity .5s; }
@@ -2243,10 +2244,6 @@ function renderResult() {
   else banner.appendChild(el("div", "verdict-text", A.summary));
   left.appendChild(banner);
 
-  var nl = el("div", "result-notes");
-  A.notes.forEach(function (n) { nl.appendChild(el("div", null, n)); });
-  left.appendChild(nl);
-
   if (A.items.length) {
     var head = el("div", "chart-head");
     var rp = el("button", "btn", "\u21BB Replay");
@@ -2453,6 +2450,13 @@ function chartBranch(m, tok) {
   });
 }
 
+/* The topmost card on show sits at the top of the chart, so the target starts there and glides down as parents are added above it */
+function chartShift(m) {
+  var top = Infinity;
+  Object.keys(m.card).forEach(function (id) { if (m.card[id].classList.contains("show")) top = Math.min(top, m.card[id].offsetTop); });
+  if (top < Infinity) m.cv.style.transform = "translateY(" + (12 - top) + "px)";
+}
+
 function playChart(m) {
   var tok = ++chart.tok, tid = state.target.id, show = function (e) { e.classList.add("show"); };
   chart.skip = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -2464,10 +2468,15 @@ function playChart(m) {
   }
   var order = m.ids.filter(function (id) { return id !== tid; }).sort(function (a, b) { return (dist[a] || 0) - (dist[b] || 0); });
   var step = function (ms, fn) { return function () { if (fn) fn(); return chartWait(ms, tok); }; };
-  var p = chartWait(200, tok).then(step(800, function () { show(m.card[tid]); }));
+  m.cv.classList.remove("glide");
+  m.cv.style.transform = "translateY(" + (12 - m.card[tid].offsetTop) + "px)"; /* start with the target at the top */
+  void m.cv.offsetWidth;
+  m.cv.classList.add("glide");
+  var p = chartWait(200, tok).then(step(800, function () { show(m.card[tid]); chartShift(m); }));
   order.forEach(function (id) {
     p = p.then(step(500, function () {
       show(m.card[id]);
+      chartShift(m);
       m.edges.forEach(function (e) { if (e.indexOf(id) > -1 && m.card[e[0]].classList.contains("show") && m.card[e[1]].classList.contains("show")) show(m.base[e[0] + "|" + e[1]]); });
     }));
   });
