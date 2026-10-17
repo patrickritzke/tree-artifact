@@ -383,9 +383,9 @@
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
   .cnode.target { z-index: 1; border: 2px solid var(--pin); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
-  .cnode.engnode:not(.show) { transform: translateX(-90px) scale(.92); }
-  .cnode.engnode { z-index: 0; transition: opacity .4s, transform .65s cubic-bezier(.2,.8,.2,1); width: 250px; text-align: center; border: 2px solid var(--ok-fg); border-radius: 26px; padding: 7px 14px 8px; background: var(--ok-bg); }
-  .cnode.engnode .crel { justify-content: center; }
+  /* The engagement is a drawer on the target's right edge: same card shape, sharing the target's border */
+  .cnode.engnode:not(.show) { transform: translateX(-100%); }
+  .cnode.engnode { z-index: 0; transition: opacity .3s, transform .65s cubic-bezier(.2,.8,.2,1); border: 2px solid var(--ok-fg); border-left: 0; border-radius: 0 8px 8px 0; padding-left: 12px; background: var(--ok-bg); }
   .cnode.pulse { box-shadow: 0 0 0 6px rgba(37,99,235,.28); }
   .cnm { margin-top: 2px; font-size: 11px; font-weight: 600; color: var(--fg-strong); line-height: 1.25; }
   .cid { font-size: 10.5px; color: var(--muted); }
@@ -2320,9 +2320,9 @@ function drawChart(box, m) {
   });
   var cw = total;
   if (m.level === "exempt") { /* room for the engagement beside the target: whatever sits to its right in the row moves over */
-    var tr = rows[m.tier[state.target.id]], E = W + 14;
+    var tr = rows[m.tier[state.target.id]], E = W + 8;
     tr.forEach(function (id) { if (x[id] > x[state.target.id]) x[id] += E; });
-    cw = Math.max(total, x[state.target.id] + W / 2 + E + 8, Math.max.apply(null, tr.map(function (id) { return x[id] + W / 2 + 8; })));
+    cw = Math.max(total, x[state.target.id] + W / 2 + W + 8, Math.max.apply(null, tr.map(function (id) { return x[id] + W / 2 + 8; })));
   }
   cv.style.width = cw + "px";
   m.card = {}; m.pill = {}; m.rule = {}; m.base = {}; m.engId = "\u0000engagement";
@@ -2372,7 +2372,8 @@ function drawChart(box, m) {
   if (m.level === "exempt") { /* it slides out from behind the target's right edge, at the target's height */
     var tc = m.card[state.target.id];
     m.card[m.engId].style.top = tc.style.top;
-    m.card[m.engId].style.left = (x[state.target.id] + W / 2 + 14) + "px";
+    m.card[m.engId].style.left = (x[state.target.id] + W / 2) + "px";
+    m.card[m.engId].style.height = tc.offsetHeight + "px";
   }
   cv.style.height = (bottom + 14) + "px";
   svg.setAttribute("width", cw);
