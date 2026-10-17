@@ -126,7 +126,8 @@
   /* Name and any icon/status columns shrink to their content so they sit together; the filler absorbs the rest. */
   table.grid th.name-col, table.grid td.name-cell, table.grid th.icon-col, table.grid td.icon-col { width: 1%; white-space: nowrap; }
   table.grid th.fill, table.grid td.fill { width: auto; padding: 0; }
-  th.pin-col, td.pin-col { width: 28px; padding-left: 10px; padding-right: 0; text-align: center; }
+  table.grid th.name-col, table.grid td.name-cell { padding-left: 4px; }
+  th.pin-col, td.pin-col { width: 22px; padding-left: 8px; padding-right: 0; text-align: center; }
   .pin { display: block; width: 14px; height: 14px; color: var(--pin); }
   .rule-badge { white-space: nowrap; display: inline-block; font-size: 10.5px; font-weight: 500; padding: 0 7px; border-radius: 999px; background: none; cursor: pointer; }
   .rule-badge:hover { background: var(--hover); }
@@ -245,6 +246,9 @@
     color: var(--accent-fg); border: 1px solid var(--accent); cursor: help;
   }
   .rpill.off { opacity: .45; }
+  .rpill.apply { display: inline-flex; align-items: center; gap: 4px; padding-left: 5px; }
+  th.rule-col, td.rule-col { text-align: right; padding-left: 4px; padding-right: 2px; }
+  .lead { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; vertical-align: middle; }
   .rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #why-pop h3 + .lead { margin-top: 0; }
   #why-pop .sec { font-size: 11px; font-weight: 600; margin: 8px 0 3px; color: var(--fg-strong); }
@@ -328,7 +332,6 @@
   #page-eng .grid-wrap { max-height: none; }
   .node-name.eng-party { font-weight: 600; }
   .node-name.anc { color: var(--muted); }
-  th.rule-col, td.rule-col { min-width: 130px; }
   #eng-foot { margin: 8px 20px 0; font-size: 10.5px; color: var(--muted); line-height: 1.5; }
 
   /* ── Assessment page ── */
@@ -1274,8 +1277,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
   var pinTh = document.createElement("th");
-  var showEng = showEngagement();
-  pinTh.className = "pin-col" + (showEng ? " wide" : "");
+  pinTh.className = "pin-col";
   pinTh.setAttribute("aria-label", "Target company");
   hr.appendChild(pinTh);
 
@@ -1332,7 +1334,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     if (pl.sum) { /* a summary row: counts only */
       var sr = document.createElement("tr"), sp = document.createElement("td"), sn = document.createElement("td");
       sr.className = "sum-row";
-      sp.className = "pin-col" + (showEng ? " wide" : "");
+      sp.className = "pin-col";
       sn.className = "name-cell";
       var si = document.createElement("div"), ind = document.createElement("span");
       si.className = "name-inner";
@@ -1366,14 +1368,9 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     }
 
     var pinTd = document.createElement("td");
-    pinTd.className = "pin-col" + (showEng ? " wide" : "");
-    if (showEng) {
-      pinTd.appendChild(markCell(node.isTarget, node.id, siOnly(node)));
-    } else if (node.isTarget) {
-      pinTd.appendChild(pinIcon());
-    } else if (siOnly(node)) {
-      pinTd.appendChild(siTag());
-    }
+    pinTd.className = "pin-col";
+    if (node.isTarget) pinTd.appendChild(pinIcon());
+    else if (siOnly(node)) pinTd.appendChild(siTag());
     tr.appendChild(pinTd);
 
     if (opt.lead) {
@@ -1687,41 +1684,50 @@ function ruleLabel(key) {
   return r ? r.label : key;
 }
 
-/* Step 3: the rule each audit client is running (it follows the toolbar). Hover explains it, or says it was changed by hand. */
-function auditRuleCell(n, td) {
-  var auto = state.engage && state.engage.get(n.id);
-  state.auditRows.forEach(function (row) {
-    if (row.client !== n.id || !row.rule) return;
-    var pill = el("span", "rpill apply" + (row.on ? "" : " off"), ruleLabel(row.rule));
+/* The column left of the name: non-audit ring, then the audit shield. The shield is a pill carrying the audit client's rule
+   (label) when it has one; hover(pill) explains it. Aligned right so it sits against the name. */
+function engLead(td, n, label, off, hover) {
+  var e = state.engage && state.engage.get(n.id);
+  if (!e || !(e.audit || e.nonAudit)) return;
+  var box = el("span", "lead");
+  if (e.nonAudit) box.appendChild(engIcon("non"));
+  if (e.audit && !label) box.appendChild(engIcon("audit"));
+  else if (e.audit) {
+    var pill = el("span", "rpill apply" + (off ? " off" : ""));
+    pill.appendChild(engIcon("audit"));
+    pill.appendChild(document.createTextNode(label));
     pill.tabIndex = 0;
-    var open = function () {
-      if (auto && auto.apply === row.rule && state.engInfo && state.engInfo.get(n.id)) { showInfo(pill, state.engInfo.get(n.id)); return; }
-      closeWhy();
-      var pop = el("div");
-      pop.id = "why-pop";
-      pop.style.pointerEvents = "none";
-      pop.appendChild(el("h3", null, n.name));
-      pop.appendChild(el("div", null, (auto && auto.apply ? "Manually changed to " : "Manually set to ") + ruleLabel(row.rule)));
-      placePop(pop, pill);
-      state.whyFor = "info";
-    };
+    var open = function () { hover(pill); };
     pill.addEventListener("mouseenter", open);
     pill.addEventListener("focus", open);
     pill.addEventListener("mouseleave", closeWhy);
     pill.addEventListener("blur", closeWhy);
-    td.appendChild(pill);
-  });
+    box.appendChild(pill);
+  }
+  td.appendChild(box);
 }
 
-function ruleCell(td, info) {
-  if (!info || !info.audit || !info.apply) return;
-  var pill = el("span", "rpill apply", ruleLabel(FRAMEWORK_RULE[info.apply] || info.apply));
-  pill.tabIndex = 0;
-  pill.addEventListener("mouseenter", function () { showInfo(pill, info); });
-  pill.addEventListener("focus", function () { showInfo(pill, info); });
-  pill.addEventListener("mouseleave", closeWhy);
-  pill.addEventListener("blur", closeWhy);
-  td.appendChild(pill);
+/* Step 2: the rule detected for the audit client */
+function ruleCell(td, n, info) {
+  var has = info && info.audit && info.apply;
+  engLead(td, n, has ? ruleLabel(FRAMEWORK_RULE[info.apply] || info.apply) : null, false, function (pill) { showInfo(pill, info); });
+}
+
+/* Step 3: the rule each audit client is running (it follows the toolbar). Hover explains it, or says it was changed by hand. */
+function auditRuleCell(n, td) {
+  var auto = state.engage && state.engage.get(n.id);
+  var row = state.auditRows.filter(function (r) { return r.client === n.id && r.rule; })[0];
+  engLead(td, n, row ? ruleLabel(row.rule) : null, row && !row.on, function (pill) {
+    if (auto && auto.apply === row.rule && state.engInfo && state.engInfo.get(n.id)) { showInfo(pill, state.engInfo.get(n.id)); return; }
+    closeWhy();
+    var pop = el("div");
+    pop.id = "why-pop";
+    pop.style.pointerEvents = "none";
+    pop.appendChild(el("h3", null, n.name));
+    pop.appendChild(el("div", null, (auto && auto.apply ? "Manually changed to " : "Manually set to ") + ruleLabel(row.rule)));
+    placePop(pop, pill);
+    state.whyFor = "info";
+  });
 }
 
 /* ═══ HOVER INFORMATION ═══════════════════════════════════════════════════ */
@@ -2015,7 +2021,7 @@ function renderEngPage() {
     renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
       pairs: [], redraw: renderEngPage,
       nameCls: function (n) { return info.get(n.id) || n.id === state.target.id ? "eng-party" : "anc"; },
-      cols: [], lead: function (n, td) { ruleCell(td, info.get(n.id)); }
+      cols: [], lead: function (n, td) { ruleCell(td, n, info.get(n.id)); }
     });
   }
 
