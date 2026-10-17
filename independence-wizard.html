@@ -244,6 +244,7 @@
     display: inline-block; font-size: 10.5px; font-weight: 500; padding: 0 8px; border-radius: 999px; background: var(--tint);
     color: var(--accent-fg); border: 1px solid var(--accent); cursor: help;
   }
+  .rpill.off { opacity: .45; }
   .rpill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #why-pop h3 + .lead { margin-top: 0; }
   #why-pop .sec { font-size: 11px; font-weight: 600; margin: 8px 0 3px; color: var(--fg-strong); }
@@ -1147,7 +1148,7 @@ function pinIcon() {
 function extraColumns(pairs) {
   if (!pairs.length) return [];
   return [{
-    title: pairs.length === 1 ? pairs[0].rule.label : "Audit rule",
+    title: "Treatment",
     cell: function (n, td) {
       var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
       if (res.level) td.appendChild(ruleBadge(n, res));
@@ -1304,6 +1305,12 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     });
     nameTh.appendChild(all);
   }
+  if (opt.lead) { /* the audit rule sits left of the name, in its own column with no header */
+    var leadTh = document.createElement("th");
+    leadTh.className = "icon-col rule-col";
+    leadTh.setAttribute("aria-label", "Audit rule");
+    hr.appendChild(leadTh);
+  }
   hr.appendChild(nameTh);
 
   cols.forEach(function (c) {
@@ -1337,7 +1344,9 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       nm.textContent = pl.name;
       si.appendChild(nm);
       sn.appendChild(si);
-      sr.appendChild(sp); sr.appendChild(sn);
+      sr.appendChild(sp);
+      if (opt.lead) sr.appendChild(document.createElement("td"));
+      sr.appendChild(sn);
       cols.forEach(function () { sr.appendChild(document.createElement("td")); });
       var sf = document.createElement("td");
       sf.className = "fill";
@@ -1366,6 +1375,13 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       pinTd.appendChild(siTag());
     }
     tr.appendChild(pinTd);
+
+    if (opt.lead) {
+      var leadTd = document.createElement("td");
+      leadTd.className = "icon-col rule-col";
+      opt.lead(node, leadTd);
+      tr.appendChild(leadTd);
+    }
 
     var nameTd = document.createElement("td");
     nameTd.className = "name-cell";
@@ -1449,7 +1465,7 @@ function renderAll() {
     (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.tree.add(p.key); open(p.children); }); })(roots);
   }
   var shown = renderGrid("tree", "tree-grid", "tree-count", roots, byId, {
-    pairs: pairs, cols: extraColumns(pairs), redraw: renderAll,
+    pairs: pairs, cols: extraColumns(pairs), redraw: renderAll, lead: auditRuleCell,
     nameCls: function (n) { return n.idParty ? "has-party" : ""; } /* bold = entity has an Intapp party record */
   });
   $("node-count").textContent = $("tree-count").textContent = cond ? shown + " of " + all.size + " entities" : shown + " entities";
@@ -1666,9 +1682,40 @@ function el(tag, cls, text) {
 }
 
 /* Apply Audit Rule pill; hovering it explains the rule, the engagements and the entity rule (information only) */
+function ruleLabel(key) {
+  var r = RULES.filter(function (x) { return x.key === key; })[0];
+  return r ? r.label : key;
+}
+
+/* Step 3: the rule each audit client is running (it follows the toolbar). Hover explains it, or says it was changed by hand. */
+function auditRuleCell(n, td) {
+  var auto = state.engage && state.engage.get(n.id);
+  state.auditRows.forEach(function (row) {
+    if (row.client !== n.id || !row.rule) return;
+    var pill = el("span", "rpill apply" + (row.on ? "" : " off"), ruleLabel(row.rule));
+    pill.tabIndex = 0;
+    var open = function () {
+      if (auto && auto.apply === row.rule && state.engInfo && state.engInfo.get(n.id)) { showInfo(pill, state.engInfo.get(n.id)); return; }
+      closeWhy();
+      var pop = el("div");
+      pop.id = "why-pop";
+      pop.style.pointerEvents = "none";
+      pop.appendChild(el("h3", null, n.name));
+      pop.appendChild(el("div", null, (auto && auto.apply ? "Manually changed to " : "Manually set to ") + ruleLabel(row.rule)));
+      placePop(pop, pill);
+      state.whyFor = "info";
+    };
+    pill.addEventListener("mouseenter", open);
+    pill.addEventListener("focus", open);
+    pill.addEventListener("mouseleave", closeWhy);
+    pill.addEventListener("blur", closeWhy);
+    td.appendChild(pill);
+  });
+}
+
 function ruleCell(td, info) {
   if (!info || !info.audit || !info.apply) return;
-  var pill = el("span", "rpill apply", info.apply);
+  var pill = el("span", "rpill apply", ruleLabel(FRAMEWORK_RULE[info.apply] || info.apply));
   pill.tabIndex = 0;
   pill.addEventListener("mouseenter", function () { showInfo(pill, info); });
   pill.addEventListener("focus", function () { showInfo(pill, info); });
@@ -1968,7 +2015,7 @@ function renderEngPage() {
     renderGrid("eng", "eng-grid", "eng-count", roots, byId, {
       pairs: [], redraw: renderEngPage,
       nameCls: function (n) { return info.get(n.id) || n.id === state.target.id ? "eng-party" : "anc"; },
-      cols: [{ title: "Apply Audit Rule", cls: " rule-col", cell: function (n, td) { ruleCell(td, info.get(n.id)); } }]
+      cols: [], lead: function (n, td) { ruleCell(td, info.get(n.id)); }
     });
   }
 
