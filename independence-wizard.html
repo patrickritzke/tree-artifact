@@ -72,6 +72,28 @@
   .gear-opt.active { color: var(--accent-fg); font-weight: 600; }
   .gear-opt.active .dot { background: var(--accent); border-color: var(--accent); }
 
+  /* ── Inheritance framework sheet (read only) ── */
+  #fw-back { position: fixed; inset: 0; z-index: 200; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; background: rgba(0,0,0,.35); }
+  #fw-back.open { display: flex; }
+  .fw-sheet { position: relative; width: min(780px, 100%); padding: 20px 22px 24px; background: var(--surface); border-radius: 12px; box-shadow: 0 8px 32px var(--shadow); }
+  .fw-x { position: absolute; top: 10px; right: 14px; border: none; background: none; font-size: 20px; color: var(--muted); cursor: pointer; }
+  .fw-sheet h2 { font-size: 15px; font-weight: 600; color: var(--fg-strong); }
+  .fw-sheet h3 { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+  .fw-sheet h3 span { font-size: 11px; font-weight: 400; color: var(--muted); }
+  .fw-lede, .fw-src, .fw-foot { color: var(--muted); line-height: 1.5; }
+  .fw-lede { margin: 4px 24px 14px 0; }
+  .fw-src { margin: 2px 0 8px; font-size: 11px; }
+  .fw-foot { margin-top: 16px; font-size: 11px; }
+  .fw-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; padding: 8px 10px; background: var(--bg); border-radius: 8px; color: var(--fg-2); }
+  .fw-rule { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .fw-sheet table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .fw-sheet th, .fw-sheet td { padding: 5px 8px 5px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--hover); }
+  .fw-sheet th { font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); }
+  .fw-sheet .rule-badge { cursor: default; }
+  .fw-sheet .relpill { margin: 0 4px 4px 0; white-space: nowrap; }
+  .fw-sheet .relpill.ca { background: var(--tint); border-color: var(--border-2); color: var(--accent-fg); }
+  .fw-none { color: var(--muted); }
+
   /* ── Toolbars ── */
   .toolbar {
     margin: 10px 20px 0; padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
@@ -372,6 +394,10 @@
     <div id="header-title"></div>
     <span id="build"></span>
     <span id="node-count" hidden></span>
+    <div id="gear-wrap">
+      <button id="gear-btn" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;margin:auto"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <div id="gear-menu"><button class="gear-opt" id="fw-open" type="button">Show My Inheritance Framework</button></div>
+    </div>
   </div>
   <nav id="stepper" class="stepper" aria-label="Progress"></nav>
 </div>
@@ -461,6 +487,7 @@
 </footer>
 
 
+<div id="fw-back"><div class="fw-sheet" role="dialog" aria-label="My Inheritance Framework"><button class="fw-x" id="fw-close" type="button" aria-label="Close">&times;</button><div id="fw-body"></div></div></div>
 <script>
 /* ═══ DATA ════════════════════════════════════════════════════════════════
    One data layer for every step. Tool calls, as in the acct-audit-rule-engagement-tree skill and the tree page:
@@ -2322,7 +2349,69 @@ function advance() {
     .then(function () { btn.disabled = false; });
 }
 
+/* ═══ INHERITANCE FRAMEWORK ═══════════════════════════════════════════════
+   The embedded config, laid out to read: for each rule, which relationships give which result, and which service
+   lines are exempt. Read only.
+   ═══════════════════════════════════════════════════════════════════ */
+function exemptText(v) { /* a value becomes its label; a trailing * becomes "All <group> service lines" */
+  if (v.slice(-1) !== "*") return serviceLabel(v) + (serviceLabel(v) === v ? "" : " (" + v + ")");
+  var m = CONFIG.serviceLines.filter(function (x) { return x.value.indexOf(v.slice(0, -1)) === 0; })[0];
+  return "All " + (m ? m.label.split(" - ")[0] : v.slice(0, -1)) + " service lines";
+}
+function showFramework() {
+  var h = $("fw-body"), key = el("div", "fw-key");
+  h.innerHTML = "";
+  h.appendChild(el("h2", null, "My Inheritance Framework"));
+  h.appendChild(el("div", "fw-lede", "How each rule treats an entity, based on its relationship to an audit client. Read only: this is set outside the wizard."));
+  key.appendChild(document.createTextNode("Strictest first:"));
+  CONFIG.treatments.forEach(function (t, i) {
+    if (i) key.appendChild(document.createTextNode("then"));
+    key.appendChild(el("span", "rule-badge " + t.value, t.label));
+  });
+  key.appendChild(el("div", null, "Exempt applies only to the engagement's service line and always ranks lowest."));
+  key.lastChild.style.flexBasis = "100%";
+  h.appendChild(key);
+  CONFIG.rules.forEach(function (r) {
+    var box = el("div", "fw-rule"), t = el("h3", null, r.label), tb = el("table"), hd = el("tr");
+    t.appendChild(el("span", null, r.framework));
+    box.appendChild(t);
+    box.appendChild(el("div", "fw-src", r.source));
+    ["Result", "For these relationships", "Exempt service lines"].forEach(function (x, i) {
+      var th = el("th", null, x);
+      if (i < 2) th.style.width = i ? "46%" : "120px";
+      hd.appendChild(th);
+    });
+    tb.appendChild(hd);
+    r.treatments.forEach(function (e) {
+      if (!e.inheritingRelationships.length) return;
+      var tr = el("tr"), a = el("td"), b = el("td"), c = el("td");
+      var ex = (e.exemptServiceLines || []).filter(function (v, i, all) { /* a value a pattern already covers is not repeated */
+        return v.slice(-1) === "*" || !all.some(function (p) { return p.slice(-1) === "*" && v.indexOf(p.slice(0, -1)) === 0; });
+      });
+      a.appendChild(el("span", "rule-badge " + e.value, LEVEL_LABELS[e.value]));
+      e.inheritingRelationships.forEach(function (v) { b.appendChild(el("span", "relpill" + (REL_LABEL[v].indexOf(AFF_PREFIX) === 0 ? " ca" : ""), REL_LABEL[v])); });
+      c.textContent = ex.length ? ex.map(exemptText).join("; ") : "None";
+      if (!ex.length) c.className = "fw-none";
+      tr.appendChild(a);
+      tr.appendChild(b);
+      tr.appendChild(c);
+      tb.appendChild(tr);
+    });
+    box.appendChild(tb);
+    h.appendChild(box);
+  });
+  h.appendChild(el("div", "fw-foot", "A relationship that no row lists is out of scope for that rule. Other entities in the tree have no service line, so nothing is exempt for them."));
+  $("fw-back").classList.add("open");
+}
+
 /* ═══ WIRING ══════════════════════════════════════════════════════════════ */
+$("gear-btn").addEventListener("click", function (e) {
+  e.stopPropagation();
+  this.setAttribute("aria-expanded", $("gear-menu").classList.toggle("open"));
+});
+$("fw-open").addEventListener("click", showFramework);
+$("fw-close").addEventListener("click", function () { $("fw-back").classList.remove("open"); });
+$("fw-back").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("open"); });
 ["start-service", "party-service"].forEach(function (id) { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
   var sel = $(id), groups = {}, count = {};
   CONFIG.serviceLines.forEach(function (s) { count[s.label] = (count[s.label] || 0) + 1; });
@@ -2344,11 +2433,13 @@ $("wiz-next").addEventListener("click", advance);
 $("wiz-back").addEventListener("click", function () { if (step > 0) show(step - 1); });
 
 document.addEventListener("click", function (e) {
+  $("gear-menu").classList.remove("open");
+  $("gear-btn").setAttribute("aria-expanded", "false");
   if (!e.target.closest(".dd")) closeDropdowns();
   if (!e.target.closest("#why-pop, .rule-badge")) closeWhy();
 });
 document.addEventListener("keydown", function (e) {
-  if (e.key === "Escape") { closeDropdowns(); closeWhy(); }
+  if (e.key === "Escape") { closeDropdowns(); closeWhy(); $("fw-back").classList.remove("open"); }
 });
 window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
 window.addEventListener("resize", closeWhy);
