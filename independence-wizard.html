@@ -1255,7 +1255,7 @@ function condense(roots, pairs) {
       gone.forEach(function (id) { var l = evalNode(id, pairs).level; if (c[l] != null) c[l]++; });
       if (c.restricted) parts.push(c.restricted + " restricted");
       if (c.materiality) parts.push(c.materiality + " materiality check");
-      out.push({ id: "\u0000" + parentKey, name: gone.size + " other " + (gone.size === 1 ? "subsidiary" : "subsidiaries") + (parts.length ? " (" + parts.join(", ") + ")" : ""), key: parentKey + "/s", sum: true, children: [] });
+      out.unshift({ id: "\u0000" + parentKey, name: gone.size + " other " + (gone.size === 1 ? "subsidiary" : "subsidiaries") + (parts.length ? " (" + parts.join(", ") + ")" : ""), key: parentKey + "/s", sum: true, children: [] });
     }
     return out;
   }
