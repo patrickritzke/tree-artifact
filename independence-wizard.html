@@ -347,14 +347,12 @@
   #find-foot { font-size: 10.5px; color: var(--muted); line-height: 1.5; }
 
   /* ── Assessment page ── */
-  .card-page.wide { max-width: 1240px; margin-top: 40px; }
-  .res-cols { display: flex; flex-direction: row-reverse; gap: 24px; align-items: flex-start; } /* the assessment comes first in the page, the animation sits to its left */
-  .res-left { flex: 0 0 380px; min-width: 0; }
-  .res-right { flex: 1; min-width: 0; }
+  .card-page.wide { max-width: 1000px; margin-top: 40px; }
+  .res-cols { display: flex; flex-direction: column; gap: 18px; } /* the assessment on top, the animation below */
+  .res-left, .res-right { min-width: 0; }
   .chart-wrap { position: relative; }
   .chart-wrap > .btn { position: absolute; top: 8px; right: 8px; z-index: 6; }
   .res-left .verdict { margin-bottom: 0; }
-  @media (max-width: 860px) { .res-cols { flex-direction: column; } .res-left { flex: none; width: 100%; } .res-right { width: 100%; } }
   .verdict { border: 1px solid var(--border); border-left-width: 5px; border-radius: 8px; padding: 14px 18px; background: var(--surface); margin-bottom: 20px; }
   .verdict-head { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
   .verdict-text { font-size: 13px; color: var(--fg-2); line-height: 1.5; }
