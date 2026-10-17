@@ -1975,6 +1975,14 @@ function buildAssessment() {
   if (off.length) out.notes.push("Switched off and not applied: " + off.map(function (r) { return nameOfNode(r.client); }).join(", ") + ".");
   var none = state.auditRows.filter(function (r) { return r.client && !r.rule; });
   if (none.length) out.notes.push("No rule could be determined for " + none.map(function (r) { return nameOfNode(r.client); }).join(", ") + ", so it was not applied.");
+  /* How each active rule read each relationship, including the service line, so a result can be checked */
+  pairs.forEach(function (p) {
+    var parts = (p.rels.get(t.id) || []).map(function (r) {
+      var e = p.rule.by[REL_VALUE[r]];
+      return r + " = " + (e ? (exemptFor(e.ex, state.serviceLine) ? "exempt" : e.t) + (e.ex.length ? " (exempt list: " + e.ex.join(", ") + ")" : "") : "not covered");
+    });
+    out.notes.push(p.rule.label + " from " + p.client.name + ": " + (parts.join("; ") || "no relationship") + ". Service line: " + (state.serviceLine || "none") + ".");
+  });
   out.notes.push("This assessment applies the audit rules to corporate relationships only. It does not consider the specific services requested.");
   return out;
 }
