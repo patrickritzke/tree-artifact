@@ -654,7 +654,7 @@ var CONFIG = {
   rules: [
     { "value": "SEC", "label": "SEC", "framework": "SEC/PCAOB", "source": "17 CFR 210.2-01(f)(4)",
       "treatments": [
-      {"value": "restricted", "exemptServiceLines": ["TAX*"], "inheritingRelationships": ["indirectSubsidiary"]},
+      {"value": "restricted", "exemptServiceLines": ["TAX*", "TAX-110"], "inheritingRelationships": ["indirectSubsidiary"]},
       {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
       {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["immediateParent", "sibling", "caImmediateSubsidiary"]}
       ] },
