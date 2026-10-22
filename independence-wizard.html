@@ -480,7 +480,7 @@
     </button>
     <div class="tb-body" id="body-audit">
       <div id="audit-rows"></div>
-      <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit client</button></div>
+      <div class="audit-foot"><button class="btn" id="add-audit" type="button">+ Add another audit relationship</button></div>
     </div>
   </div>
 
@@ -501,8 +501,8 @@
       <h2>Corporate Tree (50%)</h2>
       <span class="eng-key" hidden>
         <span><span data-eng="target"></span>Target company</span>
-        <span><span data-eng="audit"></span>Audit client</span>
-        <span><span data-eng="non"></span>Non-audit client</span>
+        <span><span data-eng="audit"></span>Audit relationship</span>
+        <span><span data-eng="non"></span>Non-audit relationship</span>
       </span>
       <span class="count" id="tree-count"></span>
     </div>
@@ -997,7 +997,7 @@ var ENG_PATHS = {
         "m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4",
         "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8"]
 };
-var ENG_LABEL = { audit: "Audit client", non: "Non-audit client" };
+var ENG_LABEL = { audit: "Audit relationship", non: "Non-audit relationship" };
 
 function engIcon(kind) {
   var ns = "http://www.w3.org/2000/svg";
@@ -1224,7 +1224,7 @@ function extraColumns(pairs) {
         var m = marks.get(n.id);
         if (!m) return;
         var b = ruleBadge(m.node || n, m.res);
-        if (m.inherited) { b.textContent = "Inherited from"; b.title = "The audit client behind the strictest treatment"; }
+        if (m.inherited) { b.textContent = "Inherited from"; b.title = "The audit relationship behind the strictest treatment"; }
         td.appendChild(b);
         if (!m.inherited && m.res.level === "exempt") td.appendChild(exemptBadge());
         return;
@@ -1350,8 +1350,8 @@ function closeWhy() {
    row becomes one summary row: how many other subsidiaries, and how many of them are restricted or need a materiality check. */
 function condense(roots, pairs) {
   var keep = new Set([state.target.id]);
-  everyNode().forEach(function (n) { var e = state.engage && state.engage.get(n.id); if (e && (e.audit || e.nonAudit)) keep.add(n.id); });
-  state.auditRows.forEach(function (r) { if (r.client && r.rule && r.on) keep.add(r.client); }); /* a client chosen by hand counts as an audit client */
+  everyNode().forEach(function (n) { var e = state.engage && state.engage.get(n.id); if (e && e.nonAudit) keep.add(n.id); });
+  state.auditRows.forEach(function (r) { if (r.client && r.on) keep.add(r.client); }); /* the audit relationships are the rows that are on: unchecking one drops it here, adding one adds it */
   var has = function (p) { return keep.has(p.id) || p.children.some(has); };
   function walk(list, parentKey) {
     var out = [], gone = new Set();
@@ -1594,7 +1594,7 @@ function renderAll() {
   if (cond && !state.expanded.cond) { /* the first time, open every kept row so all audit and non-audit entities show */
     state.expanded.cond = 1;
     [roots, siRoots].forEach(function (rs) {
-      (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.tree.add(p.key); open(p.children); }); })(rs);
+      (function open(l) { l.forEach(function (p) { if (p.children.some(function (c) { return !c.sum; })) state.expanded.tree.add(p.key); open(p.children); }); })(rs); /* a row with only "hidden" lines below it stays closed */
     });
   }
   var gridOpt = {
@@ -1630,8 +1630,8 @@ function renderRuleBar() {
     var on = document.createElement("input");
     on.type = "checkbox";
     on.checked = row.on;
-    on.title = "Apply this audit client's rule";
-    on.setAttribute("aria-label", "Apply this audit client's rule");
+    on.title = "Apply this audit relationship's rule";
+    on.setAttribute("aria-label", "Apply this audit relationship's rule");
     on.addEventListener("change", function () {
       row.on = on.checked;
       state.rowsTouched = true;
@@ -1664,8 +1664,8 @@ function renderRuleBar() {
       rm.type = "button";
       rm.className = "icon-btn";
       rm.textContent = "\u00D7";
-      rm.title = "Remove this audit client";
-      rm.setAttribute("aria-label", "Remove this audit client");
+      rm.title = "Remove this audit relationship";
+      rm.setAttribute("aria-label", "Remove this audit relationship");
       rm.addEventListener("click", function () {
         state.auditRows.splice(i, 1);
         state.rowsTouched = true;
@@ -1681,7 +1681,7 @@ function renderRuleBar() {
   if (!state.data) { sum.textContent = "Load a target company first."; return; }
   if (!pairs.length) {
     var allOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
-    sum.textContent = allOff ? "All audit clients are switched off." : "Select an audit client and a rule to mark restricted and materiality-check entities.";
+    sum.textContent = allOff ? "All audit relationships are switched off." : "Select an audit relationship and a rule to mark restricted and materiality-check entities.";
     return;
   }
   var seen = new Set(), c = { restricted: 0, materiality: 0 };
@@ -1722,7 +1722,7 @@ function clientDropdown(row) {
   }
   var nm = document.createElement("span");
   nm.className = "dd-name" + (sel ? "" : " placeholder");
-  nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit client\u2026";
+  nm.textContent = sel ? sel.name + " (" + sel.id + ")" : "Select audit relationship\u2026";
   btn.appendChild(nm);
   var caret = document.createElement("span");
   caret.className = "dd-caret";
@@ -1859,8 +1859,8 @@ function engLead(td, n, label, hideAudit, hover, kind, force) { /* kind limits i
 /* Step 3: the rule each audit client is running (it follows the toolbar). Hover explains it, or says it was changed by hand. */
 function auditRuleCell(n, td) {
   var auto = state.engage && state.engage.get(n.id);
-  var row = state.auditRows.filter(function (r) { return r.client === n.id && r.rule; })[0];
-  engLead(td, n, row ? ruleLabel(row.rule) : null, row && !row.on, function (pill) {
+  var row = state.auditRows.filter(function (r) { return r.client === n.id; })[0];
+  engLead(td, n, row && row.rule ? ruleLabel(row.rule) : null, !(row && row.on), function (pill) {
     if (auto && auto.apply === row.rule && state.engInfo && state.engInfo.get(n.id)) { showInfo(pill, state.engInfo.get(n.id)); return; }
     closeWhy();
     var pop = el("div");
@@ -2209,7 +2209,7 @@ function findEngagements() {
       byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
 
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
-      if (!byParty.size) notes.push("No engagements were found for this corporate tree. Choose the audit clients and rules on the next steps.");
+      if (!byParty.size) notes.push("No engagements were found for this corporate tree. Choose the audit relationships and rules on the next steps.");
       if (state.unmatched && state.unmatched.length) notes.push("Engagements for parties that match nothing in this tree or its close affiliates were not applied: " + state.unmatched.join(", ") + ".");
       var noNote = [], noCountry = [];
       info.forEach(function (v, id) {
@@ -2255,14 +2255,14 @@ function buildAssessment() {
   var switchedOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
   if (!clients && switchedOff) {
     out.headline = "No audit rules applied";
-    out.summary = "Every audit client is switched off, so no audit rules were applied to this engagement.";
+    out.summary = "Every audit relationship is switched off, so no audit rules were applied to this engagement.";
   } else if (!clients) {
     out.headline = "No audit rules to apply";
-    out.summary = "No audit client with an applicable rule was found in this corporate family, so none of the audit rules restrict this engagement.";
+    out.summary = "No audit relationship with an applicable rule was found in this corporate family, so none of the audit rules restrict this engagement.";
   } else if (res.level === "restricted") {
     out.headline = "Restricted";
     out.summary = "Under the rules applied, this non-audit engagement is restricted. " + t.name + " has a restricted relationship to " +
-      res.items.filter(function (i) { return i.level === "restricted"; }).length + " of the " + clients + " audit client" + s + " considered.";
+      res.items.filter(function (i) { return i.level === "restricted"; }).length + " of the " + clients + " audit relationship" + s + " considered.";
   } else if (res.level === "exempt") {
     out.headline = "Exempt";
     out.summary = "Under the rules applied, this service line is exempt, so no restriction or materiality check arises.";
@@ -2271,12 +2271,12 @@ function buildAssessment() {
     out.summary = "Under the rules applied, no restriction arises, but this non-audit engagement needs a materiality check before it can be accepted.";
   } else {
     out.headline = "No restriction identified";
-    out.summary = "Under the rules applied, " + t.name + " has no restricted or materiality-check relationship to the " + clients + " audit client" + s + " considered.";
+    out.summary = "Under the rules applied, " + t.name + " has no restricted or materiality-check relationship to the " + clients + " audit relationship" + s + " considered.";
   }
 
   var self = state.engInfo && state.engInfo.get(t.id);
   if (self && self.audit) {
-    out.notes.push(t.name + " is itself an audit client" + (self.apply ? " (rule applied: " + (RULES.filter(function (r) { return r.key === FRAMEWORK_RULE[self.apply]; })[0] || {}).label + ")" : "") +
+    out.notes.push(t.name + " has an audit relationship itself" + (self.apply ? " (rule applied: " + (RULES.filter(function (r) { return r.key === FRAMEWORK_RULE[self.apply]; })[0] || {}).label + ")" : "") +
       ". The rules here cover its relatives; its own position is not assessed.");
   }
   var off = state.auditRows.filter(function (r) { return r.client && r.rule && !r.on; });
@@ -2363,7 +2363,7 @@ function reasonRow(it) {
   txt.appendChild(el("b", null, state.target.name));
   txt.appendChild(document.createTextNode(" is " + (cfg ? cfg.phrase : "related to") + " "));
   txt.appendChild(el("b", null, it.client.name));
-  txt.appendChild(document.createTextNode(", an audit client. " + it.rule.label +
+  txt.appendChild(document.createTextNode(", which has an audit relationship. " + it.rule.label +
     (it.level === "exempt" ? " would treat that as " + how + ", but the " + svc + " service line is exempt." : " treats that as " + how + ".")));
   row.appendChild(txt);
   return row;
@@ -2727,7 +2727,7 @@ function showFramework() {
   x.addEventListener("click", function () { $("fw-back").classList.remove("open"); });
   head.appendChild(x);
   h.appendChild(head);
-  h.appendChild(el("div", "eng-key", "How each rule treats an entity, based on its relationship to an audit client. Read only: this is set outside the wizard."));
+  h.appendChild(el("div", "eng-key", "How each rule treats an entity, based on its relationship to an entity with an audit relationship. Read only: this is set outside the wizard."));
   key.appendChild(document.createTextNode("Strictest first:"));
   CONFIG.treatments.forEach(function (t, i) {
     if (i) key.appendChild(document.createTextNode("then"));
