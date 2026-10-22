@@ -167,7 +167,6 @@
   table.grid tbody td { height: 24px; }
   .name-inner { min-height: 24px; }
   .name-inner .pin { flex: none; margin: 0 4px 0 2px; }
-  .held { margin-left: 10px; font-size: 11px; color: var(--muted); font-style: italic; }
   .si-tag { font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); }
   /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
   .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
@@ -1069,7 +1068,7 @@ var state = {
   data: null,
   target: null,
   owners: [],
-  expanded: { tree: new Set() }
+  expanded: { tree: new Set(), si: new Set() }
 };
 
 var $ = function (id) { return document.getElementById(id); };
@@ -1357,7 +1356,7 @@ function condense(roots, pairs) {
     var out = [], gone = new Set();
     function drop(l) { l.forEach(function (p) { if (!keep.has(p.id)) gone.add(p.id); drop(p.children); }); }
     list.forEach(function (p) {
-      if (has(p)) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, held: p.held, children: walk(p.children, p.key) });
+      if (has(p)) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: walk(p.children, p.key) });
       else drop([p]);
     });
     if (gone.size && parentKey !== null) {
@@ -1365,7 +1364,7 @@ function condense(roots, pairs) {
     }
     return out;
   }
-  return roots.filter(has).map(function (r) { return { id: r.id, name: r.name, key: r.key, hasTarget: r.hasTarget, held: r.held, children: walk(r.children, r.key) }; });
+  return roots.filter(has).map(function (r) { return { id: r.id, name: r.name, key: r.key, hasTarget: r.hasTarget, children: walk(r.children, r.key) }; });
 }
 
 /* The one grid for the engagement step and the independence step. gridKey names the expand state; roots are the
@@ -1513,7 +1512,6 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     idSp.className = "node-id";
     idSp.textContent = "(" + pl.id + ")";
     inner.appendChild(idSp);
-    if (pl.held) inner.appendChild(el("span", "held", "Held by " + pl.held));
     tr.appendChild(nameTd);
 
 
@@ -1548,20 +1546,29 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   return uniq.size;
 }
 
-/* Significant influence companies (close affiliates only) are drawn in their own grid, each as a top row noting who holds it.
-   One that also has non-SI entities below it stays where it is, since it holds the tree together. */
+/* Significant influence companies (close affiliates only) get their own grid. The tree grid leaves them out. The SI grid keeps the
+   hierarchy intact: every SI company is shown under its full chain of parents, the target included, and nothing else from the tree.
+   An SI company that also has non-SI entities below it stays in the tree, since it holds the tree together. */
 function splitSi(list, byId) {
-  var si = [];
   function isSi(p) { return siOnly(byId.get(p.id) || p) && p.children.every(isSi); }
-  function walk(l, parent) {
+  function main(l, parent) {
     var out = [];
     l.forEach(function (p) {
-      if (parent && isSi(p)) { si.push({ id: p.id, name: p.name, key: p.key, hasTarget: false, held: parent.name, children: p.children }); return; }
-      out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: walk(p.children, p) });
+      if (parent && isSi(p)) return;
+      out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: main(p.children, p) });
     });
     return out;
   }
-  return { main: walk(list, null), si: si };
+  function paths(l) {
+    var out = [];
+    l.forEach(function (p) {
+      if (isSi(p)) { out.push(p); return; }
+      var kids = paths(p.children);
+      if (kids.length) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: kids });
+    });
+    return out;
+  }
+  return { main: main(list, null), si: paths(list) };
 }
 
 /* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
@@ -1574,28 +1581,28 @@ function renderAll() {
   var byId = new Map(), pairs = auditPairs();
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
   var cond = state.tree !== "full", split = splitSi(state.trees, byId);
-  var roots = cond ? condense(split.main, pairs) : split.main, siRoots = cond ? condense(split.si, pairs) : split.si;
+  var roots = cond ? condense(split.main, pairs) : split.main, siRoots = split.si;
   var uniq = function (l) { var s = new Set(); (function ids(x) { x.forEach(function (p) { if (!p.sum) s.add(p.id); ids(p.children); }); })(l); return s.size; };
-  var treeAll = uniq(split.main), siAll = uniq(split.si);
-  if (cond) { /* whole significant influence groups with nothing of interest in them fold into one line */
-    var kept = new Set(siRoots.map(function (r) { return r.key; })), gone = split.si.filter(function (r) { return !kept.has(r.key); });
-    if (gone.length) siRoots.push({ id: "\u0000si", name: uniq(gone) + (uniq(gone) === 1 ? " entity" : " entities") + " hidden", key: "si/hidden", sum: true, children: [] });
-  }
+  var treeAll = uniq(split.main), siSeen = new Set();
+  (function mark(l) { l.forEach(function (p) { if (siOnly(byId.get(p.id) || p)) siSeen.add(p.id); mark(p.children); }); })(siRoots);
+  var siAll = siSeen.size; /* the significant influence companies themselves, not the parents shown above them */
   if (cond) { /* open the way to an audit client picked by hand, once, so it is not hidden under a collapsed parent */
     var opened = state.expanded.manual || (state.expanded.manual = new Set());
     state.auditRows.forEach(function (r) {
       if (!r.client || !r.rule || !r.on || opened.has(r.client)) return;
       opened.add(r.client);
-      [roots, siRoots].forEach(function (rs) {
-        (function open(l) { return l.some(function (p) { var hit = p.id === r.client || open(p.children); if (hit && p.id !== r.client) state.expanded.tree.add(p.key); return hit; }); })(rs);
+      [[roots, state.expanded.tree], [siRoots, state.expanded.si]].forEach(function (g) {
+        (function open(l) { return l.some(function (p) { var hit = p.id === r.client || open(p.children); if (hit && p.id !== r.client) g[1].add(p.key); return hit; }); })(g[0]);
       });
     });
   }
   if (cond && !state.expanded.cond) { /* the first time, open every kept row so all audit and non-audit entities show */
     state.expanded.cond = 1;
-    [roots, siRoots].forEach(function (rs) {
-      (function open(l) { l.forEach(function (p) { if (p.children.some(function (c) { return !c.sum; })) state.expanded.tree.add(p.key); open(p.children); }); })(rs); /* a row with only "hidden" lines below it stays closed */
-    });
+    (function open(l) { l.forEach(function (p) { if (p.children.some(function (c) { return !c.sum; })) state.expanded.tree.add(p.key); open(p.children); }); })(roots); /* a row with only "hidden" lines below it stays closed */
+  }
+  if (siAll && !state.expanded.siOpen) { /* the significant influence grid opens in full, so each company shows under its parents */
+    state.expanded.siOpen = 1;
+    (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.si.add(p.key); open(p.children); }); })(siRoots);
   }
   var gridOpt = {
     pairs: pairs, cols: extraColumns(pairs), redraw: renderAll, lead: auditRuleCell,
@@ -1605,11 +1612,11 @@ function renderAll() {
   $("tree-count").textContent = cond ? shown + " of " + treeAll + " entities" : shown + " entities";
   var siShown = 0;
   if (siAll) {
-    siShown = renderGrid("tree", "si-grid", "si-count", siRoots, byId, gridOpt);
-    $("si-count").textContent = cond ? siShown + " of " + siAll + " entities" : siShown + " entities";
+    siShown = renderGrid("si", "si-grid", "si-count", siRoots, byId, gridOpt);
+    $("si-count").textContent = siAll + (siAll === 1 ? " entity" : " entities");
   }
   $("si-section").hidden = !siAll;
-  $("node-count").textContent = cond ? (shown + siShown) + " of " + (treeAll + siAll) + " entities" : (shown + siShown) + " entities";
+  $("node-count").textContent = cond ? (shown + siAll) + " of " + (treeAll + siAll) + " entities" : (shown + siAll) + " entities";
   document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.tree); });
   document.querySelectorAll("#inherit-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.inherit); });
   $("display-summary").textContent = (state.tree === "full" ? "Full tree" : "Filtered tree") + " \u00B7 " + (state.inherit === "strictest" ? "Strictest rule inheritance" : "All rule inheritance");
@@ -2005,7 +2012,7 @@ function setFamily(data) {
   state.rowsTouched = false;
   state.assessment = null;
   state.auditRows = [{ client: null, rule: null, on: true }];
-  state.expanded = { tree: new Set() };
+  state.expanded = { tree: new Set(), si: new Set() };
 
   /* Default expansion: every placement on a path down to the target, in both grids */
   (function open(list) {
