@@ -1263,6 +1263,7 @@ function closeWhy() {
 function condense(roots, pairs) {
   var keep = new Set([state.target.id]);
   everyNode().forEach(function (n) { var e = state.engage && state.engage.get(n.id); if (e && (e.audit || e.nonAudit)) keep.add(n.id); });
+  state.auditRows.forEach(function (r) { if (r.client && r.rule && r.on) keep.add(r.client); }); /* a client chosen by hand counts as an audit client */
   var has = function (p) { return keep.has(p.id) || p.children.some(has); };
   function walk(list, parentKey) {
     var out = [], gone = new Set();
@@ -1474,6 +1475,14 @@ function renderAll() {
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
   var cond = state.view !== "full", roots = cond ? condense(state.trees, pairs) : state.trees, all = new Set();
   (function ids(l) { l.forEach(function (p) { all.add(p.id); ids(p.children); }); })(state.trees);
+  if (cond) { /* open the way to an audit client picked by hand, once, so it is not hidden under a collapsed parent */
+    var opened = state.expanded.manual || (state.expanded.manual = new Set());
+    state.auditRows.forEach(function (r) {
+      if (!r.client || !r.rule || !r.on || opened.has(r.client)) return;
+      opened.add(r.client);
+      (function open(l) { return l.some(function (p) { var hit = p.id === r.client || open(p.children); if (hit && p.id !== r.client) state.expanded.tree.add(p.key); return hit; }); })(roots);
+    });
+  }
   if (cond && !state.expanded.cond) { /* the first time, open every kept row so all audit and non-audit entities show */
     state.expanded.cond = 1;
     (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.tree.add(p.key); open(p.children); }); })(roots);
@@ -1703,8 +1712,9 @@ function ruleLabel(key) {
 
 /* The column left of the name: non-audit ring, then the audit shield. The shield is a pill carrying the audit client's rule
    (label) when it has one; hover(pill) explains it. Aligned right so it sits against the name. */
-function engLead(td, n, label, hideAudit, hover, kind) { /* kind limits it to "audit" or "non"; unset shows both */
+function engLead(td, n, label, hideAudit, hover, kind, force) { /* kind limits it to "audit" or "non"; unset shows both; force treats the entity as an audit client */
   var e = state.engage && state.engage.get(n.id);
+  if (force) e = { audit: true, nonAudit: !!(e && e.nonAudit) };
   if (!e || !(e.audit || e.nonAudit)) return;
   var box = el("span", "lead");
   if (e.nonAudit && kind !== "audit") box.appendChild(engIcon("non"));
@@ -1739,7 +1749,7 @@ function auditRuleCell(n, td) {
     pop.appendChild(el("div", null, (auto && auto.apply ? "Manually changed to " : "Manually set to ") + ruleLabel(row.rule)));
     placePop(pop, pill);
     state.whyFor = "info";
-  });
+  }, undefined, !!(row && row.on)); /* an entity picked here is treated as an audit client under that rule, found engagement or not */
 }
 
 /* ═══ HOVER INFORMATION ═══════════════════════════════════════════════════ */
