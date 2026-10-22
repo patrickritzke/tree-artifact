@@ -1221,14 +1221,18 @@ function extraColumns(pairs) {
   }];
 }
 
+/* Row shading follows the treatment inherited, whether or not the service line is exempt */
+function shadeOf(res) { return res.level === "exempt" ? res.base : res.level; }
+
 /* Strictest view: only the target and the audit client(s) that set its strictest treatment are marked. Null in the other views. */
 function viewMarks(pairs) {
   if (state.inherit !== "strictest" || !pairs || !pairs.length) return null;
   var t = state.target, res = evalNode(t.id, pairs, state.serviceLine), marks = new Map();
   if (!res.level) return marks;
-  marks.set(t.id, { level: res.level, res: res });
+  var shade = res.level === "exempt" ? res.base : res.level; /* rows are shaded by the treatment, exempt or not */
+  marks.set(t.id, { level: shade, res: res });
   var top = res.items[0]; /* one source only: items are sorted strictest first, then highest up the tree */
-  if (top && top.client.id !== t.id) marks.set(top.client.id, { level: res.level, res: res, node: t, inherited: true });
+  if (top && top.client.id !== t.id) marks.set(top.client.id, { level: shade, res: res, node: t, inherited: true });
   return marks;
 }
 
@@ -1444,7 +1448,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
 
     var tr = document.createElement("tr");
     if (pairs.length) {
-      var lvl = marks ? (marks.get(node.id) || {}).level : evalNode(node.id, pairs, node.isTarget ? state.serviceLine : null).level; /* only the target has a service line */
+      var lvl = marks ? (marks.get(node.id) || {}).level : shadeOf(evalNode(node.id, pairs, node.isTarget ? state.serviceLine : null)); /* only the target has a service line */
       if (lvl) tr.className = lvl;
     }
 
@@ -2714,15 +2718,10 @@ $("gear-btn").addEventListener("click", function (e) {
 });
 $("fw-open").addEventListener("click", showFramework);
 $("fw-back").addEventListener("click", function (e) { if (e.target === this) this.classList.remove("open"); });
-["start-service"].forEach(function (id) { /* service line choices, grouped by the label's first word; a value is added where labels repeat */
-  var sel = $(id), groups = {}, count = {};
-  CONFIG.serviceLines.forEach(function (s) { count[s.label] = (count[s.label] || 0) + 1; });
+["start-service"].forEach(function (id) { /* service line choices: the full label, section included, then the value */
+  var sel = $(id);
   sel.appendChild(new Option("Not chosen", ""));
-  CONFIG.serviceLines.forEach(function (s) {
-    var g = s.label.split(" - ")[0], txt = s.label.slice(g.length + 3);
-    if (!groups[g]) { groups[g] = document.createElement("optgroup"); groups[g].label = g; sel.appendChild(groups[g]); }
-    groups[g].appendChild(new Option(count[s.label] > 1 ? txt + " (" + s.value + ")" : txt, s.value));
-  });
+  CONFIG.serviceLines.forEach(function (s) { sel.appendChild(new Option(s.label + " (" + s.value + ")", s.value)); });
 });
 $("inherit-view").addEventListener("click", function (e) {
   var v = e.target.getAttribute("data-v");
