@@ -134,6 +134,7 @@
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
   .rule-badge.exempt { color: var(--ok-fg); border: 1px solid var(--ok-fg); }
+  .rule-badge.other { color: var(--muted); border: 1px solid var(--faint); margin-left: 4px; }
 
   /* Collapsible toolbar sections: shaded header strip + body */
   .toolbar.tb { display: block; padding: 0; margin: 8px 20px 0; background: var(--bar-bg); border: 1px solid var(--bar-border); border-radius: 8px; }
@@ -1180,7 +1181,9 @@ function extraColumns(pairs) {
         return;
       }
       var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
-      if (res.level) td.appendChild(ruleBadge(n, res));
+      if (!res.level) return;
+      td.appendChild(ruleBadge(n, res));
+      if (res.items.length > 1) td.appendChild(otherBadge(n, res)); /* the secondary results sit behind a grey pill */
     }
   }];
 }
@@ -1203,11 +1206,23 @@ function ruleBadge(node, res) {
   var b = document.createElement("button");
   b.type = "button";
   b.className = "rule-badge " + res.level;
-  b.textContent = LEVEL_LABELS[res.level] + (res.items.length > 1 ? " · " + res.items.length : "");
+  b.textContent = LEVEL_LABELS[res.level]; /* always the one strictest result */
   b.title = "Show where this came from";
   b.setAttribute("aria-haspopup", "dialog");
   b.addEventListener("click", function () {
-    if (state.whyFor === node.id) closeWhy(); else showWhy(b, node, res);
+    if (state.whyFor === node.id) closeWhy(); else showWhy(b, node, res, res.items.slice(0, 1), node.id);
+  });
+  return b;
+}
+
+/* Grey "Other (n)" pill: opens the secondary results behind the strictest one */
+function otherBadge(node, res) {
+  var b = el("button", "rule-badge other", "Other (" + (res.items.length - 1) + ")"), key = node.id + "#other";
+  b.type = "button";
+  b.title = "Show the other results";
+  b.setAttribute("aria-haspopup", "dialog");
+  b.addEventListener("click", function () {
+    if (state.whyFor === key) closeWhy(); else showWhy(b, node, res, res.items.slice(1), key);
   });
   return b;
 }
@@ -1236,7 +1251,7 @@ function resultRow(it) {
   return row;
 }
 
-function showWhy(anchor, node, res) {
+function showWhy(anchor, node, res, items, key) { /* items: the results to list; key: what whyFor remembers so a second click closes it */
   closeWhy();
   var pop = document.createElement("div");
   pop.id = "why-pop";
@@ -1246,21 +1261,14 @@ function showWhy(anchor, node, res) {
   h.textContent = node.name + " (" + node.id + ")";
   pop.appendChild(h);
 
-  res.items.forEach(function (it, i) {
-    if (it.level !== res.level && (!i || res.items[i - 1].level === res.level)) pop.appendChild(el("div", "sec", "Other rules"));
-    pop.appendChild(resultRow(it));
-  });
+  var others = items[0] !== res.items[0];
+  if (others) pop.appendChild(el("div", "sec", "Other results"));
+  items.forEach(function (it) { pop.appendChild(resultRow(it)); });
 
-  if (res.level === "exempt") pop.appendChild(el("div", "why-note", "Service Line is Exempt"));
-  else if (res.items.length > 1) {
-    var note = document.createElement("div");
-    note.className = "why-note";
-    note.textContent = "Strictest result applies: Restricted, then Materiality check, then Exempt.";
-    pop.appendChild(note);
-  }
+  if (!others && res.level === "exempt") pop.appendChild(el("div", "why-note", "Service Line is Exempt"));
 
   placePop(pop, anchor);
-  state.whyFor = node.id;
+  state.whyFor = key;
 }
 
 /* Put a popover just under its anchor (above it when there is no room), kept on screen */
@@ -1295,11 +1303,7 @@ function condense(roots, pairs) {
       else drop([p]);
     });
     if (gone.size && parentKey !== null) {
-      var c = { restricted: 0, materiality: 0 }, parts = [];
-      gone.forEach(function (id) { var l = evalNode(id, pairs).level; if (c[l] != null) c[l]++; });
-      if (c.restricted) parts.push(c.restricted + " restricted");
-      if (c.materiality) parts.push(c.materiality + " materiality check");
-      out.unshift({ id: "\u0000" + parentKey, name: gone.size + " other " + (gone.size === 1 ? "subsidiary" : "subsidiaries") + (parts.length ? " (" + parts.join(", ") + ")" : ""), key: parentKey + "/s", sum: true, children: [] });
+      out.unshift({ id: "\u0000" + parentKey, name: gone.size + (gone.size === 1 ? " subsidiary" : " subsidiaries") + " hidden", key: parentKey + "/s", sum: true, children: [] });
     }
     return out;
   }
