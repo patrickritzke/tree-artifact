@@ -82,6 +82,9 @@
   #fw-sheet th:nth-child(2) { width: 46%; }
   #fw-sheet td:not(.icon-col) { white-space: normal; padding-top: 3px; padding-bottom: 3px; }
   .seg { display: inline-flex; gap: 4px; margin-left: 10px; }
+  .opt-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .opt-label { font-size: 11px; color: var(--muted); width: 110px; flex: none; }
+  .opt-row .seg { margin-left: 0; }
   .sum-row td { color: var(--muted); }
   .sum-row .node-name { font-style: italic; color: var(--muted); }
   .relpill.ca { background: var(--tint); color: var(--accent-fg); }
@@ -469,6 +472,18 @@
     </div>
   </div>
 
+  <div class="toolbar tb" id="bar-display">
+    <button class="tb-head closed" id="head-display" data-sec="display" type="button" aria-expanded="false">
+      <span class="tb-chev">▸</span><span>Display Options</span><span class="summary" id="display-summary"></span>
+    </button>
+    <div class="tb-body" id="body-display" hidden>
+      <div class="opt-row"><span class="opt-label">Tree</span>
+        <span class="seg" id="tree-view"><button class="pill" type="button" data-v="filtered">Filtered tree (relationships only)</button><button class="pill" type="button" data-v="full">Full tree</button></span></div>
+      <div class="opt-row"><span class="opt-label">Rule inheritance</span>
+        <span class="seg" id="inherit-view"><button class="pill" type="button" data-v="strictest">Strictest rule inheritance only</button><button class="pill" type="button" data-v="all">All rule inheritance</button></span></div>
+    </div>
+  </div>
+
   <div class="section">
     <div class="section-head">
       <span class="eng-key" hidden>
@@ -477,7 +492,6 @@
         <span><span data-eng="non"></span>Non-audit client</span>
         <span><span class="si-tag">SI</span>Significant influence only</span>
       </span>
-      <span class="seg" id="tree-view"><button class="pill" type="button" data-v="condensed">Condensed tree</button><button class="pill" type="button" data-v="full">Full tree</button><button class="pill" type="button" data-v="strictest">Strictest treatment</button></span>
       <span class="count" id="tree-count"></span>
     </div>
     <div class="grid-wrap" id="tree-grid"></div>
@@ -1003,7 +1017,8 @@ function siTag() {
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
 
 var state = {
-  view: "condensed", /* the step 3 tree: condensed or full */
+  tree: "filtered", /* the step 3 tree rows: filtered (relationships only) or full */
+  inherit: "strictest", /* the step 3 treatment pills: strictest only, or all */
   serviceLine: null, /* the target's service line, chosen on the first page; every other entity has none */
   mode: "independence", /* the wizard always works in the independence view */
   auditRows: [{ client: null, rule: null, on: true }], /* one audit client + rule per row; on = the row is applied */
@@ -1014,7 +1029,7 @@ var state = {
   profile: null, /* the target's country, listing and industry, read from its Orbis note */
   rulesRun: false, /* the audit rows have been filled from the engagements */
   assessment: null,
-  collapsed: { audit: false }, /* toolbar sections folded away */
+  collapsed: { audit: false, display: true }, /* toolbar sections folded away */
   rowsTouched: false, /* true once the user edits the audit rows, so a late engagement load will not overwrite them */
   loadSeq: 0,
   trees: [],
@@ -1190,7 +1205,7 @@ function extraColumns(pairs) {
 
 /* Strictest view: only the target and the audit client(s) that set its strictest treatment are marked. Null in the other views. */
 function viewMarks(pairs) {
-  if (state.view !== "strictest" || !pairs || !pairs.length) return null;
+  if (state.inherit !== "strictest" || !pairs || !pairs.length) return null;
   var t = state.target, res = evalNode(t.id, pairs, state.serviceLine), marks = new Map();
   if (!res.level) return marks;
   marks.set(t.id, { level: res.level, res: res });
@@ -1499,7 +1514,7 @@ function renderAll() {
   /* One grid: the tree(s) that contain the target, with close-affiliate entities the tree lacks merged in */
   var byId = new Map(), pairs = auditPairs();
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
-  var cond = state.view !== "full", roots = cond ? condense(state.trees, pairs) : state.trees, all = new Set();
+  var cond = state.tree !== "full", roots = cond ? condense(state.trees, pairs) : state.trees, all = new Set();
   (function ids(l) { l.forEach(function (p) { all.add(p.id); ids(p.children); }); })(state.trees);
   if (cond) { /* open the way to an audit client picked by hand, once, so it is not hidden under a collapsed parent */
     var opened = state.expanded.manual || (state.expanded.manual = new Set());
@@ -1518,12 +1533,15 @@ function renderAll() {
     nameCls: function (n) { return n.idParty ? "has-party" : ""; } /* bold = entity has an Intapp party record */
   });
   $("node-count").textContent = $("tree-count").textContent = cond ? shown + " of " + all.size + " entities" : shown + " entities";
-  document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.view); });
+  document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.tree); });
+  document.querySelectorAll("#inherit-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.inherit); });
+  $("display-summary").textContent = (state.tree === "full" ? "Full tree" : "Filtered tree") + " \u00B7 " + (state.inherit === "strictest" ? "Strictest rule inheritance" : "All rule inheritance");
   renderRuleBar();
 }
 
 function renderRuleBar() {
   var bar = $("bar-independence");
+  $("bar-display").hidden = state.mode !== "independence";
   bar.hidden = state.mode !== "independence";
   if (bar.hidden) return;
   var host = $("audit-rows");
@@ -2682,9 +2700,13 @@ $("fw-back").addEventListener("click", function (e) { if (e.target === this) thi
     groups[g].appendChild(new Option(count[s.label] > 1 ? txt + " (" + s.value + ")" : txt, s.value));
   });
 });
+$("inherit-view").addEventListener("click", function (e) {
+  var v = e.target.getAttribute("data-v");
+  if (v) { state.inherit = v; renderAll(); }
+});
 $("tree-view").addEventListener("click", function (e) {
   var v = e.target.getAttribute("data-v");
-  if (v) { state.view = v; renderAll(); }
+  if (v) { state.tree = v; renderAll(); }
 });
 $("start-service").addEventListener("change", function () {
   state.serviceLine = this.value || null;
@@ -2705,7 +2727,7 @@ document.addEventListener("keydown", function (e) {
 window.addEventListener("scroll", closeWhy, true); /* popover is fixed, so it would drift from its badge */
 window.addEventListener("resize", closeWhy);
 function applyCollapse() {
-  ["audit"].forEach(function (k) {
+  ["audit", "display"].forEach(function (k) {
     var c = state.collapsed[k], h = $("head-" + k);
     $("body-" + k).hidden = c;
     h.classList.toggle("closed", c);
