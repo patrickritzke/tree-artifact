@@ -1546,9 +1546,8 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   return uniq.size;
 }
 
-/* Significant influence companies (close affiliates only) get their own grid. The tree grid leaves them out. The SI grid keeps the
-   hierarchy intact: every SI company is shown under its full chain of parents, the target included, and nothing else from the tree.
-   An SI company that also has non-SI entities below it stays in the tree, since it holds the tree together. */
+/* Significant influence companies (close affiliates only) get their own grid. The tree grid leaves them out; an SI company that also
+   has non-SI entities below it stays in the tree, since it holds the tree together. */
 function splitSi(list, byId) {
   function isSi(p) { return siOnly(byId.get(p.id) || p) && p.children.every(isSi); }
   function main(l, parent) {
@@ -1559,16 +1558,40 @@ function splitSi(list, byId) {
     });
     return out;
   }
-  function paths(l) {
+  return main(list, null);
+}
+
+/* The significant influence grid is the close-affiliate hierarchy itself, cut down to the target and the SI-only companies, each shown
+   under its full chain of parents. Anything else (what the tree grid already shows) is left out. */
+function siTree(affTrees, byId, targetId, mainTrees) {
+  var isSi = function (p) { return siOnly(byId.get(p.id) || p); };
+  var any = false;
+  (function scan(l) { l.forEach(function (p) { if (isSi(p)) any = true; scan(p.children); }); })(affTrees);
+  if (!any) return [];
+  function cut(l) {
     var out = [];
     l.forEach(function (p) {
-      if (isSi(p)) { out.push(p); return; }
-      var kids = paths(p.children);
-      if (kids.length) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: kids });
+      var kids = cut(p.children);
+      if (p.id === targetId || isSi(p) || kids.length) out.push({ id: p.id, name: p.name, children: kids });
     });
     return out;
   }
-  return { main: main(list, null), si: paths(list) };
+  /* Each affiliate hierarchy is lifted under its parents in the corporate tree where it appears there, so the chain runs all the way up */
+  var roots = [];
+  function put(list, node) {
+    var at = list.filter(function (x) { return x.id === node.id; })[0];
+    if (!at) { list.push(node); return; }
+    node.children.forEach(function (c) { put(at.children, c); });
+  }
+  cut(affTrees).forEach(function (r) {
+    var chain = null;
+    (function find(l, path) { l.forEach(function (p) { if (chain) return; if (p.id === r.id) chain = path; else find(p.children, path.concat([p])); }); })(mainTrees, []);
+    var node = r;
+    for (var i = (chain ? chain.length : 0) - 1; i >= 0; i--) node = { id: chain[i].id, name: chain[i].name, children: [node] };
+    put(roots, node);
+  });
+  annotate(roots, targetId);
+  return roots;
 }
 
 /* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
@@ -1580,8 +1603,8 @@ function renderAll() {
   /* One grid: the tree(s) that contain the target, with close-affiliate entities the tree lacks merged in */
   var byId = new Map(), pairs = auditPairs();
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
-  var cond = state.tree !== "full", split = splitSi(state.trees, byId);
-  var roots = cond ? condense(split.main, pairs) : split.main, siRoots = split.si;
+  var cond = state.tree !== "full", split = { main: splitSi(state.trees, byId) };
+  var roots = cond ? condense(split.main, pairs) : split.main, siRoots = siTree(state.data.affTrees, byId, state.target.id, state.trees);
   var uniq = function (l) { var s = new Set(); (function ids(x) { x.forEach(function (p) { if (!p.sum) s.add(p.id); ids(p.children); }); })(l); return s.size; };
   var treeAll = uniq(split.main), siSeen = new Set();
   (function mark(l) { l.forEach(function (p) { if (siOnly(byId.get(p.id) || p)) siSeen.add(p.id); mark(p.children); }); })(siRoots);
