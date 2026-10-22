@@ -476,7 +476,7 @@
         <span><span data-eng="non"></span>Non-audit client</span>
         <span><span class="si-tag">SI</span>Significant influence only</span>
       </span>
-      <span class="seg" id="tree-view"><button class="pill" type="button" data-v="condensed">Condensed tree</button><button class="pill" type="button" data-v="full">Full tree</button></span>
+      <span class="seg" id="tree-view"><button class="pill" type="button" data-v="condensed">Condensed tree</button><button class="pill" type="button" data-v="full">Full tree</button><button class="pill" type="button" data-v="strictest">Strictest treatment</button></span>
       <span class="count" id="tree-count"></span>
     </div>
     <div class="grid-wrap" id="tree-grid"></div>
@@ -1167,13 +1167,35 @@ function pinIcon() {
 /* Mode-specific columns: Independence adds the audit rule result (strictest across all client/rule pairs). */
 function extraColumns(pairs) {
   if (!pairs.length) return [];
+  var marks = viewMarks(pairs);
   return [{
     title: "Treatment",
     cell: function (n, td) {
+      if (marks) { /* strictest view: the target's treatment, and "Inherited from" on the audit client(s) behind it */
+        var m = marks.get(n.id);
+        if (!m) return;
+        var b = ruleBadge(m.node || n, m.res);
+        if (m.inherited) { b.textContent = "Inherited from"; b.title = "The audit client behind the strictest treatment"; }
+        td.appendChild(b);
+        return;
+      }
       var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
       if (res.level) td.appendChild(ruleBadge(n, res));
     }
   }];
+}
+
+/* Strictest view: only the target and the audit client(s) that set its strictest treatment are marked. Null in the other views. */
+function viewMarks(pairs) {
+  if (state.view !== "strictest" || !pairs || !pairs.length) return null;
+  var t = state.target, res = evalNode(t.id, pairs, state.serviceLine), marks = new Map();
+  if (!res.level) return marks;
+  marks.set(t.id, { level: res.level, res: res });
+  if (res.level === "exempt") return marks; /* nothing is inherited from an exempt result */
+  res.items.forEach(function (it) {
+    if (it.level === res.level && it.client.id !== t.id) marks.set(it.client.id, { level: res.level, res: res, node: t, inherited: true });
+  });
+  return marks;
 }
 
 /* Clickable badge: opens the popover listing every client/rule pair that flagged this entity */
@@ -1288,7 +1310,7 @@ function condense(roots, pairs) {
    placements to draw. opt: pairs and cols (the extra columns), redraw (repaint after a toggle), nameCls (name style). */
 function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   var metaOf = function (pl) { return byId.get(pl.id) || pl; };
-  var pairs = opt.pairs;
+  var pairs = opt.pairs, marks = viewMarks(pairs);
   var cols = opt.cols;
   var table = document.createElement("table");
   table.className = "grid";
@@ -1381,7 +1403,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
 
     var tr = document.createElement("tr");
     if (pairs.length) {
-      var lvl = evalNode(node.id, pairs, node.isTarget ? state.serviceLine : null).level; /* only the target has a service line */
+      var lvl = marks ? (marks.get(node.id) || {}).level : evalNode(node.id, pairs, node.isTarget ? state.serviceLine : null).level; /* only the target has a service line */
       if (lvl) tr.className = lvl;
     }
 
