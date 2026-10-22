@@ -804,6 +804,18 @@ function auditPairs() {
 /* Result for one entity across every client/rule pair. Each pair is scored on the entity's relationship to
    that pair's client; the strictest result wins (restricted > materiality > out of scope).
    items: one { client, rule, level, rels } per pair that applies, so the badge can show where it came from. */
+/* How far down the tree an entity sits (roots are 0); entities outside the tree rank last. Breaks ties between equal results. */
+function clientDepth(id) {
+  if (state.depthFor !== state.trees) {
+    var m = new Map();
+    (function walk(l, d) { l.forEach(function (p) { if (!m.has(p.id) || m.get(p.id) > d) m.set(p.id, d); walk(p.children, d + 1); }); })(state.trees, 0);
+    state.depthFor = state.trees;
+    state.depthOf = m;
+  }
+  var d = state.depthOf.get(id);
+  return d == null ? 1e9 : d;
+}
+
 function evalNode(id, pairs, svc) {
   var items = [], level = null;
   pairs.forEach(function (p) {
@@ -819,7 +831,7 @@ function evalNode(id, pairs, svc) {
     items.push({ client: p.client, rule: p.rule, level: best, rels: why });
     if (!level || LEVEL_RANK[best] > LEVEL_RANK[level]) level = best;
   });
-  items.sort(function (a, b) { return LEVEL_RANK[b.level] - LEVEL_RANK[a.level]; });
+  items.sort(function (a, b) { return LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || clientDepth(a.client.id) - clientDepth(b.client.id); }); /* equal results: the client highest up the tree leads */
   return { level: level, items: items };
 }
 
@@ -1210,9 +1222,8 @@ function viewMarks(pairs) {
   if (!res.level) return marks;
   marks.set(t.id, { level: res.level, res: res });
   if (res.level === "exempt") return marks; /* nothing is inherited from an exempt result */
-  res.items.forEach(function (it) {
-    if (it.level === res.level && it.client.id !== t.id) marks.set(it.client.id, { level: res.level, res: res, node: t, inherited: true });
-  });
+  var top = res.items[0]; /* one source only: items are sorted strictest first, then highest up the tree */
+  if (top && top.client.id !== t.id) marks.set(top.client.id, { level: res.level, res: res, node: t, inherited: true });
   return marks;
 }
 
