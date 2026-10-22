@@ -158,6 +158,15 @@
   /* Audit / non-audit marks beside the pin: filled = audit client, ring = non-audit client */
   th.pin-col.wide, td.pin-col.wide { width: 76px; text-align: left; padding-left: 10px; }
   .mark { display: flex; align-items: center; gap: 4px; }
+  .gw { display: inline-flex; flex: none; }
+  .g { width: 18px; height: 24px; position: relative; flex: none; }
+  .g.vl::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; border-left: 1px solid var(--faint); }
+  .g.elbow::before { content: ""; position: absolute; left: 8px; top: 0; height: 50%; width: 9px; border-left: 1px solid var(--faint); border-bottom: 1px solid var(--faint); border-bottom-left-radius: 4px; }
+  .g.elbow.cont::after { content: ""; position: absolute; left: 8px; top: 50%; bottom: 0; border-left: 1px solid var(--faint); }
+  table.grid tbody td { height: 24px; }
+  .name-inner { min-height: 24px; }
+  .name-inner .pin { flex: none; margin: 0 4px 0 2px; }
+  .held { margin-left: 10px; font-size: 11px; color: var(--muted); font-style: italic; }
   .si-tag { font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 4px; border-radius: 999px; background: var(--tint); color: var(--accent-fg); }
   /* Audit client: orange shield. Non-audit client: orange handshake on a white badge with an orange border. */
   .eng { display: inline-flex; flex: none; align-items: center; justify-content: center; }
@@ -488,15 +497,23 @@
 
   <div class="section">
     <div class="section-head">
+      <h2>Corporate Tree (50%)</h2>
       <span class="eng-key" hidden>
         <span><span data-eng="target"></span>Target company</span>
         <span><span data-eng="audit"></span>Audit client</span>
         <span><span data-eng="non"></span>Non-audit client</span>
-        <span><span class="si-tag">SI</span>Significant influence only</span>
       </span>
       <span class="count" id="tree-count"></span>
     </div>
     <div class="grid-wrap" id="tree-grid"></div>
+  </div>
+
+  <div class="section" id="si-section" hidden>
+    <div class="section-head">
+      <h2>Significant Influence (20-50%)</h2>
+      <span class="count" id="si-count"></span>
+    </div>
+    <div class="grid-wrap" id="si-grid"></div>
   </div>
 
   </section>
@@ -1008,11 +1025,10 @@ function engageDots(id) {
 }
 
 /* Pin slot then icon slot, the same cell the grids use, so names line up wherever it appears */
-function markCell(isTarget, id, si) {
+function markCell(isTarget, id) {
   var mk = document.createElement("div");
   mk.className = "mark";
   if (isTarget) mk.appendChild(pinIcon());
-  else if (si) mk.appendChild(siTag());
   engageDots(id).forEach(function (d) { mk.appendChild(d); });
   return mk;
 }
@@ -1340,7 +1356,7 @@ function condense(roots, pairs) {
     var out = [], gone = new Set();
     function drop(l) { l.forEach(function (p) { if (!keep.has(p.id)) gone.add(p.id); drop(p.children); }); }
     list.forEach(function (p) {
-      if (has(p)) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: walk(p.children, p.key) });
+      if (has(p)) out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, held: p.held, children: walk(p.children, p.key) });
       else drop([p]);
     });
     if (gone.size && parentKey !== null) {
@@ -1348,7 +1364,7 @@ function condense(roots, pairs) {
     }
     return out;
   }
-  return roots.filter(has).map(function (r) { return { id: r.id, name: r.name, key: r.key, hasTarget: r.hasTarget, children: walk(r.children, r.key) }; });
+  return roots.filter(has).map(function (r) { return { id: r.id, name: r.name, key: r.key, hasTarget: r.hasTarget, held: r.held, children: walk(r.children, r.key) }; });
 }
 
 /* The one grid for the engagement step and the independence step. gridKey names the expand state; roots are the
@@ -1361,10 +1377,6 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   table.className = "grid";
   var thead = document.createElement("thead");
   var hr = document.createElement("tr");
-  var pinTh = document.createElement("th");
-  pinTh.className = "pin-col";
-  pinTh.setAttribute("aria-label", "Target company");
-  hr.appendChild(pinTh);
 
   /* Expand/collapse everything in this grid */
   var expandable = [], uniq = new Set();
@@ -1415,23 +1427,34 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   var tbody = document.createElement("tbody");
   var shown = 0;
 
-  function walk(pl, depth) {
+  /* Connector lines: one 18px cell per level. anc[k] = the ancestor one level below the one that cell sits under has a later sibling
+     (so its vertical line runs on); the last cell is the elbow into this row, continuing when this row has a later sibling. */
+  function guides(depth, anc, hasLater) {
+    var gw = document.createElement("span");
+    gw.className = "gw";
+    for (var k = 0; k < depth; k++) {
+      var g = document.createElement("span");
+      g.className = "g" + (k === depth - 1 ? " elbow" + (hasLater ? " cont" : "") : (anc[k] ? " vl" : ""));
+      gw.appendChild(g);
+    }
+    return gw;
+  }
+
+  function walk(pl, depth, anc, hasLater) {
     if (pl.sum) { /* a summary row: counts only */
-      var sr = document.createElement("tr"), sp = document.createElement("td"), sn = document.createElement("td");
+      var sr = document.createElement("tr"), sn = document.createElement("td");
       sr.className = "sum-row";
-      sp.className = "pin-col";
       sn.className = "name-cell";
-      var si = document.createElement("div"), ind = document.createElement("span");
+      var si = document.createElement("div"), leaf = document.createElement("span");
       si.className = "name-inner";
-      ind.className = "indent";
-      ind.style.width = (depth * 20 + 22) + "px";
-      si.appendChild(ind);
+      si.appendChild(guides(depth, anc, hasLater));
+      leaf.className = "toggle leaf";
+      si.appendChild(leaf);
       var nm = document.createElement("span");
       nm.className = "node-name";
       nm.textContent = pl.name;
       si.appendChild(nm);
       sn.appendChild(si);
-      sr.appendChild(sp);
       if (opt.lead) sr.appendChild(document.createElement("td"));
       sr.appendChild(sn);
       cols.forEach(function () { sr.appendChild(document.createElement("td")); });
@@ -1452,12 +1475,6 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       if (lvl) tr.className = lvl;
     }
 
-    var pinTd = document.createElement("td");
-    pinTd.className = "pin-col";
-    if (node.isTarget) pinTd.appendChild(pinIcon());
-    else if (siOnly(node)) pinTd.appendChild(siTag());
-    tr.appendChild(pinTd);
-
     if (opt.lead) {
       var leadTd = document.createElement("td");
       leadTd.className = "icon-col rule-col";
@@ -1470,10 +1487,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     var inner = document.createElement("div");
     inner.className = "name-inner";
     nameTd.appendChild(inner);
-    var ind = document.createElement("span");
-    ind.className = "indent";
-    ind.style.width = (depth * 20) + "px";
-    inner.appendChild(ind);
+    inner.appendChild(guides(depth, anc, hasLater));
 
     var tg = document.createElement("button");
     tg.className = "toggle" + (kids.length ? "" : " leaf");
@@ -1487,6 +1501,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
       });
     }
     inner.appendChild(tg);
+    if (node.isTarget) inner.appendChild(pinIcon()); /* the pin sits with the name */
 
     var nm = document.createElement("span");
     nm.className = "node-name " + opt.nameCls(node);
@@ -1497,6 +1512,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     idSp.className = "node-id";
     idSp.textContent = "(" + pl.id + ")";
     inner.appendChild(idSp);
+    if (pl.held) inner.appendChild(el("span", "held", "Held by " + pl.held));
     tr.appendChild(nameTd);
 
 
@@ -1511,15 +1527,15 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     tr.appendChild(fillTd);
     tbody.appendChild(tr);
 
-    if (open) kids.forEach(function (k) { walk(k, depth + 1); });
+    if (open) kids.forEach(function (k, i) { walk(k, depth + 1, depth > 0 ? anc.concat([hasLater]) : [], i < kids.length - 1); });
   }
 
-  roots.forEach(function (r) { walk(r, 0); });
+  roots.forEach(function (r) { walk(r, 0, [], false); });
   table.appendChild(tbody);
 
   var host = $(containerId);
   host.innerHTML = "";
-  if (!shown) {
+  if (!shown && !tbody.children.length) {
     var e = document.createElement("div");
     e.className = "empty";
     e.textContent = "No matching entities.";
@@ -1531,6 +1547,22 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
   return uniq.size;
 }
 
+/* Significant influence companies (close affiliates only) are drawn in their own grid, each as a top row noting who holds it.
+   One that also has non-SI entities below it stays where it is, since it holds the tree together. */
+function splitSi(list, byId) {
+  var si = [];
+  function isSi(p) { return siOnly(byId.get(p.id) || p) && p.children.every(isSi); }
+  function walk(l, parent) {
+    var out = [];
+    l.forEach(function (p) {
+      if (parent && isSi(p)) { si.push({ id: p.id, name: p.name, key: p.key, hasTarget: false, held: parent.name, children: p.children }); return; }
+      out.push({ id: p.id, name: p.name, key: p.key, hasTarget: p.hasTarget, children: walk(p.children, p) });
+    });
+    return out;
+  }
+  return { main: walk(list, null), si: si };
+}
+
 /* ═══ RENDER ALL ══════════════════════════════════════════════════════ */
 function renderAll() {
   closeWhy();
@@ -1540,25 +1572,43 @@ function renderAll() {
   /* One grid: the tree(s) that contain the target, with close-affiliate entities the tree lacks merged in */
   var byId = new Map(), pairs = auditPairs();
   state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!byId.has(n.id)) byId.set(n.id, n); });
-  var cond = state.tree !== "full", roots = cond ? condense(state.trees, pairs) : state.trees, all = new Set();
-  (function ids(l) { l.forEach(function (p) { all.add(p.id); ids(p.children); }); })(state.trees);
+  var cond = state.tree !== "full", split = splitSi(state.trees, byId);
+  var roots = cond ? condense(split.main, pairs) : split.main, siRoots = cond ? condense(split.si, pairs) : split.si;
+  var uniq = function (l) { var s = new Set(); (function ids(x) { x.forEach(function (p) { if (!p.sum) s.add(p.id); ids(p.children); }); })(l); return s.size; };
+  var treeAll = uniq(split.main), siAll = uniq(split.si);
+  if (cond) { /* whole significant influence groups with nothing of interest in them fold into one line */
+    var kept = new Set(siRoots.map(function (r) { return r.key; })), gone = split.si.filter(function (r) { return !kept.has(r.key); });
+    if (gone.length) siRoots.push({ id: "\u0000si", name: uniq(gone) + (uniq(gone) === 1 ? " entity" : " entities") + " hidden", key: "si/hidden", sum: true, children: [] });
+  }
   if (cond) { /* open the way to an audit client picked by hand, once, so it is not hidden under a collapsed parent */
     var opened = state.expanded.manual || (state.expanded.manual = new Set());
     state.auditRows.forEach(function (r) {
       if (!r.client || !r.rule || !r.on || opened.has(r.client)) return;
       opened.add(r.client);
-      (function open(l) { return l.some(function (p) { var hit = p.id === r.client || open(p.children); if (hit && p.id !== r.client) state.expanded.tree.add(p.key); return hit; }); })(roots);
+      [roots, siRoots].forEach(function (rs) {
+        (function open(l) { return l.some(function (p) { var hit = p.id === r.client || open(p.children); if (hit && p.id !== r.client) state.expanded.tree.add(p.key); return hit; }); })(rs);
+      });
     });
   }
   if (cond && !state.expanded.cond) { /* the first time, open every kept row so all audit and non-audit entities show */
     state.expanded.cond = 1;
-    (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.tree.add(p.key); open(p.children); }); })(roots);
+    [roots, siRoots].forEach(function (rs) {
+      (function open(l) { l.forEach(function (p) { if (p.children.length) state.expanded.tree.add(p.key); open(p.children); }); })(rs);
+    });
   }
-  var shown = renderGrid("tree", "tree-grid", "tree-count", roots, byId, {
+  var gridOpt = {
     pairs: pairs, cols: extraColumns(pairs), redraw: renderAll, lead: auditRuleCell,
     nameCls: function (n) { return n.idParty ? "has-party" : ""; } /* bold = entity has an Intapp party record */
-  });
-  $("node-count").textContent = $("tree-count").textContent = cond ? shown + " of " + all.size + " entities" : shown + " entities";
+  };
+  var shown = renderGrid("tree", "tree-grid", "tree-count", roots, byId, gridOpt);
+  $("tree-count").textContent = cond ? shown + " of " + treeAll + " entities" : shown + " entities";
+  var siShown = 0;
+  if (siAll) {
+    siShown = renderGrid("tree", "si-grid", "si-count", siRoots, byId, gridOpt);
+    $("si-count").textContent = cond ? siShown + " of " + siAll + " entities" : siShown + " entities";
+  }
+  $("si-section").hidden = !siAll;
+  $("node-count").textContent = cond ? (shown + siShown) + " of " + (treeAll + siAll) + " entities" : (shown + siShown) + " entities";
   document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.tree); });
   document.querySelectorAll("#inherit-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.inherit); });
   $("display-summary").textContent = (state.tree === "full" ? "Full tree" : "Filtered tree") + " \u00B7 " + (state.inherit === "strictest" ? "Strictest rule inheritance" : "All rule inheritance");
@@ -2419,7 +2469,7 @@ function drawChart(box, m) {
     var n = m.meta.get(id), isT = id === state.target.id, d = el("div", "cnode" + (isT ? " target" : ""));
     d.style.left = (x[id] - W / 2) + "px";
     var mk = el("div", "mark"), srcs = m.sources.filter(function (sc) { return sc.client.id === id; });
-    if (isT) mk.appendChild(pinIcon()); else if (siOnly(n)) mk.appendChild(siTag());
+    if (isT) mk.appendChild(pinIcon());
     engageDots(id).forEach(function (ic) { if (!(srcs.length && ic.classList.contains("audit"))) mk.appendChild(ic); }); /* an audit client's shield comes with its rule */
     srcs.forEach(function (sc) {
       m.rule[sc.key] = el("span", "pop lead-rule");
