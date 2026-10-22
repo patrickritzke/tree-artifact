@@ -671,13 +671,13 @@ var CONFIG = {
     {"value": "indirectSubsidiary", "label": "Indirect Subsidiary", "phrase": "an indirect subsidiary of"},
     {"value": "sibling", "label": "Sibling", "phrase": "a sister company of"},
     {"value": "cousin", "label": "Cousin", "phrase": "a cousin company of"},
-    {"value": "caUltimateParent", "label": "CA - Ultimate Parent", "phrase": "a close affiliate (ultimate parent) of"},
-    {"value": "caImmediateParent", "label": "CA - Immediate Parent", "phrase": "a close affiliate (immediate parent) of"},
-    {"value": "caIndirectParent", "label": "CA - Indirect Parent", "phrase": "a close affiliate (indirect parent) of"},
-    {"value": "caImmediateSubsidiary", "label": "CA - Immediate Subsidiary", "phrase": "a close affiliate (immediate subsidiary) of"},
-    {"value": "caIndirectSubsidiary", "label": "CA - Indirect Subsidiary", "phrase": "a close affiliate (indirect subsidiary) of"},
-    {"value": "caSibling", "label": "CA - Sibling", "phrase": "a close affiliate (sibling) of"},
-    {"value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of"}
+    {"value": "caUltimateParent", "label": "SigInf - Ultimate Parent", "phrase": "a significant influence entity (ultimate parent) of"},
+    {"value": "caImmediateParent", "label": "SigInf - Immediate Parent", "phrase": "a significant influence entity (immediate parent) of"},
+    {"value": "caIndirectParent", "label": "SigInf - Indirect Parent", "phrase": "a significant influence entity (indirect parent) of"},
+    {"value": "caImmediateSubsidiary", "label": "SigInf - Immediate Subsidiary", "phrase": "a significant influence entity (immediate subsidiary) of"},
+    {"value": "caIndirectSubsidiary", "label": "SigInf - Indirect Subsidiary", "phrase": "a significant influence entity (indirect subsidiary) of"},
+    {"value": "caSibling", "label": "SigInf - Sibling", "phrase": "a significant influence entity (sibling) of"},
+    {"value": "caCousin", "label": "SigInf - Cousin", "phrase": "a significant influence entity (cousin) of"}
   ],
   serviceLines: [
     {"value": "AUD-financial-statement-audit", "label": "Audit - Financial Statement Audit"},
@@ -749,13 +749,13 @@ var CONFIG = {
 };
 
 /* Lookups built from the config */
-var AFF_PREFIX = "CA - ";
+var AFF_PREFIX = "SigInf - ";
 var LEVEL_RANK = {}, LEVEL_LABELS = {}, REL_LABEL = {}, REL_VALUE = {}, REL_ORDER = [], FRAMEWORK_RULE = {};
 CONFIG.treatments.forEach(function (t, i) { LEVEL_RANK[t.value] = CONFIG.treatments.length - i; LEVEL_LABELS[t.value] = t.label; });
 CONFIG.relationships.forEach(function (r) {
   REL_LABEL[r.value] = r.label;
   REL_VALUE[r.label] = r.value;
-  if (r.label.indexOf(AFF_PREFIX) !== 0) REL_ORDER.push(r.label); /* tree relationships; close affiliates are "CA - " + one of them */
+  if (r.label.indexOf(AFF_PREFIX) !== 0) REL_ORDER.push(r.label); /* tree relationships; close affiliates are "SigInf - " + one of them */
 });
 var RULES = CONFIG.rules.map(function (r) {
   var by = {};
@@ -1042,7 +1042,7 @@ function siTag() {
   var t = document.createElement("span");
   t.className = "si-tag";
   t.textContent = "SI";
-  t.title = "Significant influence: related to the target only as a close affiliate";
+  t.title = "Significant influence: related to the target only as a significant influence entity";
   return t;
 }
 
@@ -1137,7 +1137,7 @@ function classify(nodes, targetId) {
 }
 
 /* Metadata is per entity id: every node with the same id, in the tree or in close affiliates,
-   gets the same values. Tree labels come first, then the same labels prefixed with "CA - ". */
+   gets the same values. Tree labels come first, then the same labels prefixed with "SigInf - ". */
 /* Labels for every entity id relative to one anchor entity (the target, or any audit client). */
 function relLabels(nodes, affiliates, anchorId) {
   var treeRels = classify(nodes, anchorId);
@@ -2202,7 +2202,7 @@ function findEngagements() {
 
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
       if (!byParty.size) notes.push("No engagements were found for this corporate tree. Choose the audit relationships and rules on the next steps.");
-      if (state.unmatched && state.unmatched.length) notes.push("Engagements for parties that match nothing in this tree or its close affiliates were not applied: " + state.unmatched.join(", ") + ".");
+      if (state.unmatched && state.unmatched.length) notes.push("Engagements for parties that match nothing in this tree or its significant influence entities were not applied: " + state.unmatched.join(", ") + ".");
       var noNote = [], noCountry = [];
       info.forEach(function (v, id) {
         if (!v.audit || v.entity) return;

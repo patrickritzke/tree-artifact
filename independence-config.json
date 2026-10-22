@@ -18,13 +18,13 @@
     {"value": "indirectSubsidiary", "label": "Indirect Subsidiary", "phrase": "an indirect subsidiary of"},
     {"value": "sibling", "label": "Sibling", "phrase": "a sister company of"},
     {"value": "cousin", "label": "Cousin", "phrase": "a cousin company of"},
-    {"value": "caUltimateParent", "label": "CA - Ultimate Parent", "phrase": "a close affiliate (ultimate parent) of"},
-    {"value": "caImmediateParent", "label": "CA - Immediate Parent", "phrase": "a close affiliate (immediate parent) of"},
-    {"value": "caIndirectParent", "label": "CA - Indirect Parent", "phrase": "a close affiliate (indirect parent) of"},
-    {"value": "caImmediateSubsidiary", "label": "CA - Immediate Subsidiary", "phrase": "a close affiliate (immediate subsidiary) of"},
-    {"value": "caIndirectSubsidiary", "label": "CA - Indirect Subsidiary", "phrase": "a close affiliate (indirect subsidiary) of"},
-    {"value": "caSibling", "label": "CA - Sibling", "phrase": "a close affiliate (sibling) of"},
-    {"value": "caCousin", "label": "CA - Cousin", "phrase": "a close affiliate (cousin) of"}
+    {"value": "caUltimateParent", "label": "SigInf - Ultimate Parent", "phrase": "a significant influence entity (ultimate parent) of"},
+    {"value": "caImmediateParent", "label": "SigInf - Immediate Parent", "phrase": "a significant influence entity (immediate parent) of"},
+    {"value": "caIndirectParent", "label": "SigInf - Indirect Parent", "phrase": "a significant influence entity (indirect parent) of"},
+    {"value": "caImmediateSubsidiary", "label": "SigInf - Immediate Subsidiary", "phrase": "a significant influence entity (immediate subsidiary) of"},
+    {"value": "caIndirectSubsidiary", "label": "SigInf - Indirect Subsidiary", "phrase": "a significant influence entity (indirect subsidiary) of"},
+    {"value": "caSibling", "label": "SigInf - Sibling", "phrase": "a significant influence entity (sibling) of"},
+    {"value": "caCousin", "label": "SigInf - Cousin", "phrase": "a significant influence entity (cousin) of"}
   ],
 
   "serviceLines": [
