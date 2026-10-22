@@ -70,7 +70,8 @@
       "treatments": [
         {"value": "restricted", "exemptServiceLines": ["TAX*", "TAX-110"], "inheritingRelationships": ["indirectSubsidiary"]},
         {"value": "restricted", "exemptServiceLines": [], "inheritingRelationships": ["immediateSubsidiary"]},
-        {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["immediateParent", "sibling", "caImmediateSubsidiary"]}
+        {"value": "materiality", "exemptServiceLines": [], "inheritingRelationships": ["immediateParent", "caImmediateSubsidiary"]},
+        {"value": "materiality", "exemptServiceLines": ["TAX*", "TAX-110"], "inheritingRelationships": ["sibling"]}
       ]
     },
     {
