@@ -137,6 +137,8 @@
   .rule-badge.restricted { color: var(--restr-fg); border: 1px solid var(--restr-fg); }
   .rule-badge.materiality { color: var(--mat-fg); border: 1px solid var(--mat-fg); }
   .rule-badge.exempt { color: var(--ok-fg); border: 1px solid var(--ok-fg); }
+  .rule-badge.flag { cursor: default; margin-left: 4px; }
+  .rule-badge.flag:hover { background: none; }
   .rule-badge.other { color: var(--muted); border: 1px solid var(--faint); margin-left: 4px; }
 
   /* Collapsible toolbar sections: shaded header strip + body */
@@ -643,7 +645,7 @@ function loadFamily(partyId) {
    Source: jurisdiction screening guide; "not confirmed" items are noted in each rule's source.
    ═══════════════════════════════════════════════════════════════════ */
 var CONFIG = {
-  treatments: [{"value": "restricted", "label": "Restricted"}, {"value": "materiality", "label": "Materiality check"}, {"value": "exempt", "label": "Exempt"}],
+  treatments: [{"value": "restricted", "label": "Restricted"}, {"value": "materiality", "label": "Materiality check"}, {"value": "exempt", "label": "Exempt Service Line"}],
   relationships: [
     {"value": "ultimateParent", "label": "Ultimate Parent", "phrase": "the ultimate parent of"},
     {"value": "immediateParent", "label": "Immediate Parent", "phrase": "the immediate parent of"},
@@ -819,20 +821,22 @@ function clientDepth(id) {
 function evalNode(id, pairs, svc) {
   var items = [], level = null;
   pairs.forEach(function (p) {
-    var best = null, why = [];
+    var best = null, why = [], baseEx = null;
     (p.rels.get(id) || []).forEach(function (r) {
       var e = p.rule.by[REL_VALUE[r]];
       if (!e) return;
-      var l = exemptFor(e.ex, svc) ? "exempt" : e.t; /* exempt ranks last, so any other result still wins */
+      var ex = exemptFor(e.ex, svc);
+      var l = ex ? "exempt" : e.t; /* exempt ranks last, so any other result still wins */
+      if (ex && (!baseEx || LEVEL_RANK[e.t] > LEVEL_RANK[baseEx])) baseEx = e.t; /* what the entity inherits, before the service line exemption */
       if (!best || LEVEL_RANK[l] > LEVEL_RANK[best]) { best = l; why = [r]; }
       else if (l === best) why.push(r);
     });
     if (!best) return;
-    items.push({ client: p.client, rule: p.rule, level: best, rels: why });
+    items.push({ client: p.client, rule: p.rule, level: best, base: best === "exempt" ? baseEx : best, rels: why });
     if (!level || LEVEL_RANK[best] > LEVEL_RANK[level]) level = best;
   });
   items.sort(function (a, b) { return LEVEL_RANK[b.level] - LEVEL_RANK[a.level] || clientDepth(a.client.id) - clientDepth(b.client.id); }); /* equal results: the client highest up the tree leads */
-  return { level: level, items: items };
+  return { level: level, base: items.length ? items[0].base : null, items: items }; /* level can be "exempt"; base is the treatment inherited either way */
 }
 
 /* ═══ ENGAGEMENTS ═════════════════════════════════════════════════════
@@ -1205,11 +1209,13 @@ function extraColumns(pairs) {
         var b = ruleBadge(m.node || n, m.res);
         if (m.inherited) { b.textContent = "Inherited from"; b.title = "The audit client behind the strictest treatment"; }
         td.appendChild(b);
+        if (!m.inherited && m.res.level === "exempt") td.appendChild(exemptBadge());
         return;
       }
       var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
       if (!res.level) return;
       td.appendChild(ruleBadge(n, res));
+      if (res.level === "exempt") td.appendChild(exemptBadge());
       if (res.items.length > 1) td.appendChild(otherBadge(n, res)); /* the secondary results sit behind a grey pill */
     }
   }];
@@ -1221,7 +1227,6 @@ function viewMarks(pairs) {
   var t = state.target, res = evalNode(t.id, pairs, state.serviceLine), marks = new Map();
   if (!res.level) return marks;
   marks.set(t.id, { level: res.level, res: res });
-  if (res.level === "exempt") return marks; /* nothing is inherited from an exempt result */
   var top = res.items[0]; /* one source only: items are sorted strictest first, then highest up the tree */
   if (top && top.client.id !== t.id) marks.set(top.client.id, { level: res.level, res: res, node: t, inherited: true });
   return marks;
@@ -1231,14 +1236,20 @@ function viewMarks(pairs) {
 function ruleBadge(node, res) {
   var b = document.createElement("button");
   b.type = "button";
-  b.className = "rule-badge " + res.level;
-  b.textContent = LEVEL_LABELS[res.level]; /* always the one strictest result */
+  var lvl = res.level === "exempt" ? res.base : res.level; /* an exempt service line still shows the treatment inherited */
+  b.className = "rule-badge " + lvl;
+  b.textContent = LEVEL_LABELS[lvl]; /* always the one strictest result */
   b.title = "Show where this came from";
   b.setAttribute("aria-haspopup", "dialog");
   b.addEventListener("click", function () {
     if (state.whyFor === node.id) closeWhy(); else showWhy(b, node, res, res.items.slice(0, 1), node.id);
   });
   return b;
+}
+
+/* Green "Exempt Service Line" flag beside a treatment pill: the treatment was inherited, but the service line is exempt */
+function exemptBadge() {
+  return el("span", "rule-badge exempt flag", LEVEL_LABELS.exempt);
 }
 
 /* Grey "Other (n)" pill: opens the secondary results behind the strictest one */
@@ -1256,7 +1267,9 @@ function otherBadge(node, res) {
 /* One result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
 function resultRow(it) {
   var row = el("div", "why-item"), l1 = el("div");
-  l1.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
+  var lvl = it.level === "exempt" ? it.base : it.level;
+  l1.appendChild(el("span", "rule-badge " + lvl, LEVEL_LABELS[lvl]));
+  if (it.level === "exempt") { l1.appendChild(document.createTextNode(" ")); l1.appendChild(exemptBadge()); }
   l1.appendChild(document.createTextNode(" by "));
   l1.appendChild(el("span", "rpill", it.rule.label));
   row.appendChild(l1);
@@ -1290,8 +1303,6 @@ function showWhy(anchor, node, res, items, key) { /* items: the results to list;
   var others = items[0] !== res.items[0];
   if (others) pop.appendChild(el("div", "sec", "Other results"));
   items.forEach(function (it) { pop.appendChild(resultRow(it)); });
-
-  if (!others && res.level === "exempt") pop.appendChild(el("div", "why-note", "Service Line is Exempt"));
 
   placePop(pop, anchor);
   state.whyFor = key;
@@ -2233,7 +2244,7 @@ function buildAssessment() {
 function recordJson() {
   var t = state.target, A = state.assessment, pairs = auditPairs(), now = new Date(), who = function (c) { return { id: c.id, name: c.name }; };
   var all = evalNode(t.id, pairs, state.serviceLine);
-  var result = function (it) { return { level: it.level, rule: { value: it.rule.key, label: it.rule.label }, client: who(it.client), relationships: it.rels }; };
+  var result = function (it) { return { level: it.level, treatment: it.base, exemptServiceLine: it.level === "exempt", rule: { value: it.rule.key, label: it.rule.label }, client: who(it.client), relationships: it.rels }; };
   var mark = new Map(everyNode().map(function (n) { return [n.id, n]; }));
   var tree = function (list) {
     return list.map(function (pl) {
@@ -2286,8 +2297,10 @@ function nameOfNode(id) {
 function reasonRow(it) {
   var rel = it.rels[0], cfg = CONFIG.relationships.filter(function (r) { return r.label === rel; })[0], by = it.rule.by[REL_VALUE[rel]];
   var row = el("div", "reason"), head = el("div", "reason-head"), txt = el("div", "reason-text");
-  head.appendChild(el("span", "rule-badge " + it.level, LEVEL_LABELS[it.level]));
-  head.appendChild(document.createTextNode("by "));
+  var lvl = it.level === "exempt" ? it.base : it.level;
+  head.appendChild(el("span", "rule-badge " + lvl, LEVEL_LABELS[lvl]));
+  if (it.level === "exempt") { head.appendChild(document.createTextNode(" ")); head.appendChild(exemptBadge()); }
+  head.appendChild(document.createTextNode(" by "));
   head.appendChild(el("b", null, it.rule.label));
   row.appendChild(head);
   var how = by.t === "restricted" ? "restricted" : "a " + LEVEL_LABELS[by.t].toLowerCase();

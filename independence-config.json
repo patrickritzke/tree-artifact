@@ -1,13 +1,13 @@
 {
   "version": 14,
-  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists entries; each entry is one treatment, the relationships (measured from an audit client) it applies to, and exemptServiceLines: the service lines exempt from that treatment for those relationships (it can be empty). A relationship appears in at most one entry per rule, so use separate entries of the same treatment to give relationships different exemptions. The wizard embeds a copy of this file (without the prose fields). The target has a service line, chosen on the first page. When it is in an entry's exemptServiceLines, the result for that relationship becomes Exempt, the lowest priority treatment, so a restricted or materiality result from another audit client or rule still wins. Every other entity has no service line, which counts as not exempt.",
+  "description": "Independence rules. Everything is a { value, label } pair: value is the stable key used by logic and stored data and never changes; label is the text people see and can be renamed freely. Treatments and relationships are defined once below and rules refer to them by value. A relationship's phrase is the plain-language wording used in the independence decision. Each rule lists entries; each entry is one treatment, the relationships (measured from an audit client) it applies to, and exemptServiceLines: the service lines exempt from that treatment for those relationships (it can be empty). A relationship appears in at most one entry per rule, so use separate entries of the same treatment to give relationships different exemptions. The wizard embeds a copy of this file (without the prose fields). The target has a service line, chosen on the first page. When it is in an entry's exemptServiceLines, the relationship still shows the treatment it inherits, flagged Exempt Service Line. Exempt is the lowest priority, so a restricted or materiality result from another audit client or rule that is not exempt still wins. Every other entity has no service line, which counts as not exempt.",
 
   "serviceLinesNote": "Service lines are { value, label } pairs. Values in exemptServiceLines are service line values such as TAX-101; a value ending in * is a prefix match, so TAX* is every TAX- service line. The treatments list is ordered strictest first, so exempt is last.",
 
   "treatments": [
     {"value": "restricted", "label": "Restricted"},
     {"value": "materiality", "label": "Materiality check"},
-    {"value": "exempt", "label": "Exempt"}
+    {"value": "exempt", "label": "Exempt Service Line"}
   ],
 
   "relationships": [
