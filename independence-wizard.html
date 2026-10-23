@@ -2480,9 +2480,17 @@ function chartModel(items, level) {
     var aboveT = walk(tid, up), aboveS = walk(src, up), kind = "lateral", path = [];
     if (aboveT.has(src)) { kind = "line"; var dn = walk(src, kids); path = Array.from(aboveT).filter(function (x) { return dn.has(x); }); }
     else if (aboveS.has(tid)) { kind = "line"; var dn2 = walk(tid, kids); path = Array.from(aboveS).filter(function (x) { return dn2.has(x); }); }
-    var shown = new Set();
-    aboveT.forEach(function (x) { shown.add(x); });
-    aboveS.forEach(function (x) { shown.add(x); });
+    /* Draw only what supports the relationship that gave the result. Parent or subsidiary: the path between the two, and what sits above
+       its upper end. Sibling: the two and the parent they share, and what sits above that. Their other parents are not drawn. */
+    var shown = new Set(), addAll = function (set) { set.forEach(function (x) { shown.add(x); }); };
+    if (kind === "line") {
+      path.forEach(function (x) { shown.add(x); });
+      addAll(walk(aboveT.has(src) ? src : tid, up));
+    } else {
+      var common = (up.get(tid) || []).filter(function (q) { return (up.get(src) || []).indexOf(q) >= 0 && meta.has(q); });
+      if (common.length) { shown.add(tid); shown.add(src); common.forEach(function (q) { addAll(walk(q, up)); }); }
+      else { addAll(aboveT); addAll(aboveS); } /* related through a more distant ancestor: show both lines of ancestry */
+    }
     shown.forEach(function (x) { inc.add(x); });
     shown.forEach(function (id) {
       (up.get(id) || []).forEach(function (q) {

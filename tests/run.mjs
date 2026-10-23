@@ -233,22 +233,25 @@ test("a sibling's inheritance goes straight across as a dotted line, with the st
   noErrors(p);
 });
 
-test("a sibling and the target share a row, even when the sibling also sits under a deeper parent", async (f) => {
-  // Ultimate > Parent > (Target, Sibling, Deep Co); Sibling also appears under Deep Co, which would push it a row below the target.
+test("a sibling shows only the parent it shares with the target, not their other parents", async (f) => {
+  // The target and the sibling are both listed directly under Ultimate, and each is also listed under another parent chain.
+  const target = { externalId: "T", name: "Target LLC", subCompanies: [] };
   const sibling = { externalId: "S", name: "Sibling Co", subCompanies: [] };
   const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [
-    { externalId: "A", name: "Parent Co", subCompanies: [
-      { externalId: "T", name: "Target LLC", subCompanies: [] },
-      sibling,
-      { externalId: "Q", name: "Deep Co", subCompanies: [sibling] },
-    ] },
+    target, sibling,
+    { externalId: "P1", name: "First Holding", subCompanies: [{ externalId: "P1a", name: "First Mid", subCompanies: [target] }] },
+    { externalId: "P2", name: "Second Holding", subCompanies: [{ externalId: "P2a", name: "Second Mid", subCompanies: [sibling] }] },
   ] };
   const p = await open(f, { tree, members: [matter("m1", "S", "Audit [Audit - IESBA-PIE]")] });
   await p.click("#wiz-next");
   await p.waitForTimeout(9000);
+  const all = await nodeTexts(p);
+  assert.equal(all.length, 3, `just the target, the sibling and their shared parent: ${all.join(" | ")}`);
+  assert.ok(!all.join().match(/First|Second/), "their other parents are not drawn");
   const tops = await p.$$eval("#result-body .cnode", (n) => Object.fromEntries(n.map((x) => [x.innerText.split("\n").find((l) => /Co$|LLC$/.test(l.trim())).trim(), x.offsetTop])));
-  assert.equal(tops["Target LLC"], tops["Sibling Co"], `same row: ${JSON.stringify(tops)}`);
-  assert.ok(tops["Parent Co"] < tops["Target LLC"], "still below its parent");
+  assert.equal(tops["Target LLC"], tops["Sibling Co"], "the pair share a row");
+  assert.equal(await p.$$eval("#result-body .cedge", (e) => e.length), 2, "one line from the shared parent to each");
+  assert.equal(await text(p, "#result-body .clabel"), "Sibling");
   noErrors(p);
 });
 

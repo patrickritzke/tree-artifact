@@ -180,7 +180,7 @@ A banner shows **the one strictest result**: the treatment, the audit rule, and 
 
 Under the banner an animation shows how the result reaches the client, with a Replay button. It builds **structure first, then inheritance**:
 
-1. **Structure.** The client and the audit relationship the result comes from appear, each under its parents all the way up to the ultimate owner, joined by plain grey parent/child lines. Nothing else from the tree is drawn: no other branches, no other parents of the client, no other audit relationships.
+1. **Structure.** Only what supports the relationship that gave the result is drawn, joined by plain grey parent/child lines, up to the ultimate owner. For a **parent or subsidiary** that is the path between the audit relationship and the client, plus the chain above its upper end. For a **sibling** it is the two entities and the parent they share, plus that parent's chain. An entity the data lists under several parents shows only the parent that matters, so a sibling never looks like a cousin. No other branches, no other parents, no other audit relationships.
 2. **Inheritance.** The audit relationship's rule then appears, and the result travels to the client as a **dotted line** in red (or orange), in one of two ways:
    - **Parent or subsidiary:** the dotted line is laid over the structure lines it follows, and every entity it passes through that takes the same result shows the rule pill.
    - **Sibling or cousin:** the dotted line goes **straight across**, labelled with the relationship ("Sibling", "Cousin", "SigInf - Sibling"). Only the audit relationship and the client carry the rule.
