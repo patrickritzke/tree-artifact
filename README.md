@@ -181,9 +181,9 @@ A banner shows **the one strictest result**: the treatment, the audit rule, and 
 Under the banner an animation shows how the result reaches the client, with a Replay button. It builds **structure first, then inheritance**:
 
 1. **Structure.** The client and the audit relationship the result comes from appear, each under its parents all the way up to the ultimate owner, joined by plain grey parent/child lines. Nothing else from the tree is drawn: no other branches, no other parents of the client, no other audit relationships.
-2. **Inheritance.** The audit relationship's rule then appears, and the result travels to the client in one of two ways:
-   - **Parent or subsidiary:** it follows the structure lines, in red (or orange), and every entity it passes through that takes the same result shows the rule pill.
-   - **Sibling or cousin:** it goes **straight across** as a dotted line, labelled with the relationship ("Sibling", "Cousin", "SigInf - Sibling"). Only the audit relationship and the client carry the rule.
+2. **Inheritance.** The audit relationship's rule then appears, and the result travels to the client as a **dotted line** in red (or orange), in one of two ways:
+   - **Parent or subsidiary:** the dotted line is laid over the structure lines it follows, and every entity it passes through that takes the same result shows the rule pill.
+   - **Sibling or cousin:** the dotted line goes **straight across**, labelled with the relationship ("Sibling", "Cousin", "SigInf - Sibling"). Only the audit relationship and the client carry the rule.
 
 Entities that are only there to show the structure, such as the ultimate owner and the parents, never show a rule pill. The animation follows the kind of link that produced the result: tree links for a tree relationship, close-affiliate links for a SigInf one.
 

@@ -393,10 +393,6 @@
   .canvas > svg path { fill: none; }
   .cedge { stroke: var(--border-2); stroke-width: 1.5; opacity: 0; transition: opacity .5s; }
   .cedge.show { opacity: 1; }
-  .chl { stroke-width: 3; stroke-linecap: round; opacity: .85; }
-  .chl.restricted { stroke: var(--restr-fg); }
-  .chl.materiality { stroke: var(--mat-fg); }
-  .chl.exempt { stroke: var(--ok-fg); }
   .cacross { stroke: none; fill: none; }
   .cdot { fill: var(--border-2); opacity: 0; }
   .cdot.restricted { fill: var(--restr-fg); }
@@ -2603,16 +2599,7 @@ function drawChart(box, m) {
     pa.setAttribute("d", g.d);
     pa.setAttribute("class", "cacross");
     svg.appendChild(pa);
-    var len = pa.getTotalLength(), n = Math.max(3, Math.round(len / 9)), dots = [];
-    for (var i = 0; i <= n; i++) {
-      var pt = pa.getPointAtLength(len * i / n), c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      c.setAttribute("cx", pt.x);
-      c.setAttribute("cy", pt.y);
-      c.setAttribute("r", 2.4);
-      c.setAttribute("class", "cdot " + s.lvl);
-      svg.appendChild(c);
-      dots.push({ at: len * i / n, el: c });
-    }
+    var dd = chartDots(m, pa, s.lvl), len = dd.len, dots = dd.dots;
     var mid = pa.getPointAtLength(len / 2), lab = el("div", "pop clabel", s.label || "Related");
     lab.style.left = mid.x + "px";
     lab.style.top = mid.y + "px";
@@ -2658,22 +2645,26 @@ function chartWait(ms, tok) {
   return new Promise(function (ok, no) { setTimeout(function () { if (tok === chart.tok) ok(); else no(); }, chart.skip ? 0 : ms); });
 }
 
-/* One rule pill travelling from its source to one entity */
-function chartTravel(m, s, to, tok) {
+/* Dots every few pixels along a path, hidden until the rule pill passes. The inheritance is always dotted: over the structure line for a parent or
+   subsidiary, straight across for a sibling or cousin. */
+function chartDots(m, pa, lvl) {
+  var len = pa.getTotalLength(), n = Math.max(3, Math.round(len / 9)), dots = [];
+  for (var i = 0; i <= n; i++) {
+    var pt = pa.getPointAtLength(len * i / n), c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("cx", pt.x);
+    c.setAttribute("cy", pt.y);
+    c.setAttribute("r", 2.4);
+    c.setAttribute("class", "cdot " + lvl);
+    m.svg.appendChild(c);
+    dots.push({ at: len * i / n, el: c });
+  }
+  return { len: len, dots: dots };
+}
+
+/* A rule pill running along a path; the dots (if any) light up behind it */
+function chartRunAlong(m, s, pa, len, dots, tok) {
   return new Promise(function (ok, no) {
-    var path = chartRoute(m, s.client.id, to), d = "", start = null, edge = {};
-    m.edges.forEach(function (e) { edge[e[0] + "|" + e[1]] = 1; });
-    for (var i = 0; i < path.length - 1; i++) {
-      var fwd = edge[path[i] + "|" + path[i + 1]], g = fwd ? chartSeg(m, path[i], path[i + 1], false) : chartSeg(m, path[i], path[i + 1], true);
-      d += (i ? " " : "M" + g.s.join(" ") + " ") + g.d;
-    }
-    var hl = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    hl.setAttribute("d", d);
-    hl.setAttribute("class", "chl " + s.lvl);
-    m.svg.appendChild(hl);
-    var len = hl.getTotalLength(), dur = 300 + len * 3, turned = false;
-    hl.style.strokeDasharray = len;
-    hl.style.strokeDashoffset = len;
+    var start = null, turned = false, dur = 300 + len * 3;
     var run = el("span", "crun rpill", s.rule.label);
     m.cv.appendChild(run);
     function frame(t) {
@@ -2681,37 +2672,38 @@ function chartTravel(m, s, to, tok) {
       if (start === null) start = t;
       var k = chart.skip ? 1 : Math.min(1, (t - start) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       if (!turned && k > .12) { turned = true; run.className = "crun rule-badge " + s.lvl; run.textContent = s.rule.label + " - " + LEVEL_LABELS[s.lvl]; }
-      var pt = hl.getPointAtLength(len * e);
+      var pt = pa.getPointAtLength(len * e);
       run.style.left = pt.x + "px";
       run.style.top = pt.y + "px";
-      hl.style.strokeDashoffset = len * (1 - e);
+      dots.forEach(function (d) { if (d.at <= len * e + .01) d.el.style.opacity = ".9"; });
       if (k < 1) requestAnimationFrame(frame); else { run.remove(); ok(); }
     }
     requestAnimationFrame(frame);
   });
 }
 
+/* One rule pill travelling from its source to one entity along the structure lines. Only the run to the target leaves the dotted line,
+   so a line shared by several stops is not drawn twice. */
+function chartTravel(m, s, to, tok, dotted) {
+  var path = chartRoute(m, s.client.id, to), d = "", edge = {};
+  m.edges.forEach(function (e) { edge[e[0] + "|" + e[1]] = 1; });
+  for (var i = 0; i < path.length - 1; i++) {
+    var fwd = edge[path[i] + "|" + path[i + 1]], g = fwd ? chartSeg(m, path[i], path[i + 1], false) : chartSeg(m, path[i], path[i + 1], true);
+    d += (i ? " " : "M" + g.s.join(" ") + " ") + g.d;
+  }
+  var pa = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  pa.setAttribute("d", d);
+  pa.setAttribute("class", "cacross");
+  m.svg.appendChild(pa);
+  var dd = dotted ? chartDots(m, pa, s.lvl) : { len: pa.getTotalLength(), dots: [] };
+  return chartRunAlong(m, s, pa, dd.len, dd.dots, tok);
+}
+
 /* One rule pill crossing straight from a sibling or cousin to the target, leaving a dotted line */
 function chartTravelAcross(m, s, tok) {
-  return new Promise(function (ok, no) {
-    var ac = m.across[s.key], start = null, turned = false;
-    ac.label.classList.add("show");
-    var run = el("span", "crun rpill", s.rule.label);
-    m.cv.appendChild(run);
-    var dur = 300 + ac.len * 3;
-    function frame(t) {
-      if (tok !== chart.tok) { run.remove(); no(); return; }
-      if (start === null) start = t;
-      var k = chart.skip ? 1 : Math.min(1, (t - start) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-      if (!turned && k > .12) { turned = true; run.className = "crun rule-badge " + s.lvl; run.textContent = s.rule.label + " - " + LEVEL_LABELS[s.lvl]; }
-      var pt = ac.path.getPointAtLength(ac.len * e);
-      run.style.left = pt.x + "px";
-      run.style.top = pt.y + "px";
-      ac.dots.forEach(function (d) { if (d.at <= ac.len * e + .01) d.el.style.opacity = ".9"; });
-      if (k < 1) requestAnimationFrame(frame); else { run.remove(); ok(); }
-    }
-    requestAnimationFrame(frame);
-  });
+  var ac = m.across[s.key];
+  ac.label.classList.add("show");
+  return chartRunAlong(m, s, ac.path, ac.len, ac.dots, tok);
 }
 
 /* The topmost card on show sits at the top of the chart, so the target starts there and glides down as parents are added above it */
@@ -2749,7 +2741,7 @@ function playChart(m) {
   m.sources.forEach(function (s) {
     p = p.then(function () {
       return Promise.all(Object.keys(s.reach).map(function (to) {
-        return (s.kind === "lateral" ? chartTravelAcross(m, s, tok) : chartTravel(m, s, to, tok)).then(function () {
+        return (s.kind === "lateral" ? chartTravelAcross(m, s, tok) : chartTravel(m, s, to, tok, to === tid)).then(function () {
           show(m.pill[s.key + "|" + to]);
           if (to !== tid) return;
           m.card[tid].classList.add("pulse");

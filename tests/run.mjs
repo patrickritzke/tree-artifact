@@ -199,7 +199,10 @@ test("the animation shows the structure up to the ultimate owner, with the rule 
   assert.match(by("Parent Co"), /IESBA \(PIE\)/, "the source carries its rule");
   assert.match(by("Mid Co"), /IESBA \(PIE\) - Restricted/, "an entity on the inheritance path carries the result");
   assert.match(by("Target LLC"), /IESBA \(PIE\) - Restricted/);
-  assert.equal(await p.$$eval("#result-body .cdot", (d) => d.length), 0, "parent and child inheritance follows the lines, with no dotted line");
+  const dots = await p.$$eval("#result-body .cdot", (d) => d.map((x) => parseFloat(x.style.opacity || 0)));
+  assert.ok(dots.length > 5 && dots.every((o) => o > 0), "the inheritance is a dotted line over the structure lines, fully drawn");
+  assert.equal(await p.$$eval("#result-body .chl", (d) => d.length), 0, "no solid inheritance line");
+  assert.equal(await p.$$eval("#result-body .clabel", (d) => d.length), 0, "no across label for a parent and child");
   noErrors(p);
 });
 
