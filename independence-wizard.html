@@ -495,6 +495,8 @@
       <span class="tb-chev">▸</span><span>Display Options</span><span class="summary" id="display-summary"></span>
     </button>
     <div class="tb-body" id="body-display" hidden>
+      <div class="opt-row"><span class="opt-label">Tree</span>
+        <span class="seg" id="tree-view"><button class="pill" type="button" data-v="filtered">Filtered tree (relationships only)</button><button class="pill" type="button" data-v="full">Full tree</button></span></div>
       <div class="opt-row"><span class="opt-label">Rule inheritance</span>
         <span class="seg" id="inherit-view"><button class="pill" type="button" data-v="strictest">Target only / Strictest rule</button><button class="pill" type="button" data-v="targetAll">Target only / All rules</button><button class="pill" type="button" data-v="all">All entities / All rules</button></span></div>
     </div>
@@ -1063,7 +1065,7 @@ function siTag() {
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
 
 var state = {
-  tree: "filtered", /* the step 3 tree rows: filtered (relationships only) or full; follows the view below */
+  tree: "filtered", /* the step 3 tree rows: filtered (relationships only) or full; separate from the view below */
   inherit: "strictest", /* the step 3 view: "strictest" (target only, strictest rule), "targetAll" (target only, all rules) or "all" (all entities, all rules) */
   serviceLine: null, /* the target's service line, chosen on the first page; every other entity has none */
   mode: "independence", /* the wizard always works in the independence view */
@@ -1673,8 +1675,9 @@ function renderAll() {
   }
   $("si-section").hidden = !siAll;
   $("node-count").textContent = cond ? (shown + siAll) + " of " + (treeAll + siAll) + " entities" : (shown + siAll) + " entities";
+  document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.tree); });
   document.querySelectorAll("#inherit-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.inherit); });
-  $("display-summary").textContent = { strictest: "Target only / Strictest rule", targetAll: "Target only / All rules", all: "All entities / All rules" }[state.inherit];
+  $("display-summary").textContent = (state.tree === "full" ? "Full tree" : "Filtered tree") + " \u00B7 " + { strictest: "Target only / Strictest rule", targetAll: "Target only / All rules", all: "All entities / All rules" }[state.inherit];
   renderRuleBar();
 }
 
@@ -2834,7 +2837,11 @@ $("fw-back").addEventListener("click", function (e) { if (e.target === this) thi
 });
 $("inherit-view").addEventListener("click", function (e) {
   var v = e.target.getAttribute("data-v");
-  if (v) { state.inherit = v; state.tree = v === "all" ? "full" : "filtered"; renderAll(); } /* "target only" views use the filtered tree; "all entities" the full tree */
+  if (v) { state.inherit = v; renderAll(); }
+});
+$("tree-view").addEventListener("click", function (e) { /* hidden subsidiaries or every entity: it changes the rows, not which results show */
+  var v = e.target.getAttribute("data-v");
+  if (v) { state.tree = v; renderAll(); }
 });
 $("start-service").addEventListener("change", function () {
   state.serviceLine = this.value || null;

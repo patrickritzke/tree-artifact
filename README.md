@@ -131,15 +131,22 @@ Picking a company by hand means "treat this as an audit relationship in this jur
 One row per audit relationship: a checkbox, the company, and a choice of the six rules. A summary on the right counts how many entities are restricted or need a materiality check.
 
 ### Display Options (collapsed by default)
-One choice, three views:
+Two independent choices, which can be combined freely.
+
+**Tree**: hidden subsidiaries or real entities. It changes only which rows show, not which results show.
+
+| Choice | Rows |
+|---|---|
+| **Filtered tree (relationships only)** (the default) | The client, the audit and non-audit relationships, and their parents. What is left out is a quiet tag under its parent: **Filtered: 44 subsidiaries**. |
+| **Full tree** | Every entity. |
+
+**Rule inheritance**: which results show on the rows.
 
 | View | What it shows |
 |---|---|
-| **Target only / Strictest rule** (the default) | The filtered tree: only the client, the audit and non-audit relationships, and their parents. The client shows its one strictest result, and the audit relationship it comes from is marked **Inherited from**. |
-| **Target only / All rules** | The same filtered tree. The client shows its strictest result plus a grey **Other (n)** pill for its other results. Every other audit relationship those results come from gets a grey **Inherited from** pill (click it to see that result). The strictest source keeps its coloured pill. |
-| **All entities / All rules** | The full tree. Every entity shows its own strictest result, with an **Other (n)** pill where it has more. |
-
-When the tree is filtered, what was left out is shown as a quiet tag under its parent: **Filtered: 44 subsidiaries**.
+| **Target only / Strictest rule** (the default) | The client shows its one strictest result, and the audit relationship it comes from is marked **Inherited from**. |
+| **Target only / All rules** | The client shows its strictest result plus a grey **Other (n)** pill for its other results. Every other audit relationship those results come from gets a grey **Inherited from** pill (click it to see that result). The strictest source keeps its coloured pill. |
+| **All entities / All rules** | Every entity shows its own strictest result, with an **Other (n)** pill where it has more. |
 
 ### The grids
 There are two, one above the other, and the page scrolls as a whole.
@@ -229,4 +236,4 @@ First time only: `npm install`, then `npx playwright install chromium` (or point
 
 ### What the tests cover
 Built against a fake host with made-up companies, run once for the source and once for the min file:
-the three display views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, the animation drawing only the inheritance path, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.
+the tree choice and the three rule inheritance views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, the animation drawing only the inheritance path, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.

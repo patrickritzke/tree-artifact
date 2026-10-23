@@ -38,9 +38,10 @@ const rows = (page, grid = "tree-grid") =>
 const text = (page, sel) => page.textContent(sel).then((t) => t.replace(/\s+/g, " ").trim());
 const noErrors = (page) => assert.deepEqual(page.errors, [], "page errors");
 const openDisplay = (page) => page.click("#head-display");
-const setView = async (page, mode) => { // "strictest" | "targetAll" | "all"
+const setView = async (page, mode, tree) => { // mode: "strictest" | "targetAll" | "all";  tree: "filtered" | "full" (optional)
   if (await page.$eval("#body-display", (e) => e.hidden)) await openDisplay(page);
   await page.click(`#inherit-view [data-v=${mode}]`);
+  if (tree) await page.click(`#tree-view [data-v=${tree}]`);
   await page.waitForTimeout(150);
 };
 
@@ -59,7 +60,7 @@ test("default view is filtered tree with the strictest result only", async (f) =
     " | ▾ Mid Co (X)",
     "restricted | Target LLC (T) SEC - Restricted",
   ]);
-  assert.equal(await text(p, "#display-summary"), "Target only / Strictest rule");
+  assert.equal(await text(p, "#display-summary"), "Filtered tree · Target only / Strictest rule");
   assert.equal(await p.$eval("#body-display", (e) => e.hidden), true, "Display Options starts collapsed");
   assert.equal(await text(p, "#tree-grid th.icon-col:not(.rule-col)"), "Audit Rule Treatment");
   noErrors(p);
@@ -83,14 +84,32 @@ test("target only / all rules: Other pill on the target, grey Inherited from on 
   noErrors(p);
 });
 
-test("all entities / all rules lists every entity with its own strictest result", async (f) => {
+test("all entities / all rules shows every entity's own result, on the filtered tree too", async (f) => {
   const p = await open(f, { members: SEC_AICPA });
   await setView(p, "all");
   const r = await rows(p);
-  assert.equal(r.length, 6);
-  assert.ok(r.some((x) => x.includes("Sub Two")) && r.some((x) => x.includes("Bravo Ltd")));
+  assert.ok(r.some((x) => /Filtered: /.test(x)), "the tree is still filtered");
   assert.match(r.find((x) => x.includes("Target LLC")), /Other \(1\)/);
-  assert.match(await text(p, "#display-summary"), /All entities \/ All rules/);
+  assert.match(r.find((x) => x.includes("Root Co")), /(Materiality check|Restricted)/, "Root Co shows its own result");
+  assert.match(await text(p, "#display-summary"), /Filtered tree · All entities \/ All rules/);
+  noErrors(p);
+});
+
+test("the tree choice is independent: full tree lists every entity, whichever view is chosen", async (f) => {
+  const p = await open(f, { members: SEC_AICPA });
+  for (const view of ["strictest", "targetAll", "all"]) {
+    await setView(p, view, "full");
+    const r = await rows(p);
+    assert.equal(r.length, 6, `${view}: every entity is listed`);
+    assert.ok(!r.some((x) => /Filtered: /.test(x)), `${view}: no filtered lines`);
+    assert.ok(r.some((x) => x.includes("Sub Two")) && r.some((x) => x.includes("Bravo Ltd")));
+  }
+  await setView(p, "strictest", "full");
+  const marked = (await rows(p)).filter((x) => /Inherited from|SEC - Restricted/.test(x));
+  assert.equal(marked.length, 2, "strictest still marks only the target and its source");
+  assert.match(await text(p, "#display-summary"), /Full tree · Target only \/ Strictest rule/);
+  await setView(p, "strictest", "filtered");
+  assert.ok((await rows(p)).some((x) => /Filtered: /.test(x)), "back to hidden subsidiaries");
   noErrors(p);
 });
 
