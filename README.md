@@ -171,7 +171,7 @@ A banner shows **the one strictest result**: the treatment, the audit rule, and 
 - **No restriction identified**: green.
 - **No audit rules to apply / applied**: when no audit relationship has a usable rule, or every one is switched off.
 
-Under the banner an animation shows the audit relationship's rule travelling down the tree and arriving at the client, with a Replay button. Notes list anything unusual: the client being an audit relationship itself, rows switched off, relationships with no rule, and how each rule read each relationship, including the service line.
+Under the banner an animation shows the audit relationship's rule travelling down to the client, with a Replay button. It draws **only the path the rule takes**: the audit relationship, each entity between it and the client, and the client. It follows the kind of link that produced the result (tree links for a tree relationship, close-affiliate links for a SigInf one). Other parents of the client, entities above the audit relationship, and other audit relationships are not drawn. Notes list anything unusual: the client being an audit relationship itself, rows switched off, relationships with no rule, and how each rule read each relationship, including the service line.
 
 The assessment applies the audit rules to **corporate relationships only**. It does not consider the specific services requested.
 
@@ -229,4 +229,4 @@ First time only: `npm install`, then `npx playwright install chromium` (or point
 
 ### What the tests cover
 Built against a fake host with made-up companies, run once for the source and once for the min file:
-the three display views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.
+the three display views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, the animation drawing only the inheritance path, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.

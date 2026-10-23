@@ -150,6 +150,33 @@ test("a row whose only child is a filtered line starts collapsed", async (f) => 
   noErrors(p);
 });
 
+// ---- the assessment ------------------------------------------------------------------------------
+
+test("the animation draws only the path from the audit relationship down to the client", async (f) => {
+  // Parent Co > Mid Co > Target; another entity (Other Parent) is also a close-affiliate parent of the target and holds an audit relationship.
+  const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [
+    { externalId: "C", name: "Parent Co", subCompanies: [
+      { externalId: "SG", name: "Mid Co", subCompanies: [{ externalId: "T", name: "Target LLC", subCompanies: [] }] },
+      { externalId: "O", name: "Side Co", subCompanies: [] },
+    ] },
+  ] };
+  const aff = [{ id: "C", name: "Parent Co", closeAffiliates: [
+    { id: "SG", name: "Mid Co", closeAffiliates: [{ id: "T", name: "Target LLC", closeAffiliates: [] }] },
+    { id: "PS", name: "Other Parent", closeAffiliates: [{ id: "T", name: "Target LLC", closeAffiliates: [] }] },
+  ] }];
+  const members = [matter("m1", "C", "Audit [Audit - IESBA-PIE]"), matter("m2", "PS", "Audit [Audit - IESBA-PIE]")];
+  const p = await open(f, { tree, closeAffiliates: aff, members });
+  await p.click("#wiz-next");
+  await p.waitForTimeout(600);
+  assert.match(await text(p, "#result-body .verdict"), /Restricted/);
+  const names = await p.$$eval("#result-body .cnode", (n) => n.map((x) => x.querySelector("b, .cname, div")?.textContent.trim() || x.innerText.split("\n")[0].trim()));
+  const all = (await p.$$eval("#result-body .cnode", (n) => n.map((x) => x.innerText.replace(/\s+/g, " ")))).join(" | ");
+  assert.equal(names.length, 3, `three entities on the path, got: ${all}`);
+  assert.match(all, /Parent Co/); assert.match(all, /Mid Co/); assert.match(all, /Target LLC/);
+  assert.ok(!/Ultimate Co|Other Parent|Side Co/.test(all), "nothing above the source or beside the path");
+  noErrors(p);
+});
+
 // ---- significant influence -----------------------------------------------------------------------
 
 for (const [shape, affiliates] of Object.entries(closeAffiliates)) {

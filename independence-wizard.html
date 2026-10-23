@@ -2454,20 +2454,40 @@ function chartModel(items, level) {
     n.parents.forEach(function (p) { if (ps.indexOf(p) === -1) ps.push(p); });
     parents.set(n.id, ps);
   });
-  var inc = new Set([tid]);
-  (function up(id) { (parents.get(id) || []).forEach(function (p) { if (!inc.has(p) && meta.has(p)) { inc.add(p); up(p); } }); })(tid);
-  items.forEach(function (it) { /* join each source to what is already drawn by its nearest route upward */
-    var q = [[it.client.id]], seen = {};
-    seen[it.client.id] = 1;
-    while (q.length) {
-      var p = q.shift(), last = p[p.length - 1];
-      if (inc.has(last)) { p.forEach(function (x) { inc.add(x); }); return; }
-      (parents.get(last) || []).forEach(function (n) { if (!seen[n] && meta.has(n)) { seen[n] = 1; q.push(p.concat(n)); } });
-    }
-    inc.add(it.client.id);
+  /* Only the way the rule travels to the target: every entity on a path from the source down to the target, along the kind of link
+     that gave the result (tree links for a tree relationship, close-affiliate links for a SigInf one). Nothing else is drawn,
+     not the other parents of the target, not what sits above the source. */
+  var linkSets = { tree: new Map(), aff: new Map() };
+  [[linkSets.tree, state.data.nodes], [linkSets.aff, state.data.affiliates]].forEach(function (g) {
+    g[1].forEach(function (n) {
+      var ps = g[0].get(n.id) || [];
+      n.parents.forEach(function (p) { if (ps.indexOf(p) === -1) ps.push(p); });
+      g[0].set(n.id, ps);
+    });
   });
-  var ids = Array.from(inc), edges = [], tier = {};
-  ids.forEach(function (id) { tier[id] = 0; (parents.get(id) || []).forEach(function (p) { if (inc.has(p)) edges.push([p, id]); }); });
+  var inc = new Set([tid]), edgeSeen = {}, edges = [];
+  items.forEach(function (it) {
+    var onlyAff = it.rels.length > 0 && it.rels.every(function (r) { return r.indexOf(AFF_PREFIX) === 0; });
+    var up = onlyAff ? linkSets.aff : linkSets.tree, kids = new Map();
+    up.forEach(function (ps, id) { ps.forEach(function (p) { if (!kids.has(p)) kids.set(p, []); kids.get(p).push(id); }); });
+    var above = new Set([tid]), below = new Set([it.client.id]);
+    (function climb(id) { (up.get(id) || []).forEach(function (q) { if (!above.has(q)) { above.add(q); climb(q); } }); })(tid);
+    (function descend(id) { (kids.get(id) || []).forEach(function (q) { if (!below.has(q)) { below.add(q); descend(q); } }); })(it.client.id);
+    var path = Array.from(above).filter(function (x) { return below.has(x) && meta.has(x); });
+    if (!above.has(it.client.id) || path.indexOf(tid) < 0) { /* not joined by a link we can follow: show the source above the target */
+      inc.add(it.client.id);
+      edges.push([it.client.id, tid]);
+      return;
+    }
+    path.forEach(function (x) { inc.add(x); });
+    path.forEach(function (id) {
+      (up.get(id) || []).forEach(function (q) {
+        if (path.indexOf(q) >= 0 && !edgeSeen[q + ">" + id]) { edgeSeen[q + ">" + id] = 1; edges.push([q, id]); }
+      });
+    });
+  });
+  var ids = Array.from(inc), tier = {};
+  ids.forEach(function (id) { tier[id] = 0; });
   for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); });
   var sources = items.map(function (it, i) { /* the rule as inherited, before any service line exemption */
     var pair = { client: it.client, rule: it.rule, rels: relsFor(it.client.id) }, reach = {};
