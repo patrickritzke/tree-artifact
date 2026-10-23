@@ -1233,7 +1233,7 @@ function extraColumns(pairs) {
   if (!pairs.length) return [];
   var marks = viewMarks(pairs);
   return [{
-    title: "Treatment",
+    title: "Audit Rule Treatment",
     cell: function (n, td) {
       if (marks) { /* strictest view: the target's treatment, and "Inherited from" on the audit client(s) behind it */
         var m = marks.get(n.id);
@@ -1274,7 +1274,7 @@ function ruleBadge(node, res) {
   b.type = "button";
   var lvl = res.level === "exempt" ? res.base : res.level; /* an exempt service line still shows the treatment inherited */
   b.className = "rule-badge " + lvl;
-  b.textContent = LEVEL_LABELS[lvl]; /* always the one strictest result */
+  b.textContent = res.items[0].rule.label + " - " + LEVEL_LABELS[lvl]; /* always the one strictest result, with the audit rule that gave it */
   b.title = "Show where this came from";
   b.setAttribute("aria-haspopup", "dialog");
   b.addEventListener("click", function () {
