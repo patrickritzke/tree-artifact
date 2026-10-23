@@ -1360,7 +1360,7 @@ function condense(roots, pairs) {
       else drop([p]);
     });
     if (gone.size && parentKey !== null) {
-      out.unshift({ id: "\u0000" + parentKey, name: gone.size + (gone.size === 1 ? " subsidiary" : " subsidiaries") + " filtered", key: parentKey + "/s", sum: true, children: [] });
+      out.unshift({ id: "\u0000" + parentKey, name: "Filtered: " + gone.size + (gone.size === 1 ? " subsidiary" : " subsidiaries"), key: parentKey + "/s", sum: true, children: [] });
     }
     return out;
   }
