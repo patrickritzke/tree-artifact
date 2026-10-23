@@ -2276,7 +2276,7 @@ function buildAssessment() {
   var clients = pairs.length, s = clients === 1 ? "" : "s";
   var out = { level: res.level || "none", headline: "", summary: "", items: [], notes: [] };
 
-  out.items = res.items.filter(function (i) { return i.level === res.level; }); /* only the strictest results */
+  out.items = res.items.slice(0, 1); /* the one strictest result: items are sorted strictest first, then highest up the tree */
 
   var switchedOff = state.auditRows.some(function (r) { return r.client && r.rule && !r.on; });
   if (!clients && switchedOff) {
