@@ -2493,7 +2493,17 @@ function chartModel(items, level) {
   });
   var ids = Array.from(inc), tier = {};
   ids.forEach(function (id) { tier[id] = 0; });
-  for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); });
+  var settle = function () { for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); }); };
+  settle();
+  /* A sibling (or cousin) and the target share a row: the shallower of the two is moved down to the deeper one, and the links simply
+     span the extra row. Without this a sibling that also sits under a deeper parent pushes the target to the bottom of the chart. */
+  items.forEach(function (it, i) {
+    if (info[i].kind !== "lateral") return;
+    var row = Math.max(tier[it.client.id], tier[tid]);
+    tier[it.client.id] = row;
+    tier[tid] = row;
+    settle();
+  });
   var sources = items.map(function (it, i) { /* the rule as inherited, before any service line exemption */
     var pair = { client: it.client, rule: it.rule, rels: relsFor(it.client.id) }, reach = {};
     var lvl = level === "exempt" ? evalNode(tid, [pair], null).level : level;
@@ -2509,7 +2519,7 @@ function chartModel(items, level) {
 
 function drawChart(box, m) {
   box.innerHTML = "";
-  var W = 250, GX = 24, GY = 46, cv = el("div", "canvas"), rows = [], x = {};
+  var W = 250, GX = 24, GY = 34, cv = el("div", "canvas"), rows = [], x = {};
   var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   cv.appendChild(svg);
   box.appendChild(cv);

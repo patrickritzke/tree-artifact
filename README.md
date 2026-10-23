@@ -185,6 +185,8 @@ Under the banner an animation shows how the result reaches the client, with a Re
    - **Parent or subsidiary:** the dotted line is laid over the structure lines it follows, and every entity it passes through that takes the same result shows the rule pill.
    - **Sibling or cousin:** the dotted line goes **straight across**, labelled with the relationship ("Sibling", "Cousin", "SigInf - Sibling"). Only the audit relationship and the client carry the rule.
 
+A sibling and the client always sit **on the same row**. If the sibling also appears under a deeper parent, the client is moved down to meet it, and the link from their shared parent simply spans the extra row. Rows are kept close together so the chart stays compact.
+
 Entities that are only there to show the structure, such as the ultimate owner and the parents, never show a rule pill. The animation follows the kind of link that produced the result: tree links for a tree relationship, close-affiliate links for a SigInf one.
 
 Notes list anything unusual: the client being an audit relationship itself, rows switched off, relationships with no rule, and how each rule read each relationship, including the service line.

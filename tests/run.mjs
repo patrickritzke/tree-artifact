@@ -233,6 +233,25 @@ test("a sibling's inheritance goes straight across as a dotted line, with the st
   noErrors(p);
 });
 
+test("a sibling and the target share a row, even when the sibling also sits under a deeper parent", async (f) => {
+  // Ultimate > Parent > (Target, Sibling, Deep Co); Sibling also appears under Deep Co, which would push it a row below the target.
+  const sibling = { externalId: "S", name: "Sibling Co", subCompanies: [] };
+  const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [
+    { externalId: "A", name: "Parent Co", subCompanies: [
+      { externalId: "T", name: "Target LLC", subCompanies: [] },
+      sibling,
+      { externalId: "Q", name: "Deep Co", subCompanies: [sibling] },
+    ] },
+  ] };
+  const p = await open(f, { tree, members: [matter("m1", "S", "Audit [Audit - IESBA-PIE]")] });
+  await p.click("#wiz-next");
+  await p.waitForTimeout(9000);
+  const tops = await p.$$eval("#result-body .cnode", (n) => Object.fromEntries(n.map((x) => [x.innerText.split("\n").find((l) => /Co$|LLC$/.test(l.trim())).trim(), x.offsetTop])));
+  assert.equal(tops["Target LLC"], tops["Sibling Co"], `same row: ${JSON.stringify(tops)}`);
+  assert.ok(tops["Parent Co"] < tops["Target LLC"], "still below its parent");
+  noErrors(p);
+});
+
 // ---- significant influence -----------------------------------------------------------------------
 
 for (const [shape, affiliates] of Object.entries(closeAffiliates)) {
