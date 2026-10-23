@@ -171,8 +171,10 @@ test("a row whose only child is a filtered line starts collapsed", async (f) => 
 
 // ---- the assessment ------------------------------------------------------------------------------
 
-test("the animation draws only the path from the audit relationship down to the client", async (f) => {
-  // Parent Co > Mid Co > Target; another entity (Other Parent) is also a close-affiliate parent of the target and holds an audit relationship.
+const nodeTexts = (p) => p.$$eval("#result-body .cnode", (n) => n.map((x) => x.innerText.replace(/\s+/g, " ")));
+
+test("the animation shows the structure up to the ultimate owner, with the rule only where it is inherited", async (f) => {
+  // Ultimate Co > Parent Co (audit) > Mid Co > Target; Side Co hangs beside Mid Co; Other Parent is a close-affiliate parent that also holds an audit relationship.
   const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [
     { externalId: "C", name: "Parent Co", subCompanies: [
       { externalId: "SG", name: "Mid Co", subCompanies: [{ externalId: "T", name: "Target LLC", subCompanies: [] }] },
@@ -186,13 +188,45 @@ test("the animation draws only the path from the audit relationship down to the 
   const members = [matter("m1", "C", "Audit [Audit - IESBA-PIE]"), matter("m2", "PS", "Audit [Audit - IESBA-PIE]")];
   const p = await open(f, { tree, closeAffiliates: aff, members });
   await p.click("#wiz-next");
-  await p.waitForTimeout(600);
+  await p.waitForTimeout(9000); // let the animation finish
   assert.match(await text(p, "#result-body .verdict"), /Restricted/);
-  const names = await p.$$eval("#result-body .cnode", (n) => n.map((x) => x.querySelector("b, .cname, div")?.textContent.trim() || x.innerText.split("\n")[0].trim()));
-  const all = (await p.$$eval("#result-body .cnode", (n) => n.map((x) => x.innerText.replace(/\s+/g, " ")))).join(" | ");
-  assert.equal(names.length, 3, `three entities on the path, got: ${all}`);
-  assert.match(all, /Parent Co/); assert.match(all, /Mid Co/); assert.match(all, /Target LLC/);
-  assert.ok(!/Ultimate Co|Other Parent|Side Co/.test(all), "nothing above the source or beside the path");
+  const all = await nodeTexts(p);
+  const by = (name) => all.find((x) => x.includes(name));
+  assert.equal(all.length, 4, `entities: ${all.join(" | ")}`);
+  assert.ok(by("Ultimate Co"), "shown up to the ultimate owner");
+  assert.ok(!all.join().match(/Other Parent|Side Co/), "nothing beside the path");
+  assert.ok(!/IESBA/.test(by("Ultimate Co").replace("IESBA (PIE) - ", "")) && !/- Restricted/.test(by("Ultimate Co")), "no rule on an entity outside the inheritance");
+  assert.match(by("Parent Co"), /IESBA \(PIE\)/, "the source carries its rule");
+  assert.match(by("Mid Co"), /IESBA \(PIE\) - Restricted/, "an entity on the inheritance path carries the result");
+  assert.match(by("Target LLC"), /IESBA \(PIE\) - Restricted/);
+  assert.equal(await p.$$eval("#result-body .cdot", (d) => d.length), 0, "parent and child inheritance follows the lines, with no dotted line");
+  noErrors(p);
+});
+
+test("a sibling's inheritance goes straight across as a dotted line, with the structure drawn first", async (f) => {
+  // Root > Parent > (Target, Sibling Co); the audit relationship is the sibling.
+  const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [
+    { externalId: "A", name: "Parent Co", subCompanies: [
+      { externalId: "T", name: "Target LLC", subCompanies: [] },
+      { externalId: "S", name: "Sibling Co", subCompanies: [] },
+      { externalId: "Z", name: "Unrelated Co", subCompanies: [] },
+    ] },
+  ] };
+  const p = await open(f, { tree, members: [matter("m1", "S", "Audit [Audit - IESBA-PIE]")] });
+  await p.click("#wiz-next");
+  await p.waitForTimeout(500);
+  // early in the animation the structure is there but nothing is inherited yet
+  assert.equal(await p.$$eval("#result-body .cdot", (d) => d.filter((x) => parseFloat(x.style.opacity || 0) > 0).length), 0, "no dots before the structure is built");
+  await p.waitForTimeout(9000);
+  const all = await nodeTexts(p);
+  assert.equal(all.length, 4, `entities: ${all.join(" | ")}`);
+  assert.ok(!all.join().includes("Unrelated Co"), "an unrelated sibling is not drawn");
+  assert.match(all.find((x) => x.includes("Target LLC")), /Materiality check/);
+  assert.match(all.find((x) => x.includes("Sibling Co")), /IESBA \(PIE\)/, "the source carries its rule");
+  assert.ok(!/- (Restricted|Materiality)/.test(all.find((x) => x.includes("Parent Co")) + all.find((x) => x.includes("Ultimate Co"))), "no rule on the parents");
+  const dots = await p.$$eval("#result-body .cdot", (d) => d.map((x) => parseFloat(x.style.opacity || 0)));
+  assert.ok(dots.length > 5 && dots.every((o) => o > 0), "the dotted line is fully drawn");
+  assert.equal(await text(p, "#result-body .clabel"), "Sibling", "the line says what the relationship is");
   noErrors(p);
 });
 

@@ -178,7 +178,16 @@ A banner shows **the one strictest result**: the treatment, the audit rule, and 
 - **No restriction identified**: green.
 - **No audit rules to apply / applied**: when no audit relationship has a usable rule, or every one is switched off.
 
-Under the banner an animation shows the audit relationship's rule travelling down to the client, with a Replay button. It draws **only the path the rule takes**: the audit relationship, each entity between it and the client, and the client. It follows the kind of link that produced the result (tree links for a tree relationship, close-affiliate links for a SigInf one). Other parents of the client, entities above the audit relationship, and other audit relationships are not drawn. Notes list anything unusual: the client being an audit relationship itself, rows switched off, relationships with no rule, and how each rule read each relationship, including the service line.
+Under the banner an animation shows how the result reaches the client, with a Replay button. It builds **structure first, then inheritance**:
+
+1. **Structure.** The client and the audit relationship the result comes from appear, each under its parents all the way up to the ultimate owner, joined by plain grey parent/child lines. Nothing else from the tree is drawn: no other branches, no other parents of the client, no other audit relationships.
+2. **Inheritance.** The audit relationship's rule then appears, and the result travels to the client in one of two ways:
+   - **Parent or subsidiary:** it follows the structure lines, in red (or orange), and every entity it passes through that takes the same result shows the rule pill.
+   - **Sibling or cousin:** it goes **straight across** as a dotted line, labelled with the relationship ("Sibling", "Cousin", "SigInf - Sibling"). Only the audit relationship and the client carry the rule.
+
+Entities that are only there to show the structure, such as the ultimate owner and the parents, never show a rule pill. The animation follows the kind of link that produced the result: tree links for a tree relationship, close-affiliate links for a SigInf one.
+
+Notes list anything unusual: the client being an audit relationship itself, rows switched off, relationships with no rule, and how each rule read each relationship, including the service line.
 
 The assessment applies the audit rules to **corporate relationships only**. It does not consider the specific services requested.
 
@@ -236,4 +245,4 @@ First time only: `npm install`, then `npx playwright install chromium` (or point
 
 ### What the tests cover
 Built against a fake host with made-up companies, run once for the source and once for the min file:
-the tree choice and the three rule inheritance views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, the animation drawing only the inheritance path, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.
+the tree choice and the three rule inheritance views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, the animation (structure up to the ultimate owner, rule only on the inheritance path, a dotted line across for a sibling), firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.

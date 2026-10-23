@@ -397,6 +397,13 @@
   .chl.restricted { stroke: var(--restr-fg); }
   .chl.materiality { stroke: var(--mat-fg); }
   .chl.exempt { stroke: var(--ok-fg); }
+  .cacross { stroke: none; fill: none; }
+  .cdot { fill: var(--border-2); opacity: 0; }
+  .cdot.restricted { fill: var(--restr-fg); }
+  .cdot.materiality { fill: var(--mat-fg); }
+  .cdot.exempt { fill: var(--ok-fg); }
+  .canvas > .clabel { position: absolute; z-index: 3; transform: translate(-50%, -50%) scale(.6); font-size: 10.5px; font-weight: 600; color: var(--muted); background: var(--surface); border: 1px solid var(--border-2); border-radius: 999px; padding: 0 8px; white-space: nowrap; }
+  .canvas > .clabel.show { transform: translate(-50%, -50%); }
   .cnode { position: absolute; width: 250px; padding: 5px 8px 6px; background: var(--surface); border: 1.5px solid var(--border-2); border-radius: 8px;
            opacity: 0; transform: translateY(8px) scale(.97); transition: opacity .45s, transform .45s, box-shadow .5s; }
   .cnode.show { opacity: 1; transform: none; }
@@ -2450,44 +2457,43 @@ var chart = { tok: 0, skip: false };
 function chartStop() { chart.tok++; }
 
 function chartModel(items, level) {
-  var parents = new Map(), meta = new Map(), tid = state.target.id;
-  state.data.nodes.concat(state.data.affiliates).forEach(function (n) {
-    if (!meta.has(n.id)) meta.set(n.id, n);
-    var ps = parents.get(n.id) || [];
-    n.parents.forEach(function (p) { if (ps.indexOf(p) === -1) ps.push(p); });
-    parents.set(n.id, ps);
-  });
-  /* Only the way the rule travels to the target: every entity on a path from the source down to the target, along the kind of link
-     that gave the result (tree links for a tree relationship, close-affiliate links for a SigInf one). Nothing else is drawn,
-     not the other parents of the target, not what sits above the source. */
-  var linkSets = { tree: new Map(), aff: new Map() };
-  [[linkSets.tree, state.data.nodes], [linkSets.aff, state.data.affiliates]].forEach(function (g) {
+  var meta = new Map(), tid = state.target.id;
+  state.data.nodes.concat(state.data.affiliates).forEach(function (n) { if (!meta.has(n.id)) meta.set(n.id, n); });
+  /* Structure first: the target and every source, each under its parents all the way up to the ultimate owner. The inheritance sits on
+     top of that structure and touches only what it passes through: down the lines for a parent or subsidiary, straight across for a
+     sibling or cousin. Links are the kind that gave the result: tree links for a tree relationship, close-affiliate links for SigInf. */
+  var links = { tree: new Map(), aff: new Map() };
+  [[links.tree, state.data.nodes], [links.aff, state.data.affiliates]].forEach(function (g) {
     g[1].forEach(function (n) {
       var ps = g[0].get(n.id) || [];
       n.parents.forEach(function (p) { if (ps.indexOf(p) === -1) ps.push(p); });
       g[0].set(n.id, ps);
     });
   });
-  var inc = new Set([tid]), edgeSeen = {}, edges = [];
+  var inc = new Set([tid]), edgeSeen = {}, edges = [], info = [];
   items.forEach(function (it) {
+    var src = it.client.id;
     var onlyAff = it.rels.length > 0 && it.rels.every(function (r) { return r.indexOf(AFF_PREFIX) === 0; });
-    var up = onlyAff ? linkSets.aff : linkSets.tree, kids = new Map();
+    var up = onlyAff ? links.aff : links.tree, kids = new Map();
     up.forEach(function (ps, id) { ps.forEach(function (p) { if (!kids.has(p)) kids.set(p, []); kids.get(p).push(id); }); });
-    var above = new Set([tid]), below = new Set([it.client.id]);
-    (function climb(id) { (up.get(id) || []).forEach(function (q) { if (!above.has(q)) { above.add(q); climb(q); } }); })(tid);
-    (function descend(id) { (kids.get(id) || []).forEach(function (q) { if (!below.has(q)) { below.add(q); descend(q); } }); })(it.client.id);
-    var path = Array.from(above).filter(function (x) { return below.has(x) && meta.has(x); });
-    if (!above.has(it.client.id) || path.indexOf(tid) < 0) { /* not joined by a link we can follow: show the source above the target */
-      inc.add(it.client.id);
-      edges.push([it.client.id, tid]);
-      return;
-    }
-    path.forEach(function (x) { inc.add(x); });
-    path.forEach(function (id) {
+    var walk = function (start, map) { /* start and everything reachable through map */
+      var seen = new Set([start]);
+      (function go(id) { (map.get(id) || []).forEach(function (q) { if (!seen.has(q) && meta.has(q)) { seen.add(q); go(q); } }); })(start);
+      return seen;
+    };
+    var aboveT = walk(tid, up), aboveS = walk(src, up), kind = "lateral", path = [];
+    if (aboveT.has(src)) { kind = "line"; var dn = walk(src, kids); path = Array.from(aboveT).filter(function (x) { return dn.has(x); }); }
+    else if (aboveS.has(tid)) { kind = "line"; var dn2 = walk(tid, kids); path = Array.from(aboveS).filter(function (x) { return dn2.has(x); }); }
+    var shown = new Set();
+    aboveT.forEach(function (x) { shown.add(x); });
+    aboveS.forEach(function (x) { shown.add(x); });
+    shown.forEach(function (x) { inc.add(x); });
+    shown.forEach(function (id) {
       (up.get(id) || []).forEach(function (q) {
-        if (path.indexOf(q) >= 0 && !edgeSeen[q + ">" + id]) { edgeSeen[q + ">" + id] = 1; edges.push([q, id]); }
+        if (shown.has(q) && !edgeSeen[q + ">" + id]) { edgeSeen[q + ">" + id] = 1; edges.push([q, id]); }
       });
     });
+    info.push({ kind: kind, path: path });
   });
   var ids = Array.from(inc), tier = {};
   ids.forEach(function (id) { tier[id] = 0; });
@@ -2495,11 +2501,12 @@ function chartModel(items, level) {
   var sources = items.map(function (it, i) { /* the rule as inherited, before any service line exemption */
     var pair = { client: it.client, rule: it.rule, rels: relsFor(it.client.id) }, reach = {};
     var lvl = level === "exempt" ? evalNode(tid, [pair], null).level : level;
-    ids.forEach(function (id) {
+    if (info[i].kind === "lateral") reach[tid] = 1; /* straight across: only the target takes the result */
+    else info[i].path.forEach(function (id) { /* down or up the lines: whatever it passes through that takes the same result */
       if (id === it.client.id) return;
       if (id === tid || evalNode(id, [pair], null).level === lvl) reach[id] = 1;
     });
-    return { key: i, client: it.client, rule: it.rule, reach: reach, lvl: lvl, exempt: level === "exempt" };
+    return { key: i, client: it.client, rule: it.rule, reach: reach, lvl: lvl, exempt: level === "exempt", kind: info[i].kind, label: showRels(it.rels)[0] };
   });
   return { ids: ids, edges: edges, tier: tier, meta: meta, sources: sources, level: level };
 }
@@ -2576,9 +2583,10 @@ function drawChart(box, m) {
     m.card[m.engId].style.left = (x[state.target.id] + W / 2) + "px";
     m.card[m.engId].style.height = tc.offsetHeight + "px";
   }
-  cv.style.height = (bottom + 14) + "px";
+  var room = m.sources.some(function (sc) { return sc.kind === "lateral"; }) ? 44 : 0; /* a sibling's dotted line dips under its row */
+  cv.style.height = (bottom + 14 + room) + "px";
   svg.setAttribute("width", cw);
-  svg.setAttribute("height", bottom + 14);
+  svg.setAttribute("height", bottom + 14 + room);
   m.edges.forEach(function (e) {
     var g = chartSeg(m, e[0], e[1], false), pa = document.createElementNS("http://www.w3.org/2000/svg", "path");
     pa.setAttribute("d", "M" + g.s.join(" ") + g.d);
@@ -2588,6 +2596,40 @@ function drawChart(box, m) {
   });
   m.svg = svg;
   m.cv = cv;
+  m.across = {};
+  m.sources.forEach(function (s) { /* sibling or cousin: a dotted line straight from the source to the target, drawn dot by dot as it plays */
+    if (s.kind !== "lateral") return;
+    var g = chartAcross(m, s.client.id, state.target.id), pa = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pa.setAttribute("d", g.d);
+    pa.setAttribute("class", "cacross");
+    svg.appendChild(pa);
+    var len = pa.getTotalLength(), n = Math.max(3, Math.round(len / 9)), dots = [];
+    for (var i = 0; i <= n; i++) {
+      var pt = pa.getPointAtLength(len * i / n), c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      c.setAttribute("cx", pt.x);
+      c.setAttribute("cy", pt.y);
+      c.setAttribute("r", 2.4);
+      c.setAttribute("class", "cdot " + s.lvl);
+      svg.appendChild(c);
+      dots.push({ at: len * i / n, el: c });
+    }
+    var mid = pa.getPointAtLength(len / 2), lab = el("div", "pop clabel", s.label || "Related");
+    lab.style.left = mid.x + "px";
+    lab.style.top = mid.y + "px";
+    cv.appendChild(lab);
+    m.across[s.key] = { path: pa, len: len, dots: dots, label: lab };
+  });
+}
+
+/* Straight across between two cards that are not on each other's lines: under the row when they share a row, else card to card */
+function chartAcross(m, from, to) {
+  var a = m.card[from], b = m.card[to];
+  var ax = a.offsetLeft + a.offsetWidth / 2, bx = b.offsetLeft + b.offsetWidth / 2;
+  var ay1 = a.offsetTop, ay2 = a.offsetTop + a.offsetHeight, by1 = b.offsetTop, by2 = b.offsetTop + b.offsetHeight;
+  if (Math.abs(ay1 - by1) < 6) { var drop = 30; return { d: "M" + ax + " " + ay2 + " C" + ax + " " + (ay2 + drop) + " " + bx + " " + (by2 + drop) + " " + bx + " " + by2 }; }
+  if (ay1 < by1) { var my = (ay2 + by1) / 2; return { d: "M" + ax + " " + ay2 + " C" + ax + " " + my + " " + bx + " " + my + " " + bx + " " + by1 }; }
+  var my2 = (by2 + ay1) / 2;
+  return { d: "M" + ax + " " + ay1 + " C" + ax + " " + my2 + " " + bx + " " + my2 + " " + bx + " " + by2 };
 }
 
 /* Curve from the bottom of the upper card to the top of the lower one (reversed when walked upward) */
@@ -2649,6 +2691,29 @@ function chartTravel(m, s, to, tok) {
   });
 }
 
+/* One rule pill crossing straight from a sibling or cousin to the target, leaving a dotted line */
+function chartTravelAcross(m, s, tok) {
+  return new Promise(function (ok, no) {
+    var ac = m.across[s.key], start = null, turned = false;
+    ac.label.classList.add("show");
+    var run = el("span", "crun rpill", s.rule.label);
+    m.cv.appendChild(run);
+    var dur = 300 + ac.len * 3;
+    function frame(t) {
+      if (tok !== chart.tok) { run.remove(); no(); return; }
+      if (start === null) start = t;
+      var k = chart.skip ? 1 : Math.min(1, (t - start) / dur), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      if (!turned && k > .12) { turned = true; run.className = "crun rule-badge " + s.lvl; run.textContent = s.rule.label + " - " + LEVEL_LABELS[s.lvl]; }
+      var pt = ac.path.getPointAtLength(ac.len * e);
+      run.style.left = pt.x + "px";
+      run.style.top = pt.y + "px";
+      ac.dots.forEach(function (d) { if (d.at <= ac.len * e + .01) d.el.style.opacity = ".9"; });
+      if (k < 1) requestAnimationFrame(frame); else { run.remove(); ok(); }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
 /* The topmost card on show sits at the top of the chart, so the target starts there and glides down as parents are added above it */
 function chartShift(m) {
   var top = Infinity;
@@ -2684,7 +2749,7 @@ function playChart(m) {
   m.sources.forEach(function (s) {
     p = p.then(function () {
       return Promise.all(Object.keys(s.reach).map(function (to) {
-        return chartTravel(m, s, to, tok).then(function () {
+        return (s.kind === "lateral" ? chartTravelAcross(m, s, tok) : chartTravel(m, s, to, tok)).then(function () {
           show(m.pill[s.key + "|" + to]);
           if (to !== tid) return;
           m.card[tid].classList.add("pulse");
