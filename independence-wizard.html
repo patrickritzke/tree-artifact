@@ -2198,7 +2198,10 @@ function findEngagements() {
     var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
     var noteIds = auditIds.indexOf(state.target.id) < 0 ? auditIds.concat(state.target.id) : auditIds; /* the target's note feeds the profile */
     return Promise.all(noteIds.map(function (id) {
-      return callTool("get_party", { partyId: state.partyOf.get(id) || id, propertiesToLoad: ["Notes"] })
+      /* The Intapp party id only, never the tree or provider id: the target's own, else the one the engagement group holds */
+      var pid = id === state.target.id ? (state.data.partyId || state.partyOf.get(id)) : state.partyOf.get(id);
+      if (!pid) return Promise.resolve([id, null]);
+      return callTool("get_party", { partyId: pid, propertiesToLoad: ["Notes"] })
         .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
         .catch(function () { return [id, null]; });
     })).then(function (pairs) {
