@@ -597,7 +597,7 @@ function readHierarchy(root, map, idOf, nameOf, kidsOf) {
 
 function noteJson(html) {
   var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
-  var text = (doc.body.textContent || "").trim();
+  var text = (doc.body.textContent || "").replace(/\u00a0/g, " ").trim(); /* the note editor pads with non-breaking spaces, which JSON rejects */
   var tries = [text, "{" + text + "}"];
   for (var i = 0; i < tries.length; i++) {
     try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
