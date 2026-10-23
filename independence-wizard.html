@@ -1284,6 +1284,13 @@ function otherBadge(node, res) {
   return b;
 }
 
+/* Display only: a SigInf relationship that repeats a tree relationship already in the list (SigInf - Sibling beside Sibling) is left off.
+   The data keeps every classification; SigInf - Immediate Parent beside Sibling both show. */
+function showRels(list) {
+  list = list || [];
+  return list.filter(function (r) { return r.indexOf(AFF_PREFIX) !== 0 || list.indexOf(r.slice(AFF_PREFIX.length)) === -1; });
+}
+
 /* One result: "<level> by <rule>", then, indented, "from <client>" and "as a <relationship>" */
 function resultRow(it) {
   var row = el("div", "why-item"), l1 = el("div");
@@ -1300,7 +1307,7 @@ function resultRow(it) {
   sub.appendChild(from);
   var as = el("div");
   as.appendChild(document.createTextNode("as "));
-  it.rels.forEach(function (r, i) {
+  showRels(it.rels).forEach(function (r, i) {
     if (i) as.appendChild(document.createTextNode(" and "));
     as.appendChild(document.createTextNode(/^[aeiou]/i.test(r) ? "an " : "a "));
     as.appendChild(el("span", "relpill", r));
@@ -1506,7 +1513,7 @@ function renderGrid(gridKey, containerId, countId, roots, byId, opt) {
     var nm = document.createElement("span");
     nm.className = "node-name " + opt.nameCls(node);
     nm.textContent = pl.name;
-    nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: node.relToTarget, idParty: node.idParty }, null, 2);
+    nm.title = JSON.stringify({ isTarget: node.isTarget, relToTarget: showRels(node.relToTarget), idParty: node.idParty }, null, 2);
     inner.appendChild(nm);
     var idSp = document.createElement("span");
     idSp.className = "node-id";
@@ -2111,7 +2118,7 @@ function renderFind() {
       var row = el("div", "rel-row" + (n0++ ? "" : " first")), lead = el("span"), nameEl = el("span", "node-name", n.name), pills = el("span", "rel-pills");
       engLead(lead, n, kind === "audit" && e.apply ? ruleLabel(e.apply) : null, false, function (pill) { showInfo(pill, info); }, kind);
       nameEl.appendChild(el("span", "node-id", "(" + id + ")"));
-      (n.isTarget ? ["This entity"] : n.relToTarget || []).forEach(function (r) { pills.appendChild(el("span", "rel-pill", r)); });
+      (n.isTarget ? ["This entity"] : showRels(n.relToTarget)).forEach(function (r) { pills.appendChild(el("span", "rel-pill", r)); });
       row.appendChild(lead); row.appendChild(nameEl); row.appendChild(pills);
       box.appendChild(row);
     });
@@ -2342,7 +2349,7 @@ function nameOfNode(id) {
 
 /* One jurisdiction's result in plain words: the relationship to the audit client, the treatment it gives, and any exemption */
 function reasonRow(it) {
-  var rel = it.rels[0], cfg = CONFIG.relationships.filter(function (r) { return r.label === rel; })[0], by = it.rule.by[REL_VALUE[rel]];
+  var rel = showRels(it.rels)[0], cfg = CONFIG.relationships.filter(function (r) { return r.label === rel; })[0], by = it.rule.by[REL_VALUE[rel]];
   var row = el("div", "reason"), head = el("div", "reason-head"), txt = el("div", "reason-text");
   var lvl = it.level === "exempt" ? it.base : it.level;
   head.appendChild(el("span", "rule-badge " + lvl, LEVEL_LABELS[lvl]));
