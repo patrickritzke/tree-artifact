@@ -597,12 +597,21 @@ function readHierarchy(root, map, idOf, nameOf, kidsOf) {
 
 function noteJson(html) {
   var doc = new DOMParser().parseFromString(String(html || "").replace(/<\/div>/gi, "\n"), "text/html");
-  var text = (doc.body.textContent || "").replace(/\u00a0/g, " ").trim(); /* the note editor pads with non-breaking spaces, which JSON rejects */
+  var text = (doc.body.textContent || "").replace(/[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/g, " ").trim(); /* the note editor pads with non-breaking spaces, which JSON rejects */
   var tries = [text, "{" + text + "}"];
   for (var i = 0; i < tries.length; i++) {
     try { return JSON.parse(tries[i]); } catch (e) { /* free-form note, try the next form */ }
   }
   return null;
+}
+
+/* Why no Orbis record was found, in a few words, for the Find step */
+function orbisWhy(party, bvdId) {
+  var notes = party.notes || [], keys = [];
+  if (!notes.length) return "the party has no notes";
+  notes.forEach(function (n) { var o = noteJson(n.message); if (o && typeof o === "object") keys = keys.concat(Object.keys(o)); });
+  if (!keys.length) return notes.length + " note" + (notes.length === 1 ? "" : "s") + ", none readable as JSON";
+  return "no note holds a record under " + bvdId + " (found: " + keys.slice(0, 3).join(", ") + ")";
 }
 
 /* The newest note that parses and holds a record keyed by the party's own BvD id */
@@ -2197,13 +2206,20 @@ function findEngagements() {
     /* Notes only for audit clients: non-audit parties carry no audit rule */
     var auditIds = Array.from(byParty.keys()).filter(function (id) { return byParty.get(id).some(function (m) { return isAuditMatter(m.name); }); });
     var noteIds = auditIds.indexOf(state.target.id) < 0 ? auditIds.concat(state.target.id) : auditIds; /* the target's note feeds the profile */
+    var why = {}; /* entity id -> why its Orbis record could not be read */
     return Promise.all(noteIds.map(function (id) {
       /* The Intapp party id only, never the tree or provider id: the target's own, else the one the engagement group holds */
       var pid = id === state.target.id ? (state.data.partyId || state.partyOf.get(id)) : state.partyOf.get(id);
-      if (!pid) return Promise.resolve([id, null]);
+      if (!pid) { why[id] = "no Intapp party id for this entity"; return Promise.resolve([id, null]); }
       return callTool("get_party", { partyId: pid, propertiesToLoad: ["Notes"] })
-        .then(function (nraw) { var p = extractObj(nraw, "partyId"); return [id, p ? orbisFromNotes(p, p.bureauVanDijkId || id) : null]; })
-        .catch(function () { return [id, null]; });
+        .then(function (nraw) {
+          var p = extractObj(nraw, "partyId");
+          if (!p) { why[id] = "the party reply for " + pid + " had no partyId"; return [id, null]; }
+          var key = p.bureauVanDijkId || id, rec = orbisFromNotes(p, key);
+          if (!rec) why[id] = orbisWhy(p, key);
+          return [id, rec];
+        })
+        .catch(function (e) { why[id] = "the party lookup for " + pid + " failed (" + e.message + ")"; return [id, null]; });
     })).then(function (pairs) {
       var orbis = new Map(), info = new Map(), names = new Map();
       pairs.forEach(function (pr) { orbis.set(pr[0], pr[1]); });
@@ -2211,6 +2227,7 @@ function findEngagements() {
       byParty.forEach(function (ms, id) { info.set(id, buildParty(ms, orbis.get(id))); });
 
       var notes = ["Entity rule from Moody's Orbis data recorded in party notes."];
+      if (why[state.target.id]) notes.push("Firmographics unavailable for " + state.target.name + ": " + why[state.target.id] + ".");
       if (!byParty.size) notes.push("No engagements were found for this corporate tree. Choose the audit relationships and rules on the next steps.");
       if (state.unmatched && state.unmatched.length) notes.push("Engagements for parties that match nothing in this tree or its significant influence entities were not applied: " + state.unmatched.join(", ") + ".");
       var noNote = [], noCountry = [];
