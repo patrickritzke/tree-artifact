@@ -131,12 +131,13 @@ Picking a company by hand means "treat this as an audit relationship in this jur
 One row per audit relationship: a checkbox, the company, and a choice of the six rules. A summary on the right counts how many entities are restricted or need a materiality check.
 
 ### Display Options (collapsed by default)
-Two independent choices, which can be combined:
+One choice, three views:
 
-| Tree | Rule inheritance |
+| View | What it shows |
 |---|---|
-| **Filtered tree (relationships only)**, the default: only the client, audit and non-audit relationships, and their parents | **Strictest rule inheritance only**, the default: only the client and the audit relationship it inherits from are marked |
-| **Full tree**: every entity | **All rule inheritance**: every entity with its strictest result, plus an **Other (n)** pill for its other results |
+| **Target only / Strictest rule** (the default) | The filtered tree: only the client, the audit and non-audit relationships, and their parents. The client shows its one strictest result, and the audit relationship it comes from is marked **Inherited from**. |
+| **Target only / All rules** | The same filtered tree. The client shows its strictest result plus a grey **Other (n)** pill for its other results. Every other audit relationship those results come from gets a grey **Inherited from** pill (click it to see that result). The strictest source keeps its coloured pill. |
+| **All entities / All rules** | The full tree. Every entity shows its own strictest result, with an **Other (n)** pill where it has more. |
 
 When the tree is filtered, what was left out is shown as a quiet tag under its parent: **Filtered: 44 subsidiaries**.
 
@@ -154,7 +155,7 @@ Columns:
 ### Pills
 - **SEC - Restricted** (red) or **SEC - Materiality check** (orange): the strictest result on that entity, with the audit rule that gave it. Click it to see which relationship it came from.
 - **Exempt Service Line** (green), beside it when the client's service line is exempt under that rule. The treatment stays visible.
-- **Inherited from**: marks the audit relationship the client's result comes from (strictest view).
+- **Inherited from**: coloured, it marks the audit relationship the client's strictest result comes from. Grey, it marks another audit relationship the client inherits from (the *Target only / All rules* view).
 - **Other (n)** (grey): the other results behind the strictest one.
 - Rows are shaded red or orange by their treatment, even when the service line is exempt.
 
@@ -228,4 +229,4 @@ First time only: `npm install`, then `npx playwright install chromium` (or point
 
 ### What the tests cover
 Built against a fake host with made-up companies, run once for the source and once for the min file:
-the default and combined display options, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.
+the three display views, the strictest result and the Other pill, tie-breaking, the exempt service line, audit rows changing the filter, the Significant Influence grid (five different shapes of affiliate data), the SigInf de-duplication, firmographics from notes (including non-breaking spaces), the party-ID-only lookup, every "why it is missing" message, the no-engagements path, the Find step fitting a laptop screen, and the wording.

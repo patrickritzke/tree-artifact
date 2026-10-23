@@ -495,10 +495,8 @@
       <span class="tb-chev">▸</span><span>Display Options</span><span class="summary" id="display-summary"></span>
     </button>
     <div class="tb-body" id="body-display" hidden>
-      <div class="opt-row"><span class="opt-label">Tree</span>
-        <span class="seg" id="tree-view"><button class="pill" type="button" data-v="filtered">Filtered tree (relationships only)</button><button class="pill" type="button" data-v="full">Full tree</button></span></div>
       <div class="opt-row"><span class="opt-label">Rule inheritance</span>
-        <span class="seg" id="inherit-view"><button class="pill" type="button" data-v="strictest">Strictest rule inheritance only</button><button class="pill" type="button" data-v="all">All rule inheritance</button></span></div>
+        <span class="seg" id="inherit-view"><button class="pill" type="button" data-v="strictest">Target only / Strictest rule</button><button class="pill" type="button" data-v="targetAll">Target only / All rules</button><button class="pill" type="button" data-v="all">All entities / All rules</button></span></div>
     </div>
   </div>
 
@@ -1065,8 +1063,8 @@ function siTag() {
 function showEngagement() { return state.mode === "independence" && !!state.engage && state.engage.size > 0; }
 
 var state = {
-  tree: "filtered", /* the step 3 tree rows: filtered (relationships only) or full */
-  inherit: "strictest", /* the step 3 treatment pills: strictest only, or all */
+  tree: "filtered", /* the step 3 tree rows: filtered (relationships only) or full; follows the view below */
+  inherit: "strictest", /* the step 3 view: "strictest" (target only, strictest rule), "targetAll" (target only, all rules) or "all" (all entities, all rules) */
   serviceLine: null, /* the target's service line, chosen on the first page; every other entity has none */
   mode: "independence", /* the wizard always works in the independence view */
   auditRows: [{ client: null, rule: null, on: true }], /* one audit client + rule per row; on = the row is applied */
@@ -1238,10 +1236,20 @@ function extraColumns(pairs) {
       if (marks) { /* strictest view: the target's treatment, and "Inherited from" on the audit client(s) behind it */
         var m = marks.get(n.id);
         if (!m) return;
+        if (m.secondary) { /* another source of the client's results: grey, and it opens that result */
+          var g = el("button", "rule-badge other", "Inherited from"), key = n.id + "#from";
+          g.type = "button";
+          g.title = "Another audit relationship the client inherits from";
+          g.setAttribute("aria-haspopup", "dialog");
+          g.addEventListener("click", function () { if (state.whyFor === key) closeWhy(); else showWhy(g, m.node, m.res, [m.item], key); });
+          td.appendChild(g);
+          return;
+        }
         var b = ruleBadge(m.node || n, m.res);
         if (m.inherited) { b.textContent = "Inherited from"; b.title = "The audit relationship behind the strictest treatment"; }
         td.appendChild(b);
         if (!m.inherited && m.res.level === "exempt") td.appendChild(exemptBadge());
+        if (!m.inherited && state.inherit === "targetAll" && m.res.items.length > 1) td.appendChild(otherBadge(n, m.res));
         return;
       }
       var res = evalNode(n.id, pairs, n.isTarget ? state.serviceLine : null);
@@ -1258,13 +1266,18 @@ function shadeOf(res) { return res.level === "exempt" ? res.base : res.level; }
 
 /* Strictest view: only the target and the audit client(s) that set its strictest treatment are marked. Null in the other views. */
 function viewMarks(pairs) {
-  if (state.inherit !== "strictest" || !pairs || !pairs.length) return null;
+  if (state.inherit === "all" || !pairs || !pairs.length) return null;
   var t = state.target, res = evalNode(t.id, pairs, state.serviceLine), marks = new Map();
   if (!res.level) return marks;
   var shade = res.level === "exempt" ? res.base : res.level; /* rows are shaded by the treatment, exempt or not */
   marks.set(t.id, { level: shade, res: res });
-  var top = res.items[0]; /* one source only: items are sorted strictest first, then highest up the tree */
+  var top = res.items[0]; /* the strictest source: items are sorted strictest first, then highest up the tree */
   if (top && top.client.id !== t.id) marks.set(top.client.id, { level: shade, res: res, node: t, inherited: true });
+  if (state.inherit === "targetAll") { /* every other source gets a grey pill, unshaded */
+    res.items.slice(1).forEach(function (it) {
+      if (it.client.id !== t.id && !marks.has(it.client.id)) marks.set(it.client.id, { res: res, node: t, inherited: true, secondary: true, item: it });
+    });
+  }
   return marks;
 }
 
@@ -1660,9 +1673,8 @@ function renderAll() {
   }
   $("si-section").hidden = !siAll;
   $("node-count").textContent = cond ? (shown + siAll) + " of " + (treeAll + siAll) + " entities" : (shown + siAll) + " entities";
-  document.querySelectorAll("#tree-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.tree); });
   document.querySelectorAll("#inherit-view .pill").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-v") === state.inherit); });
-  $("display-summary").textContent = (state.tree === "full" ? "Full tree" : "Filtered tree") + " \u00B7 " + (state.inherit === "strictest" ? "Strictest rule inheritance" : "All rule inheritance");
+  $("display-summary").textContent = { strictest: "Target only / Strictest rule", targetAll: "Target only / All rules", all: "All entities / All rules" }[state.inherit];
   renderRuleBar();
 }
 
@@ -2802,11 +2814,7 @@ $("fw-back").addEventListener("click", function (e) { if (e.target === this) thi
 });
 $("inherit-view").addEventListener("click", function (e) {
   var v = e.target.getAttribute("data-v");
-  if (v) { state.inherit = v; renderAll(); }
-});
-$("tree-view").addEventListener("click", function (e) {
-  var v = e.target.getAttribute("data-v");
-  if (v) { state.tree = v; renderAll(); }
+  if (v) { state.inherit = v; state.tree = v === "all" ? "full" : "filtered"; renderAll(); } /* "target only" views use the filtered tree; "all entities" the full tree */
 });
 $("start-service").addEventListener("change", function () {
   state.serviceLine = this.value || null;
