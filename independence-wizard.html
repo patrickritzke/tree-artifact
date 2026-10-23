@@ -794,7 +794,7 @@ function updateHeader() {
   h.appendChild(el("div", "hdr-sub", "New Engagement: " + (state.serviceLine ? serviceLabel(state.serviceLine) + " (" + state.serviceLine + ")" : "Non-Audit Engagement, no service line")));
 }
 
-var BUILD = "dev"; /* the release script stamps the date and time here, so a published copy can be told apart */
+var BUILD = "dev"; /* build.mjs stamps a short hash of this file here in the min build, so a published copy can be told apart */
 function serviceLabel(v) {
   var s = CONFIG.serviceLines.filter(function (x) { return x.value === v; })[0];
   return s ? s.label : v;
