@@ -2491,6 +2491,16 @@ function chartModel(items, level) {
     });
     info.push({ kind: kind, path: path });
   });
+  /* An entity listed under two parents where one parent is already above the other (COFACE SA directly, and again through COMPAGNIE) gets
+     one line, through the nearer parent: a link is dropped when a longer route over the other links already covers it. */
+  var below = new Map();
+  edges.forEach(function (e) { if (!below.has(e[0])) below.set(e[0], []); below.get(e[0]).push(e[1]); });
+  var reaches = function (from, to, seen) {
+    return (below.get(from) || []).some(function (k) { if (seen[k]) return false; seen[k] = 1; return k === to || reaches(k, to, seen); });
+  };
+  edges = edges.filter(function (e) {
+    return !(below.get(e[0]) || []).some(function (k) { return k !== e[1] && reaches(k, e[1], { [k]: 1 }); });
+  });
   var ids = Array.from(inc), tier = {};
   ids.forEach(function (id) { tier[id] = 0; });
   var settle = function () { for (var k = 0; k < ids.length; k++) edges.forEach(function (e) { tier[e[1]] = Math.max(tier[e[1]], tier[e[0]] + 1); }); };

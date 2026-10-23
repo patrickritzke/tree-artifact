@@ -252,6 +252,17 @@ test("a sibling and the target share a row, even when the sibling also sits unde
   noErrors(p);
 });
 
+test("an entity listed under two parents, one above the other, gets one line", async (f) => {
+  // Ultimate > Parent > Target, and the target is also listed directly under Ultimate.
+  const target = { externalId: "T", name: "Target LLC", subCompanies: [] };
+  const tree = { externalId: "U", name: "Ultimate Co", subCompanies: [{ externalId: "A", name: "Parent Co", subCompanies: [target] }, target] };
+  const p = await open(f, { tree, members: [matter("m1", "A", "Audit [Audit - IESBA-PIE]")] });
+  await p.click("#wiz-next");
+  await p.waitForTimeout(500);
+  assert.equal(await p.$$eval("#result-body .cedge", (e) => e.length), 2, "Ultimate > Parent and Parent > Target only; no direct Ultimate > Target");
+  noErrors(p);
+});
+
 // ---- significant influence -----------------------------------------------------------------------
 
 for (const [shape, affiliates] of Object.entries(closeAffiliates)) {
