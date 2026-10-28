@@ -556,7 +556,7 @@
 function isLive() { return typeof window.celeste !== "undefined"; }
 
 function callTool(name, args) {
-  return isLive() ? celeste.query("intapp_compliance__" + name, args)
+  return isLive() ? celeste.query(name, args)
                   : Promise.reject(new Error("This page needs the Intapp host to load data."));
 }
 
@@ -641,7 +641,7 @@ function orbisFromNotes(party, bvdId) {
 /* The party's corporate family: every tree node, its close affiliates, and the nested placements to draw.
    The target is the party itself, identified by its Bureau van Dijk id. */
 function loadFamily(partyId) {
-  return callTool("get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] }).then(function (raw) {
+  return callTool("intapp_compliance__get_party", { partyId: partyId, propertiesToLoad: ["CorporateFamily"] }).then(function (raw) {
     var party = extractObj(raw, "partyId");
     if (!party) throw new Error("Could not find party " + partyId + ".");
     var targetId = party.bureauVanDijkId || party.externalId || party.partyId;
@@ -2177,7 +2177,7 @@ function loadMatters() {
   var byName = new Map();
   ents.forEach(function (n) { if (!byName.has(norm(n.name))) byName.set(norm(n.name), n.id); });
   return Promise.all(state.owners.map(function (o) {
-    return callTool("get_component_group", { componentGroupName: o.id })
+    return callTool("intapp_compliance__get_component_group", { componentGroupName: o.id })
       .then(function (raw) { var g = extractObj(raw, "groupMembers"); return (g && g.groupMembers) || []; })
       .catch(function () { return []; });
   })).then(function (lists) {
@@ -2236,7 +2236,7 @@ function findEngagements() {
       /* The Intapp party id only, never the tree or provider id: the target's own, else the one the engagement group holds */
       var pid = id === state.target.id ? (state.data.partyId || state.partyOf.get(id)) : state.partyOf.get(id);
       if (!pid) { why[id] = "no Intapp party id for this entity"; return Promise.resolve([id, null]); }
-      return callTool("get_party", { partyId: pid, propertiesToLoad: ["Notes"] })
+      return callTool("intapp_compliance__get_party", { partyId: pid, propertiesToLoad: ["Notes"] })
         .then(function (nraw) {
           var p = extractObj(nraw, "partyId");
           if (!p) { why[id] = "the party reply for " + pid + " had no partyId"; return [id, null]; }
@@ -3045,7 +3045,7 @@ function bindPartySearch(input, results, idField, opts) {
   function search(q) {
     var mine = ++seq; /* a slow earlier answer must not overwrite a newer one */
     if (q.length < 2) { close(); return; }
-    callTool("search_entities", { keyword: q, entityTypes: ["Party"] })
+    callTool("intapp_compliance__search_entities", { keyword: q, entityTypes: ["Party"] })
       .then(function (raw) { if (mine === seq) render(partyHits(raw)); })
       .catch(function (e) { if (mine === seq) render([], "Search unavailable: " + e.message); });
   }

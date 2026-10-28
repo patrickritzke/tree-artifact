@@ -305,6 +305,19 @@ test("a SigInf relationship is not listed when its tree equivalent already is", 
   noErrors(p);
 });
 
+test("every host call uses the full capability name", async (f) => {
+  const p = await open(f, { members: SEC_AICPA }, { steps: 1 });
+  const names = new Set((await p.evaluate(() => window.__calls)).map(([n]) => n));
+  assert.deepEqual([...names].sort(), ["get_component_group", "get_party"], "the host rejects anything but intapp_compliance__<name>, so these all went through");
+  noErrors(p);
+  const q = await open(f, {}, { steps: 0 });
+  await q.fill("#start-input", "target");
+  await q.waitForTimeout(600);
+  assert.ok((await q.evaluate(() => window.__calls)).some(([n]) => n === "search_entities"), "the party search called the host");
+  assert.ok(!/Search unavailable/.test(await q.$eval("#party-results", (e) => e.innerText)), "and was not rejected");
+  noErrors(q);
+});
+
 // ---- the Find step -------------------------------------------------------------------------------
 
 test("firmographics come from the party note, including notes padded with non-breaking spaces", async (f) => {
