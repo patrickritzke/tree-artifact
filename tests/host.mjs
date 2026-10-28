@@ -83,9 +83,11 @@ export function hostScript(cfg = {}) {
     var family = ${JSON.stringify(family)}, members = ${JSON.stringify(c.members)}, notes = ${JSON.stringify(notesAnswer)};
     window.__calls = [];
     Object.defineProperty(window, "celeste", { configurable: true, value: { query: function (name, args) {
-      // the host knows capabilities by their full name; a short name is an error, as it is on the real host
-      if (name.indexOf("intapp_compliance__") !== 0) return Promise.reject(new Error("unknown capability " + name));
-      window.__calls.push([name.replace("intapp_compliance__", ""), args]);
+      // the broker knows capabilities only by their full names; anything else is an error, as on the real host
+      var PREFIX = "intapp_compliance__intapp_bfd4dce72_compliance-";
+      if (name.indexOf(PREFIX) !== 0) return Promise.reject(new Error("unknown capability " + name));
+      name = name.slice(PREFIX.length);
+      window.__calls.push([name, args]);
       if (/get_party$/.test(name)) {
         var props = (args && args.propertiesToLoad) || [];
         if (props.indexOf("Notes") >= 0) {

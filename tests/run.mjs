@@ -308,7 +308,7 @@ test("a SigInf relationship is not listed when its tree equivalent already is", 
 test("every host call uses the full capability name", async (f) => {
   const p = await open(f, { members: SEC_AICPA }, { steps: 1 });
   const names = new Set((await p.evaluate(() => window.__calls)).map(([n]) => n));
-  assert.deepEqual([...names].sort(), ["get_component_group", "get_party"], "the host rejects anything but intapp_compliance__<name>, so these all went through");
+  assert.deepEqual([...names].sort(), ["get_component_group", "get_party"], "the broker rejects any name but the full one, so these all went through");
   noErrors(p);
   const q = await open(f, {}, { steps: 0 });
   await q.fill("#start-input", "target");
